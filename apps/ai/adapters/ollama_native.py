@@ -58,7 +58,28 @@ def _memory_split(spec, model):
     return {}
 
 
+def _native_message(message):
+    """OpenAI-style list content ([{"type": "text"}, {"type": "image_url"}]) -> content + images."""
+    content = message.get("content")
+    if not isinstance(content, list):
+        return message
+    texts, images = [], []
+    for part in content:
+        if part.get("type") == "text":
+            texts.append(part.get("text", ""))
+        elif part.get("type") == "image_url":
+            url = part.get("image_url", {}).get("url", "")
+            if not url.startswith("data:"):
+                raise ProviderError("bad_request", "Ollama needs images as base64 data URLs")
+            images.append(url.partition(",")[2])
+    native = {**message, "content": "\n\n".join(texts)}
+    if images:
+        native["images"] = images
+    return native
+
+
 def chat(spec, model, messages, options):
+    messages = [_native_message(message) for message in messages]
     payload = {"model": model, "messages": messages, "stream": True, "options": {}}
     for key in ("num_ctx", "temperature", "num_predict", "top_p"):
         if key in options:

@@ -11,7 +11,7 @@ from .types import ProviderError
 @dataclass(frozen=True)
 class ProviderSpec:
     name: str
-    adapter: str  # "openai_compat" | "ollama_native" | "cloudflare_images"
+    adapter: str  # "openai_compat" | "ollama_native" | "cloudflare_images" | "comfyui"
     base_url: str
     api_key_env: str | None = None
     account_env: str | None = None  # Cloudflare account id

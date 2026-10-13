@@ -128,6 +128,19 @@
         </div>
 
         <aside class="s-panel" aria-label="Checks, model and versions">
+            {% if hero %}
+                <section class="s-box" aria-labelledby="hero-head">
+                    <h3 class="s-section" id="hero-head">Hero checks</h3>
+                    <div class="s-kv"><span>Branded</span><span class="s-tag s-tag--{% if hero.branded %}ok">Yes{% else %}warn">No{% endif %}</span></div>
+                    {% if hero.headline_fit %}<div class="s-kv"><span>Headline</span><span class="s-mono">{{ hero.headline_fit.lines }} lines · {{ hero.headline_fit.scale_percent }}%</span></div>{% endif %}
+                    {% if hero.headline_problem %}<div class="s-kv"><span>Headline</span><span class="s-tag s-tag--bad">Too long</span></div>{% endif %}
+                    {% if hero.contrast.grey %}<div class="s-kv"><span>Contrast (grey / periwinkle)</span><span class="s-tag s-tag--{% if hero.contrast.grey < 3 or hero.contrast.periwinkle < 2.2 %}warn{% else %}ok{% endif %}">{{ hero.contrast.grey }} / {{ hero.contrast.periwinkle }}</span></div>{% endif %}
+                    {% if hero.check %}<div class="s-kv"><span title="check_photo.py: fade strip and calm left side">Photo check</span><span class="s-tag s-tag--{% if hero.check.ok %}ok">Pass{% else %}warn">Close miss{% endif %}</span></div>{% endif %}
+                    {% if hero.subject_left %}<div class="s-kv"><span>Subject starts at</span><span class="s-mono">{% widthratio hero.subject_left 1 100 %}% (target 62%)</span></div>{% endif %}
+                    <div class="s-kv"><span>Problems to check</span><span class="s-tag s-tag--{% if hero.flags %}warn">{{ hero.flags|length }}{% else %}ok">None{% endif %}</span></div>
+                    {% if hero.photo %}<p class="s-muted" style="margin:0;font-size:.78rem"><a href="{{ hero.photo.file.url }}">Unbranded photo</a></p>{% endif %}
+                </section>
+            {% endif %}
             {% if checks %}
                 <section class="s-box" aria-labelledby="checks-head">
                     <h3 class="s-section" id="checks-head">Checks</h3>
@@ -181,7 +194,8 @@
                             {% endfor %}
                         </select>
                         <label for="regen-note">Note for the model (optional)</label>
-                        <textarea id="regen-note" name="note" rows="2" placeholder="e.g. add a section on state plans"></textarea>
+                        <textarea id="regen-note" name="note" rows="2" {% if hero %}aria-describedby="regen-note-help" placeholder="e.g. people wearing nitrile gloves"{% else %}placeholder="e.g. add a section on state plans"{% endif %}></textarea>
+                        {% if hero %}<p class="s-muted" id="regen-note-help" style="margin:0;font-size:.78rem">Start the note with <code>Headline:</code> to change only the headline, e.g. <code>Headline: **SDS Retention:** | How Long to Keep Them</code>. The same photo is reused.</p>{% endif %}
                         <div><button class="button button-secondary" type="submit" name="action" value="regenerate">Regenerate</button></div>
                     </form>
                 </section>

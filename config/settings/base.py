@@ -159,6 +159,8 @@ WAGTAILDOCS_MAX_UPLOAD_SIZE = 10 * 1024 * 1024  # 10MB
 
 OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://host.docker.internal:11434")
 COMFYUI_BASE_URL = os.environ.get("COMFYUI_BASE_URL", "http://host.docker.internal:8188")
+# Workflows exported from ComfyUI in API format; the catalog names them by file (docs/setup.md).
+COMFYUI_WORKFLOWS_DIR = BASE_DIR / "comfyui" / "workflows"
 
 # Some provider edges (e.g. Groq) reject requests without a real User-Agent.
 AI_USER_AGENT = "workflow-studio/0.1 (+https://github.com/ZarifSDS/workflow-generation-project)"
@@ -181,6 +183,7 @@ AI_PROVIDERS = {
         "base_url": "https://api.groq.com/openai/v1",
         "api_key_env": "GROQ_API_KEY",
     },
+    "comfyui": {"adapter": "comfyui", "base_url": COMFYUI_BASE_URL},
     "cloudflare": {
         "adapter": "cloudflare_images",
         "base_url": "https://api.cloudflare.com/client/v4",
@@ -215,8 +218,20 @@ AI_PROFILES = {
     "image": {
         "provider": "cloudflare",
         "model": "@cf/black-forest-labs/flux-2-klein-4b",
-        "options": {"width": 1024, "height": 576},
+        # The hero layout (sds-hero-stock) is 1440x810; 816 keeps the height a multiple of 16.
+        "options": {"width": 1440, "height": 816},
         "fallback": {"provider": "cloudflare", "model": "@cf/black-forest-labs/flux-1-schnell"},
+    },
+    # Looks at the generated hero photo: subject box, facing, readable text, safety problems.
+    "vision": {
+        "provider": "gemini",
+        "model": "gemini-3.7-flash",
+        "options": {"temperature": 0},
+        "fallback": {
+            "provider": "ollama",
+            "model": "qwen3-vl:8b-instruct",
+            "options": {"num_ctx": 8192, "temperature": 0},
+        },
     },
 }
 AI_PROFILES_INTERIM = True  # flips to False once docs/model-eval.md records the chosen defaults

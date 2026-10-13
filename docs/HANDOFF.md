@@ -1,4 +1,4 @@
-# Handoff: Content Workflow Studio (state on 2026-10-13, all work pushed to GitHub)
+# Handoff: Content Workflow Studio (state on 2026-10-13, M6 built)
 
 Read this first in a new session. Also see `docs/roadmap.md`, `docs/workflow.md`, `docs/ux.md`,
 `docs/providers.md`, `docs/model-eval.md` and `AGENTS.md`.
@@ -6,7 +6,7 @@ Read this first in a new session. Also see `docs/roadmap.md`, `docs/workflow.md`
 ## Start here
 
 1. Score the outline evaluation (below), then set the default models.
-2. Continue M6 (images) from "M6 in progress".
+2. Optional: install ComfyUI and export the workflow (`docs/setup.md` step 6) to test local hero images live.
 3. Then M7 (publish) and M8 (hardening) per `docs/roadmap.md`.
 
 ## Where things stand
@@ -19,11 +19,11 @@ Read this first in a new session. Also see `docs/roadmap.md`, `docs/workflow.md`
 | M3b Content Studio screens in the Wagtail admin | Done | c84881e |
 | M4 Background generation (worker runs steps, fallback, retry, notifications) | Done, verified live (run 9) | 67641ab |
 | M5 Seven-part review-and-edit sequence + vendored skill scripts | Done, verified live (run 10) | 5df13ae |
-| M6 Images (ComfyUI + sds-hero-stock branding) | **Started, not committed** | – |
+| M6 Images (ComfyUI provider, vision check, sds-hero-stock branding) | Built, verified live on run 9 (Cloudflare + Gemini vision + branding); ComfyUI mocked | see git log |
 | M7 Publish (ArticlePage, moderation, exports, n8n hook) | Planned | – |
 | M8 Hardening | Planned | – |
 
-**Everything up to this handoff is pushed to `main` on GitHub** (CI runs on every push). The only uncommitted work is `apps/quality/vendor/sds_hero_stock/` (see M6).
+M1–M5 are pushed to `main` on GitHub (CI runs on every push). Check `git status` for M6.
 
 ## Evaluation (M2)
 
@@ -41,20 +41,15 @@ Read this first in a new session. Also see `docs/roadmap.md`, `docs/workflow.md`
 
 Verified free models: local Ollama (Qwen3.8 27B ~19 min/outline at 4.5 tok/s; glm-4.7-flash with think off; Ornith 35B-A3B; Ornith 9B; Qwythos 9B), Ollama Cloud free (nemotron-3-ultra/super, gpt-oss:120b, gemma4:31b), Gemini free (3.8/3.7 Flash; Pro has no free quota; 2.5 closed), Groq (gpt-oss-120b; qwen3.8-27b limited to 1,000 output tokens/min), Cloudflare images (flux-2-klein-4b, flux-1-schnell). NVIDIA NIM, Mistral and OpenRouter are not usable.
 
-## M6 in progress (pick up here)
+## M6 notes
 
-Done so far:
-- Vendored the sds-hero-stock scripts and assets **unchanged** into `apps/quality/vendor/sds_hero_stock/` (uncommitted).
-  **Decision needed:** the assets include the SDS Manager logo, and the repo is public. Decide whether to commit them, keep them out of git, or make the repo private.
-- Resolved dependencies for the container: `numpy==2.5.4`, `scipy==1.18.1`, `fonttools==4.66.1` (Pillow 12.3.0 already present). Not yet added to `requirements.txt`.
-
-Planned design (agreed direction):
-1. Hero image prompt asks for the subject in the right third and a calm left side, 16:9; generate at about 1440×816.
-2. A **vision** profile (Gemini 3.7 Flash; fallback local `qwen3-vl:8b-instruct`) returns the subject box, person-at-fade, readable text/logos, and safety contradictions (missing PPE etc.), reported in the version notes as the skill requires. The Ollama native adapter must convert list-style message content into `images: [base64]`.
-3. Branding with the vendored scripts: `reframe.py` (subject box; fill `auto` falls back without LaMa, so report "regenerate with the subject further right") → `check_photo.py` → `hero_compose.py` (headline markup from the selected title: `**topic up to colon:** | rest`). Exit code 3 = headline too long: show the skill's message; a regenerate note starting `Headline:` overrides the headline.
-4. Store the raw and the branded image as Wagtail Images; version metrics get a `hero` block (check numbers, headline fit, flags).
-5. ComfyUI provider (`apps/ai/images/comfyui.py`): POST `/prompt` with the user's exported API-format workflow (patch prompt text, latent width/height and seed by node class), poll `/history/{id}`, fetch `/view`; unload Ollama models (`keep_alive: 0`) before, POST `/free` after. Add a catalog entry and docs on exporting the workflow. ComfyUI itself isn't installed yet (large download; user approves).
-6. Tests: mocked ComfyUI and vision; run the real vendored branding scripts on a synthetic 1440×810 image.
+- How the hero step works: `docs/workflow.md#hero-image-step-m6`. Code: `apps/studio/executors.py` (`hero_image`), `apps/quality/hero.py`, `apps/ai/images/comfyui.py`.
+- Brand assets are git-ignored (ADR 0004). A fresh clone needs `docs/setup.md` step 5, or heroes come out unbranded with a note.
+- No generative fill in the container (LaMa needs PyTorch). Photos whose subject starts left of 62% are branded as they are if it starts at 50% or more; below that the step generates one more photo with a firmer placement, then asks you to regenerate. FLUX tends to centre the subject (48–57% in the live runs).
+- Possible next step (needs your OK, since the skill only allows a copied fill when you accept it): the left edge of the 2026-10-11 veil is fully opaque, so a mirrored fill of a narrow strip (under about 15% of the width) would be invisible. Allowing `--fill mirror` for small strips would brand more photos at the standard 62%.
+- A `Headline:` regenerate note re-brands the same photo (no new image); used live to fix a too-wide subject box.
+- Gemini 3.7 Flash returned HTTP 500 for several image requests; the Qwen3-VL 8B fallback worked but boxes subjects less tightly (it included furniture until the prompt excluded it).
+- gpt-oss spends its token budget on reasoning: the hero prompt step needed `max_tokens` 3000 (600 returned empty text, and an empty prompt now fails the step).
 
 ## Gotchas learned
 
@@ -65,4 +60,5 @@ Planned design (agreed direction):
 - Wagtail's `--w-color-*-50` tints don't switch in dark mode; the studio CSS mixes tints from foreground colours.
 - Selects size to their longest option; panel controls are constrained to 100% width.
 - Vendored skill scripts are excluded from ruff and must stay byte-identical (re-copy from `~/.claude/skills` to update).
+- The `worker` container (db_worker) does not reload code or cached prompt templates: `docker compose restart worker` after changing executors or prompts.
 - Docker Desktop must be started manually (`D:\Docker\Docker Desktop.exe`). Your admin user is `sdsmanager`.

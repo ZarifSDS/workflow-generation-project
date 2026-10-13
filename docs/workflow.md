@@ -27,7 +27,7 @@ The studio automates an existing, proven manual workflow that runs as a set of C
 | 3 | Draft | Full draft, three metadata options per field, link map | Approve (optionally per H2) | quality |
 | 4 | Review and edit | Revised article plus a per-section changelog and grade report ([sequence below](#review-and-edit-step-m5)) | Approve | edit |
 | 5 | Final cleanup | Hidden-Unicode removal, final mechanical sweep | Auto | none (deterministic) |
-| 6 | Hero image | Generated image plus branded hero (WebP/PNG) | Approve | image |
+| 6 | Hero image | Generated photo, vision check, branded hero ([details below](#hero-image-step-m6)) | Approve | image + vision |
 | 7 | Localise (optional) | Regional or language variants | Approve | quality |
 | 8 | Publish | `ArticlePage` draft → Wagtail moderation workflow | Wagtail workflow | none |
 
@@ -37,6 +37,7 @@ The studio automates an existing, proven manual workflow that runs as a set of C
 - `fast`: quick extraction and summaries
 - `edit`: targeted revision in the review-and-edit step (may differ from the drafting model)
 - `image`: hero image generation
+- `vision`: looks at the generated hero photo (subject position, readable text, safety problems)
 
 ## Review and edit step (M5)
 
@@ -74,9 +75,23 @@ The skills already contain deterministic Python helpers. The studio will vendor 
 | clean-user-facing-text | `clean_text.py`, `inspect_text.py`, `text_unicode.py`, `score_stylometry.py` | Final cleanup step plus a stylometry gauge |
 | clarity-review | `frame_scan.py` | Repeated-frame detection |
 | ehs-seo-blog-optimized | `metrics.py`, `mechanical_sweep.py`, `prose_signals.py`, `link_check.py`, `editorial_flow_check.py` | FKGL and word-count targets, sweep, link checks |
-| sds-hero-stock | `hero_compose.py`, `overlay.py`, `reframe.py`, `inner_logo.py` | House-style hero branding on generated images |
+| sds-hero-stock | `reframe.py`, `check_photo.py`, `hero_compose.py`, `overlay.py` (`inner_logo.py`, `svgify.py` vendored for later) | House-style hero branding on generated images |
 
 Prompts for the generation steps will be adapted from each skill's `SKILL.md` instructions and stored as versioned prompt templates in the admin.
+
+## Hero image step (M6)
+
+Follows the sds-hero-stock skill, with the photo generated instead of picked from stock:
+
+1. **Prompt:** the `fast` profile writes an image prompt from the title and the article opening: the subject in the right third facing left, a calm, bright left half, correct PPE, no text.
+2. **Photo:** the `image` profile generates it at 1440×816 (Cloudflare FLUX.2 klein by default, ComfyUI optional). The unbranded photo is saved as a Wagtail image.
+3. **Vision check (skill step 2):** the `vision` profile (Gemini 3.7 Flash, falling back to local `qwen3-vl:8b-instruct`) returns the subject box, whether a person forms the subject's left edge, which way they face, any readable text or logos, and safety contradictions with the article (missing PPE and similar). Text and safety findings go into the version notes under "Problems to check". If the check fails, branding continues with the prompted layout and the note says nothing was checked.
+4. **Reframe:** `reframe.py` puts the subject's left edge at 62% of the width (flipping a right-facing photo only when it has no readable text). If that needs a generative fill, which isn't installed in the container (no LaMa), a 16:9 photo whose subject starts at 50% or further right is branded as it is with a note; otherwise the note asks to regenerate with the subject further right.
+5. **Check:** `check_photo.py` measures the fade strip and how calm the left side is; misses are listed as problems.
+6. **Brand:** `hero_compose.py` adds the veil, glow, logo and the fitted headline. The headline is the selected title, marked up as the skill says: the topic term up to the colon in periwinkle and a line break after the colon (EU: grey lead, periwinkle second). The branded 1440×810 master is saved as a Wagtail image named after the visual copy.
+7. **Headline too long** (the script's exit code 3): no branded image; the note shows the script's character budget. Regenerate with a note that starts with `Headline:` and a shorter version, e.g. `Headline: **SDS Retention:** | How Long to Keep Them`. A `Headline:` note re-brands the same photo without generating a new one.
+
+The checks panel shows whether the hero is branded, the headline fit and contrast, the photo check, where the subject starts, and how many problems were found.
 
 ## Site crawl step (guest posts)
 

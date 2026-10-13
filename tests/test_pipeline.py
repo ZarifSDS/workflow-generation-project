@@ -1,11 +1,14 @@
 """M4: step execution with fake providers (no real API calls)."""
 
+import json
+
 import httpx
 import pytest
 import respx
 from django.urls import reverse
 
 from apps.ai.types import GenerationResult, ImageResult, ProviderError
+from apps.quality import hero
 from apps.studio import executors, services, textclean, webfetch
 from apps.studio.models import ContentBrief, MetadataOption, StepRun
 from apps.studio.tasks import execute_step
@@ -42,7 +45,18 @@ class FakeLLM:
         if self.fail_first and len(self.calls) == 1:
             raise ProviderError(self.fail_first, "quota hit", 429)
         user = messages[-1]["content"]
-        if "Write the full piece" in user:
+        if isinstance(user, list):  # the hero vision check sends text plus the image
+            text = json.dumps(
+                {
+                    "subject": [0.64, 0.1, 0.92, 1.0],
+                    "person_at_left_edge": True,
+                    "facing": "left",
+                    "readable_text": ["drum label, right edge"],
+                    "safety_issues": ["no gloves while handling drums"],
+                    "scene": "chemical store",
+                }
+            )
+        elif "Write the full piece" in user:
             text = DRAFT_TEXT
         elif "image prompt" in user.lower():
             text = "A clean records room with binders, soft daylight, no text."
@@ -156,23 +170,103 @@ def test_failure_is_explained_and_retryable(brief, monkeypatch, settings):
     assert research.status == StepRun.Status.QUEUED
 
 
-def test_hero_image_is_saved_to_wagtail_images(brief, fake_llm, monkeypatch, admin_user):
-    monkeypatch.setattr(
-        executors,
-        "generate_image",
-        lambda provider, model, prompt, options: ImageResult(
-            provider=provider, model=model, data=_tiny_png(), mime_type="image/png"
-        ),
-    )
+@pytest.fixture
+def fake_images(monkeypatch):
+    calls = {"generate": 0, "brand": [], "prompts": [], "too_far_left": 0}
+
+    def generate_image(provider, model, prompt, options):
+        calls["generate"] += 1
+        calls["prompts"].append(prompt)
+        return ImageResult(provider=provider, model=model, data=_tiny_png(), mime_type="image/png")
+
+    def brand(photo, markup, vision):
+        calls["brand"].append((markup, vision))
+        if calls["too_far_left"]:
+            calls["too_far_left"] -= 1
+            return hero.HeroResult(
+                metrics={"headline": markup}, flags=["too far left"], subject_too_far_left=True
+            )
+        if "too long" in markup:
+            return hero.HeroResult(
+                metrics={"headline": markup}, headline_problem="Shorten it to about 60 characters"
+            )
+        fit = {"lines": 2, "size_px": 26.5, "scale_percent": 100, "ends_x": 300, "limit_x": 331}
+        return hero.HeroResult(
+            png=_tiny_png(), webp=b"webp", metrics={"headline": markup, "headline_fit": fit}
+        )
+
+    monkeypatch.setattr(executors, "generate_image", generate_image)
+    monkeypatch.setattr(hero, "brand", brand)
+    return calls
+
+
+def _run_hero(brief, note=""):
     run = services.create_run(brief, {})
     step = run.steps.get(key="hero_image")
-    step.status = StepRun.Status.QUEUED
+    step.status, step.regenerate_note = StepRun.Status.QUEUED, note
     step.save()
     execute_step(step.pk)
     step.refresh_from_db()
+    return step
+
+
+def test_hero_image_is_checked_branded_and_saved(brief, fake_llm, fake_images):
+    step = _run_hero(brief)
     assert step.status == StepRun.Status.READY, step.error
-    assert step.latest_version.image is not None
-    assert "Image prompt" in step.latest_version.note
+    version = step.latest_version
+    hero_metrics = version.metrics["hero"]
+    assert version.image.title.startswith("Hero: ")
+    assert hero_metrics["branded"] is True
+    assert hero_metrics["photo_image_id"] != version.image.pk
+    markup, vision = fake_images["brand"][0]
+    assert markup == brief.topic  # no colon and no primary keyword in it: nothing in periwinkle
+    assert vision["subject"] == [0.64, 0.1, 0.92, 1.0]
+    assert "Safety: no gloves while handling drums" in hero_metrics["flags"]
+    assert "Readable text or logo in the photo: drum label, right edge" in version.note
+    assert "Headline fit: 2 lines" in version.note
+    assert "Vision check: " in version.note
+    assert "Image prompt" in version.note
+
+
+def test_hero_checks_panel_replaces_text_checks(brief, fake_llm, fake_images, admin_client):
+    step = _run_hero(brief)
+    response = admin_client.get(reverse("studio:run", args=[step.run.pk]) + "?step=hero_image")
+    assert "Hero checks" in response.text
+    assert "Unbranded photo" in response.text
+    assert "Primary keyword in title" not in response.text
+
+
+def test_headline_note_rebrands_the_same_photo(brief, fake_llm, fake_images):
+    step = _run_hero(brief)
+    photo_id = step.latest_version.metrics["hero"]["photo_image_id"]
+    services.request_regenerate(step, f"{step.provider}::{step.model}", "Headline: **SDS Rules:** | Short")
+    execute_step(step.pk)
+    step.refresh_from_db()
+    assert fake_images["generate"] == 1
+    assert fake_images["brand"][-1][0] == "**SDS Rules:** | Short"
+    assert step.latest_version.metrics["hero"]["photo_image_id"] == photo_id
+
+
+def test_headline_too_long_keeps_the_photo_and_explains(brief, fake_llm, fake_images):
+    step = _run_hero(brief, note="Headline: way too long headline")
+    version = step.latest_version
+    assert step.status == StepRun.Status.READY
+    assert version.metrics["hero"]["branded"] is False
+    assert version.image.title.startswith("Hero photo (unbranded)")
+    assert "too long for the hero" in version.note
+
+
+def test_vision_failure_is_reported_not_fatal(brief, fake_llm, fake_images, monkeypatch):
+    def no_vision(provider, model, messages, options):
+        if isinstance(messages[-1]["content"], list):
+            raise ProviderError("bad_request", "no images", 400)
+        return fake_llm(provider, model, messages, options)
+
+    monkeypatch.setattr(executors, "generate", no_vision)
+    step = _run_hero(brief)
+    assert step.status == StepRun.Status.READY, step.error
+    assert fake_images["brand"][0][1] is None
+    assert "vision check failed" in step.latest_version.note
 
 
 def _tiny_png():
@@ -304,3 +398,38 @@ def test_metadata_options_from_draft_keep_users_choices(brief, fake_llm, admin_u
     own.refresh_from_db()
     assert own.selected
     assert not run.metadata_options.filter(kind="title", source="ai", selected=True).exists()
+
+
+def test_empty_image_prompt_fails_instead_of_generating(brief, fake_llm, fake_images, monkeypatch):
+    def empty_prompt(provider, model, messages, options):
+        result = fake_llm(provider, model, messages, options)
+        if "image prompt" in str(messages[-1]["content"]).lower():
+            result.text = ""
+        return result
+
+    monkeypatch.setattr(executors, "generate", empty_prompt)
+    step = _run_hero(brief)
+    assert step.status == StepRun.Status.FAILED
+    assert "empty image prompt" in step.error
+    assert fake_images["generate"] == 0
+
+
+def test_subject_too_far_left_gets_one_more_photo(brief, fake_llm, fake_images):
+    from wagtail.images import get_image_model
+
+    fake_images["too_far_left"] = 1
+    step = _run_hero(brief)
+    hero_metrics = step.latest_version.metrics["hero"]
+    assert fake_images["generate"] == 2
+    assert executors.PLACE_RIGHT in fake_images["prompts"][1]
+    assert hero_metrics["branded"] is True
+    assert any("second photo was generated" in flag for flag in hero_metrics["flags"])
+    assert get_image_model().objects.filter(title__startswith="Hero photo").count() == 1
+
+
+def test_second_photo_too_far_left_stops_and_explains(brief, fake_llm, fake_images):
+    fake_images["too_far_left"] = 2
+    step = _run_hero(brief)
+    assert fake_images["generate"] == 2
+    assert step.status == StepRun.Status.READY
+    assert step.latest_version.metrics["hero"]["branded"] is False

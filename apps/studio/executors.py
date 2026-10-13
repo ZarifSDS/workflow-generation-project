@@ -1,7 +1,10 @@
 """What each pipeline step does when the worker runs it. Each executor returns a StepOutput."""
 
+import base64
 import io
+import json
 import re
+import subprocess
 from dataclasses import dataclass, field
 
 import textstat
@@ -11,7 +14,7 @@ from django.core.files.images import ImageFile
 from apps.ai import catalog
 from apps.ai.service import generate, generate_image
 from apps.ai.types import ProviderError
-from apps.quality import review
+from apps.quality import hero, review
 from apps.quality import scripts as quality_scripts
 
 from . import prompting, textclean, webfetch
@@ -24,7 +27,7 @@ MAX_TOKENS = {
     "draft": 16000,
     "review_edit": 16000,
     "localise": 16000,
-    "hero_image": 600,
+    "hero_image": 3000,  # a 90-word prompt, but reasoning models (gpt-oss) think first
 }
 
 
@@ -233,45 +236,229 @@ def cleanup(step):
     return StepOutput(content=cleaned, note=note)
 
 
-def hero_image(step):
-    from wagtail.images import get_image_model
+VISION_KEYS = ("subject", "person_at_left_edge", "facing", "readable_text", "safety_issues", "scene")
 
-    run, brief = step.run, step.run.brief
-    article = prompting.approved_output(run, "cleanup") or prompting.approved_output(run, "draft")
-    title_option = run.metadata_options.filter(kind="title", selected=True).first()
-    title = title_option.text if title_option else brief.topic
-    context = prompting.context_for(
-        step, {"title": title, "excerpt": " ".join((article or brief.topic).split()[:150])}
+
+def _parse_vision(text):
+    """The vision model's JSON, validated; None if it isn't usable."""
+    match = re.search(r"\{.*\}", text, re.DOTALL)
+    try:
+        data = json.loads(match.group(0)) if match else None
+    except json.JSONDecodeError:
+        data = None
+    if not isinstance(data, dict):
+        return None
+    vision = {key: data.get(key) for key in VISION_KEYS}
+    box = vision["subject"]
+    valid_box = (
+        isinstance(box, list)
+        and len(box) == 4
+        and all(isinstance(v, int | float) and 0 <= v <= 1 for v in box)
+        and box[0] < box[2]
+        and box[1] < box[3]
     )
-    prompt_result = _call_text(step, prompting.render("hero_prompt", context), use_profile="fast")
-    image_prompt = " ".join(prompt_result.text.split())[:1500]
+    vision["subject"] = [float(v) for v in box] if valid_box else None
+    for key in ("readable_text", "safety_issues"):
+        vision[key] = [str(item) for item in vision[key]] if isinstance(vision[key], list) else []
+    vision["person_at_left_edge"] = vision["person_at_left_edge"] is not False
+    return vision
 
+
+def _vision_image(data, max_width=1024):
+    from PIL import Image
+
+    with Image.open(io.BytesIO(data)) as image:
+        image = image.convert("RGB")
+        if image.width > max_width:
+            image = image.resize((max_width, round(image.height * max_width / image.width)))
+        buffer = io.BytesIO()
+        image.save(buffer, "JPEG", quality=88)
+    return "data:image/jpeg;base64," + base64.b64encode(buffer.getvalue()).decode()
+
+
+def _look_at_photo(step, data, context):
+    """Skill step 2: subject box, facing, readable text and safety problems. Returns (vision, problem)."""
+    messages = prompting.render("hero_vision", context)
+    messages[-1]["content"] = [
+        {"type": "text", "text": messages[-1]["content"]},
+        {"type": "image_url", "image_url": {"url": _vision_image(data)}},
+    ]
+    try:
+        result = _call_text(step, messages, max_tokens=2000, use_profile="vision")
+    except ProviderError as error:
+        return None, f"The vision check failed ({error.kind}): {str(error)[:200]}"
+    vision = _parse_vision(result.text)
+    if vision is None:
+        return None, "The vision model didn't return usable JSON."
+    vision["model"] = f"{result.provider}/{result.model}"
+    vision["fallback_from"] = result.stats.get("fallback_from", "")
+    return vision, ""
+
+
+def _generate_photo(step, image_prompt):
     provider, model, options = _target(step)
     profile = _profile(step)
     try:
-        image = generate_image(provider, model, image_prompt, options)
+        return generate_image(provider, model, image_prompt, options)
     except ProviderError as error:
+        # A model chosen for this run (e.g. ComfyUI) falls back to the profile's default first:
+        # the profile's own fallback (FLUX.1 schnell) only makes square images.
         fallback = profile.get("fallback")
+        if profile.get("model") and (provider, model) != (profile["provider"], profile["model"]):
+            fallback = {k: profile[k] for k in ("provider", "model", "options") if k in profile}
         if not fallback:
             raise
         image = generate_image(
             fallback["provider"], fallback["model"], image_prompt, fallback.get("options", {})
         )
         image.stats["fallback_from"] = f"{provider}/{model} ({error.kind})"
-    ext = image.mime_type.split("/")[-1].replace("jpeg", "jpg")
-    stored = get_image_model().objects.create(
-        title=f"Hero: {title}"[:255],
-        file=ImageFile(io.BytesIO(image.data), name=f"hero-run{run.pk}.{ext}"),
-    )
-    note = f"Image prompt:\n\n{image_prompt}"
+        return image
+
+
+PLACE_RIGHT = (
+    "Composition: the person and everything they work with are entirely in the right 35% of the "
+    "frame; the left 60% is empty, bright background."
+)
+
+
+def _new_photo(step, image_prompt, title):
+    """Generate a photo and save it as a Wagtail image. (image, data, provider, model, note)."""
+    from wagtail.images import get_image_model
+
+    image = _generate_photo(step, image_prompt)
+    note = ""
     if image.stats.get("fallback_from"):
-        note = f"Used the fallback image model because {image.stats['fallback_from']} failed.\n\n{note}"
+        note = f"Used the fallback image model because {image.stats['fallback_from']} failed.\n\n"
+    ext = image.mime_type.split("/")[-1].replace("jpeg", "jpg")
+    photo = get_image_model().objects.create(
+        title=f"Hero photo (unbranded): {title}"[:255],
+        file=ImageFile(io.BytesIO(image.data), name=f"hero-photo-run{step.run_id}.{ext}"),
+    )
+    return photo, image.data, image.provider, image.model, note
+
+
+def _previous_photo(step):
+    """(Wagtail image, image prompt, provider, model) of the latest version's unbranded photo, or None."""
+    from wagtail.images import get_image_model
+
+    latest = step.latest_version
+    hero_metrics = (latest.metrics or {}).get("hero", {}) if latest else {}
+    photo = get_image_model().objects.filter(pk=hero_metrics.get("photo_image_id")).first()
+    if photo is None:
+        return None
+    return photo, hero_metrics.get("image_prompt", ""), latest.provider, latest.model
+
+
+def _hero_note(hero_metrics, image_prompt):
+    lines = [f"Headline: `{hero_metrics['headline']}`"]
+    vision = hero_metrics.get("vision")
+    if vision:
+        used = f"Vision check: {vision['model']}"
+        if vision.get("fallback_from"):
+            used += f" (fallback, because {vision['fallback_from']} failed)"
+        lines.append(used)
+    if hero_metrics["headline_problem"]:
+        lines += [
+            "",
+            f"**The headline is too long for the hero.** {hero_metrics['headline_problem']}",
+            "To fix it, regenerate with a note that starts with `Headline:` and a shorter version "
+            "(the periwinkle part in `**`, ` | ` for the line break). The same photo is reused.",
+        ]
+    if hero_metrics["flags"]:
+        lines += ["", "## Problems to check", "", *[f"- {flag}" for flag in hero_metrics["flags"]]]
+    fit, contrast = hero_metrics.get("headline_fit"), hero_metrics.get("contrast")
+    if fit:
+        lines += [
+            "",
+            f"Headline fit: {fit['lines']} lines at {fit['size_px']} px ({fit['scale_percent']}% of the "
+            f"template), ending at x={fit['ends_x']} of 720 (limit {fit['limit_x']}).",
+        ]
+    if contrast:
+        lines.append(
+            "Headline contrast: " + ", ".join(f"{name} {value}:1" for name, value in contrast.items())
+        )
+    lines += ["", "Image prompt:", "", image_prompt]
+    return "\n".join(lines)
+
+
+def hero_image(step):
+    from wagtail.images import get_image_model
+
+    Image = get_image_model()
+    run, brief = step.run, step.run.brief
+    article = prompting.approved_output(run, "cleanup") or prompting.approved_output(run, "draft")
+    title_option = run.metadata_options.filter(kind="title", selected=True).first()
+    title = title_option.text if title_option else brief.topic
+    note = (step.regenerate_note or "").strip()
+    headline_override = note[len("headline:") :].strip() if note.lower().startswith("headline:") else ""
+    context = prompting.context_for(
+        step, {"title": title, "excerpt": " ".join((article or brief.topic).split()[:150])}
+    )
+    markup = hero.headline_markup(headline_override or title, brief.region, brief.pkeyword)
+
+    previous = _previous_photo(step) if headline_override else None
+    fallback_note, flags = "", []
+    if previous:
+        # Only the headline changes: brand the same photo again.
+        photo, image_prompt, provider, model = previous
+        with photo.file.open("rb") as handle:
+            data = handle.read()
+    else:
+        if headline_override:
+            context["regenerate_block"] = ""
+        prompt_result = _call_text(step, prompting.render("hero_prompt", context), use_profile="fast")
+        image_prompt = " ".join(prompt_result.text.split())[:1500]
+        _require(image_prompt, "The model returned an empty image prompt. Retry, or choose another model.")
+
+    for attempt in (1, 2):
+        if not previous:
+            photo, data, provider, model, fallback_note = _new_photo(step, image_prompt, title)
+        vision, vision_problem = _look_at_photo(step, data, context)
+        try:
+            result = hero.brand(data, markup, vision)
+        except (hero.BrandingError, OSError, subprocess.SubprocessError) as error:
+            result = hero.HeroResult(metrics={"headline": markup}, flags=[f"Branding failed: {error}"])
+        if previous or attempt == 2 or not result.subject_too_far_left:
+            break
+        # Image models often centre the subject; one more try with a firmer placement.
+        flags.append(
+            f"The first photo had the subject at {vision['subject'][0]:.0%} of the width, too far left "
+            "for the layout, so a second photo was generated."
+        )
+        photo.delete()
+        image_prompt += " " + PLACE_RIGHT
+
+    if vision_problem:
+        flags.append(f"{vision_problem} Subject position, text and safety weren't checked; look yourself.")
+    if vision:
+        flags += [f"Safety: {issue}" for issue in vision["safety_issues"]]
+        flags += [f"Readable text or logo in the photo: {item}" for item in vision["readable_text"]]
+    flags += result.flags
+
+    branded = None
+    if result.branded:
+        # The 1440x810 master, named after the visual copy (Wagtail would drop the skill's "@2x").
+        branded = Image.objects.create(
+            title=f"Hero: {title}"[:255],
+            file=ImageFile(io.BytesIO(result.png), name=f"{hero.file_stem(markup)}.png"),
+        )
+    hero_metrics = {
+        **result.metrics,
+        "branded": result.branded,
+        "headline_problem": result.headline_problem,
+        "flags": flags,
+        "vision": vision,
+        "photo_image_id": photo.pk,
+        "image_prompt": image_prompt,
+    }
+    state = "Branded hero" if branded else "Hero photo (not branded yet)"
     return StepOutput(
-        content=f"Hero image for “{title}”.",
-        provider=image.provider,
-        model=image.model,
-        note=note,
-        image=stored,
+        content=f"{state} for “{title}”.",
+        provider=provider,
+        model=model,
+        note=fallback_note + _hero_note(hero_metrics, image_prompt),
+        image=branded or photo,
+        extra_metrics={"hero": hero_metrics},
     )
 
 

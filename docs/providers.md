@@ -55,8 +55,14 @@ SDXL base/lightning and DreamShaper aren't on the pricing page; test before rely
 
 | Provider | How | Notes |
 |---|---|---|
-| ComfyUI (local host) | HTTP API at `http://host.docker.internal:8188` | FLUX.2 [klein] 4B (Apache-2.0, commercial use OK). Needs quantised weights on 8 GB VRAM. |
+| ComfyUI (local host) | HTTP API at `http://host.docker.internal:8188`: `POST /prompt` with your exported API-format workflow, poll `/history/{id}`, fetch `/view` (`apps/ai/images/comfyui.py`) | FLUX.2 [klein] 4B (Apache-2.0, commercial use OK). Needs quantised weights on 8 GB VRAM. The catalog's "model" is the workflow file name; setup in [setup.md](setup.md#6-host-comfyui-local-images-optional). |
 | Cloudflare Workers AI | REST, `CLOUDFLARE_ACCOUNT_ID` + `CLOUDFLARE_API_TOKEN` | FLUX.2 klein 4B or FLUX.1 schnell; free daily allowance shared with text |
+
+Heroes are generated at 1440×816 (the hero layout is 1440×810). FLUX.1 schnell on Cloudflare ignores width and height and returns a square image, which usually can't be reframed for the hero, so a failed ComfyUI run falls back to FLUX.2 klein first.
+
+### Vision (hero check)
+
+The `vision` profile looks at each generated hero photo (subject box, facing, readable text, safety problems): Gemini 3.7 Flash, falling back to local `qwen3-vl:8b-instruct`. Messages use OpenAI-style content parts (`text` + `image_url` with a base64 data URL); the Ollama adapter converts them to Ollama's `images` field. On 2026-10-13 Gemini's Flash models returned HTTP 500 for several image requests in a row; the fallback covered them. Qwen3-VL 8B boxes subjects less tightly than Gemini.
 
 Avoid models with non-commercial licences (FLUX.1-dev, FLUX.2-dev, FLUX.2 klein 9B) for company content. Cloudflare also lists `flux-2-klein-9b` and `flux-2-dev`; use them only if Cloudflare's terms for those hosted models clearly allow commercial use. Otherwise stick to `flux-2-klein-4b` and `flux-1-schnell` (both Apache-2.0).
 

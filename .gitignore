@@ -25,3 +25,8 @@ Thumbs.db
 
 # Evaluation runs (outputs stay local; only docs/model-eval.md is committed)
 /eval/runs/
+
+# sds-hero-stock brand assets (SDS Manager logo, overlay data): copied from the skill,
+# kept out of the public repo (docs/adr/0004-brand-assets-outside-git.md). The font is OFL.
+/apps/quality/vendor/sds_hero_stock/assets/*
+!/apps/quality/vendor/sds_hero_stock/assets/fonts/

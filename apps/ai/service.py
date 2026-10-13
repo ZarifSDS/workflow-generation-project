@@ -6,14 +6,14 @@ import time
 from django.conf import settings
 
 from .adapters import ollama_native, openai_compat
-from .images import cloudflare
+from .images import cloudflare, comfyui
 from .providers import get_provider
 from .types import ProviderError
 
 logger = logging.getLogger(__name__)
 
 TEXT_ADAPTERS = {"openai_compat": openai_compat.chat, "ollama_native": ollama_native.chat}
-IMAGE_ADAPTERS = {"cloudflare_images": cloudflare.generate}
+IMAGE_ADAPTERS = {"cloudflare_images": cloudflare.generate, "comfyui": comfyui.generate}
 
 
 def _with_retries(call, describe, retries, backoff):

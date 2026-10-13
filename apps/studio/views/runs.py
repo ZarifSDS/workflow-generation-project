@@ -53,6 +53,17 @@ def _checks(version, brief):
     }
 
 
+def _hero(version):
+    """Hero branding results for the checks panel, with the unbranded photo."""
+    from wagtail.images import get_image_model
+
+    hero = (version.metrics or {}).get("hero") if version else None
+    if not hero:
+        return None
+    photo = get_image_model().objects.filter(pk=hero.get("photo_image_id")).first()
+    return {**hero, "photo": photo if hero.get("branded") else None}
+
+
 class RunWorkspaceView(StudioPage):
     template_name = "studio/run_workspace.html"
 
@@ -90,7 +101,8 @@ class RunWorkspaceView(StudioPage):
             version=version,
             versions=versions,
             first_version=versions[-1] if versions else None,
-            checks=_checks(version, self.run.brief),
+            checks=_checks(version, self.run.brief) if kind != "image" else None,
+            hero=_hero(version) if kind == "image" else None,
             model_groups=catalog.grouped(kind) if kind in ("text", "image") else [],
             current_model_key=f"{step.provider}::{step.model}" if step and step.model else "",
             can_review=bool(

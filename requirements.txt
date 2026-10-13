@@ -12,3 +12,6 @@ textstat==0.7.13
 PyYAML==6.0.3
 Markdown==3.11
 nh3==0.3.7
+# sds-hero-stock branding scripts (apps/quality/vendor/sds_hero_stock)
+numpy==2.5.4
+scipy==1.18.1

@@ -34,6 +34,7 @@ PROVIDER_LABELS = {
     "gemini": "Gemini",
     "groq": "Groq",
     "cloudflare": "Cloudflare",
+    "comfyui": "ComfyUI (your PC)",
 }
 
 CATALOG = [
@@ -104,14 +105,24 @@ CATALOG = [
         reason="Free tier allows 1,000 output tokens a minute; may fail on long drafts",
         typical_seconds=5,
     ),
+    # ComfyUI on your PC: the model is a workflow file exported in API format (docs/setup.md)
+    CatalogModel(
+        "comfyui",
+        "flux2-klein-4b.json",
+        "FLUX.2 klein 4B (ComfyUI)",
+        "image",
+        status="limited",
+        reason="Needs ComfyUI running on your PC with this workflow exported (docs/setup.md)",
+        options={"width": 1440, "height": 816},
+    ),
     # Cloudflare images (free daily allowance)
     CatalogModel(
         "cloudflare",
         "@cf/black-forest-labs/flux-2-klein-4b",
         "FLUX.2 klein 4B",
         "image",
-        typical_seconds=10,
-        options={"width": 1024, "height": 576},
+        typical_seconds=12,
+        options={"width": 1440, "height": 816},
     ),
     CatalogModel(
         "cloudflare",

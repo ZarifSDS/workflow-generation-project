@@ -7,7 +7,7 @@
 | Docker Desktop (WSL2 engine) | Must show "Engine running" before `docker compose` commands |
 | Git | To clone and push |
 | Ollama on the host | Optional for M1, required for local models from M2 |
-| ComfyUI on the host | Optional, for local image generation from M6 |
+| ComfyUI on the host | Optional, for local hero images (step 6) |
 
 ## 1. Clone and configure
 
@@ -69,9 +69,26 @@ Containers reach the host at `http://host.docker.internal:11434`. Recommended ho
 
 The Content Studio overview page shows whether the containers can reach Ollama and ComfyUI.
 
-## 5. Host ComfyUI (local images, M6)
+## 5. Hero branding assets (sds-hero-stock)
 
-Install the ComfyUI Windows portable build and the FLUX.2 [klein] 4B weights from their official sources. It listens on port 8188. The GPU has 8 GB of VRAM, so the worker unloads the Ollama model before image steps (see [providers.md](providers.md)).
+The hero step brands generated photos with the vendored sds-hero-stock scripts. Their brand assets (the SDS Manager logo and the measured overlay data) aren't in git because the repository is public ([ADR 0004](adr/0004-brand-assets-outside-git.md)). Copy them from the skill once per clone (Git Bash on the host):
+
+```bash
+cp ~/.claude/skills/sds-hero-stock/scripts/assets/*.{png,svg} apps/quality/vendor/sds_hero_stock/assets/
+```
+
+The dev containers see them through the source mount; a production build copies them into the image. Without them the hero step still generates and checks the photo, and says that branding was skipped. The Inter Bold font (SIL OFL) is committed.
+
+## 6. Host ComfyUI (local images, optional)
+
+Hero images use Cloudflare by default. To generate them on your PC instead:
+
+1. Install the ComfyUI Windows portable build and the FLUX.2 [klein] 4B weights from their official sources (a quantised build fits the 8 GB GPU). It listens on port 8188.
+2. Build a text-to-image workflow in ComfyUI and check that it renders.
+3. Export it with **Workflow › Export (API)** and save it as `comfyui/workflows/flux2-klein-4b.json` (the name the model catalog uses; add a catalog entry in `apps/ai/catalog.py` for other workflows).
+4. Choose **FLUX.2 klein 4B (ComfyUI)** as the hero image model in the run wizard, or regenerate a hero with it.
+
+The worker patches the exported workflow before queueing it: the prompt text (the text node feeding the sampler's positive input; rename the node to "Positive prompt" if it guesses wrong), the latent width and height (1440×816 for heroes) and the seed. Before each image it unloads Ollama's models (`keep_alive: 0`) so ComfyUI gets the GPU, and afterwards it asks ComfyUI to free its memory (`POST /free`). If ComfyUI isn't running, the step falls back to the image profile's Cloudflare model.
 
 ## Production-style run
 
