@@ -18,6 +18,22 @@ All text providers are called through one **OpenAI-compatible** client (`openai`
 
 Free-tier limits change often; check each provider's current terms. Source list: [awesome-free-llm-apis](https://github.com/mnfst/awesome-free-llm-apis).
 
+### Active in this deployment (verified 2026-10-13)
+
+Each key was checked with a list-models call from inside the `web` container.
+
+| Provider | Status | Notable models available |
+|---|---|---|
+| Ollama (local) | Active | Qwen3.8 27B, glm-4.7-flash, 35B-A3B MoE, qwen3-vl 30B-A3B, gemma4:e4b, nemotron-cascade-2 |
+| Ollama Cloud | Active | kimi-k3, deepseek-v4-pro, glm-5.3, mistral-large-4, gemma4:31b, gpt-oss:120b, nemotron-3-super |
+| Gemini | Active | gemini-2.5-pro, gemini-2.5-flash, gemini-3-flash-preview, gemma-4-31b-it |
+| Groq | Active | qwen/qwen3.8-27b, openai/gpt-oss-120b, openai/gpt-oss-20b |
+| Cloudflare Workers AI | Active (images) | flux-2-klein-4b, flux-1-schnell (see the licence note below) |
+| NVIDIA NIM | Not used | Account verification isn't available in the operator's country |
+| Mistral, OpenRouter | Not used | No usable free access for this deployment |
+
+**Groq:** its edge rejects requests with Python's default `urllib` user agent (HTTP 403). The `openai` SDK sends its own user agent; any raw HTTP call must set one explicitly.
+
 ## Image providers
 
 | Provider | How | Notes |
@@ -25,7 +41,7 @@ Free-tier limits change often; check each provider's current terms. Source list:
 | ComfyUI (local host) | HTTP API at `http://host.docker.internal:8188` | FLUX.2 [klein] 4B (Apache-2.0, commercial use OK). Needs quantised weights on 8 GB VRAM. |
 | Cloudflare Workers AI | REST, `CLOUDFLARE_ACCOUNT_ID` + `CLOUDFLARE_API_TOKEN` | FLUX.2 klein 4B or FLUX.1 schnell; free daily allowance shared with text |
 
-Avoid models with non-commercial licences (FLUX.1-dev, FLUX.2-dev, FLUX.2 klein 9B) for company content.
+Avoid models with non-commercial licences (FLUX.1-dev, FLUX.2-dev, FLUX.2 klein 9B) for company content. Cloudflare also lists `flux-2-klein-9b` and `flux-2-dev`; use them only if Cloudflare's terms for those hosted models clearly allow commercial use. Otherwise stick to `flux-2-klein-4b` and `flux-1-schnell` (both Apache-2.0).
 
 ## Local model strategy (RTX 5060 Laptop 8 GB + 64 GB DDR5-5200)
 
