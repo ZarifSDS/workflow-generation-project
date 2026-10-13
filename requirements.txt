@@ -9,6 +9,9 @@ gunicorn==26.2.0
 openai==3.29.0
 httpx==0.28.1
 textstat==0.7.13
+# textstat dependencies, pinned so a rebuild cannot change syllable counting (see Dockerfile: cmudict)
+nltk==3.10.3
+pyphen==0.18.1
 PyYAML==6.0.3
 Markdown==3.11
 nh3==0.3.7

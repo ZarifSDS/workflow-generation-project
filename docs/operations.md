@@ -153,6 +153,7 @@ Docker's virtual disk lives on **D:** (`D:\DockerData`, moved there on 2026-10-1
 | `failed to connect to the docker API` | Start Docker Desktop and wait for "Engine running" |
 | A step stays **Queued** | The worker isn't running: `docker compose ps`, then `docker compose up -d worker`; check `docker compose logs worker` |
 | A step stays **Running** after a worker restart | It was interrupted and won't finish on its own. An operator opens the step and uses **Mark as failed**, then **Retry** |
+| A step fails with "The output was generated but couldn't be saved" | Read `docker compose logs worker` for the cause, fix it, then **Retry** |
 | "Too many sign-in attempts" | Wait 15 minutes, or unlock the username (see Accounts and roles) |
 | "Couldn't reach the provider" with a local model | Start Ollama; check the dashboard's Services panel |
 | "The free limit for this model was reached" | Wait for the limit to reset or pick another model |

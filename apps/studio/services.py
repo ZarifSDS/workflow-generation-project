@@ -1,5 +1,7 @@
 """State changes for runs and steps. Views and the background task call these."""
 
+import logging
+
 from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
@@ -11,6 +13,8 @@ from apps.quality import scans as quality_scans
 
 from .models import VERSIONS_TO_KEEP, GenerationRun, MetadataOption, StepRun, StepVersion
 from .pipeline import steps_for
+
+logger = logging.getLogger(__name__)
 
 
 def enqueue(step):
@@ -73,6 +77,25 @@ def _prune_versions(step):
 QUALITY_SCAN_STEPS = {"draft", "review_edit", "cleanup", "localise"}
 
 
+def _safe_metrics(content, step):
+    """Checks for the checks panel. They're advisory: if one fails, the output is still saved."""
+    if not content.strip():
+        return {}
+    computed = {}
+    try:
+        computed = text_metrics.compute(content, step.run.brief.as_prompt_dict())
+    except Exception as error:  # noqa: BLE001 - a broken metric must not lose a 20-minute generation
+        logger.exception("Metrics failed for step %s", step.pk)
+        computed["metrics_error"] = f"{error.__class__.__name__}: {str(error)[:200]}"
+    if step.key in QUALITY_SCAN_STEPS and getattr(settings, "STUDIO_QUALITY_SCANS", True):
+        try:
+            computed["quality"] = quality_scans.summary(content)
+        except Exception as error:  # noqa: BLE001
+            logger.exception("Quality scans failed for step %s", step.pk)
+            computed["quality_error"] = f"{error.__class__.__name__}: {str(error)[:200]}"
+    return computed
+
+
 @transaction.atomic
 def add_version(
     step,
@@ -87,9 +110,7 @@ def add_version(
     extra_metrics=None,
 ):
     last = step.versions.order_by("-number").first()
-    computed = text_metrics.compute(content, step.run.brief.as_prompt_dict()) if content.strip() else {}
-    if content.strip() and step.key in QUALITY_SCAN_STEPS and getattr(settings, "STUDIO_QUALITY_SCANS", True):
-        computed["quality"] = quality_scans.summary(content)
+    computed = _safe_metrics(content, step)
     computed.update(extra_metrics or {})
     version = StepVersion.objects.create(
         step=step,

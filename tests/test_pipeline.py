@@ -433,3 +433,32 @@ def test_second_photo_too_far_left_stops_and_explains(brief, fake_llm, fake_imag
     assert fake_images["generate"] == 2
     assert step.status == StepRun.Status.READY
     assert step.latest_version.metrics["hero"]["branded"] is False
+
+
+def test_failing_metrics_keep_the_generated_output(brief, fake_llm, monkeypatch):
+    from apps.ai.evaluation import metrics as text_metrics
+
+    def broken(*args, **kwargs):
+        raise LookupError("Resource 'cmudict' not found.")
+
+    monkeypatch.setattr(text_metrics, "compute", broken)
+    run = services.create_run(brief, {})
+    research = run.steps.get(key="research")
+    execute_step(research.pk)
+    research.refresh_from_db()
+    assert research.status == StepRun.Status.READY, research.error
+    assert research.latest_version.content.startswith("# Output from")
+    assert "cmudict" in research.latest_version.metrics["metrics_error"]
+
+
+def test_a_crash_while_saving_fails_the_step_instead_of_leaving_it_running(brief, fake_llm, monkeypatch):
+    def broken(*args, **kwargs):
+        raise RuntimeError("disk full")
+
+    monkeypatch.setattr(services, "add_version", broken)
+    run = services.create_run(brief, {})
+    research = run.steps.get(key="research")
+    execute_step(research.pk)
+    research.refresh_from_db()
+    assert research.status == StepRun.Status.FAILED
+    assert "couldn't be saved" in research.error

@@ -20,6 +20,17 @@ ARG REQUIREMENTS=requirements.txt
 COPY requirements.txt requirements-dev.txt /
 RUN pip install --no-cache-dir -r /${REQUIREMENTS}
 
+# NLTK's CMU pronouncing dictionary, which textstat uses to count syllables for reading grades.
+# Fetched at build time and checked against the SHA-256 in NLTK's data index: downloading it at
+# runtime fails (NLTK 3.10.3's downloader rejects its own temporary file) and would leave steps stuck.
+ARG CMUDICT_URL=https://raw.githubusercontent.com/nltk/nltk_data/gh-pages/packages/corpora/cmudict.zip
+ARG CMUDICT_SHA256=d07cca47fd72ad32ea9d8ad1219f85301eeaf4568f8b6b73747506a71fb5afd6
+RUN python -c "import hashlib, io, sys, urllib.request, zipfile; \
+data = urllib.request.urlopen(sys.argv[1], timeout=60).read(); \
+assert hashlib.sha256(data).hexdigest() == sys.argv[2], 'cmudict checksum mismatch'; \
+zipfile.ZipFile(io.BytesIO(data)).extractall('/opt/venv/nltk_data/corpora')" \
+    "${CMUDICT_URL}" "${CMUDICT_SHA256}"
+
 
 # ---- Runtime stage ----
 FROM python:3.13-slim-trixie AS runtime

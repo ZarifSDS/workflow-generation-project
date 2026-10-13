@@ -46,15 +46,20 @@ def execute_step(step_id):
         _fail(step, f"Unexpected error: {error!r}"[:1000])
         return
 
-    services.add_version(
-        step,
-        output.content,
-        provider=output.provider,
-        model=output.model,
-        note=output.note,
-        image=output.image,
-        extra_metrics=output.extra_metrics,
-    )
+    try:
+        services.add_version(
+            step,
+            output.content,
+            provider=output.provider,
+            model=output.model,
+            note=output.note,
+            image=output.image,
+            extra_metrics=output.extra_metrics,
+        )
+    except Exception as error:  # noqa: BLE001 - saving must never leave a step stuck in "running"
+        logger.exception("Step %s (%s): saving the output failed", step.pk, step.key)
+        _fail(step, f"The output was generated but couldn't be saved: {error!r}"[:1000])
+        return
     step.refresh_from_db()
     step.finished_at, step.regenerate_note = timezone.now(), ""
     if step.gate:
