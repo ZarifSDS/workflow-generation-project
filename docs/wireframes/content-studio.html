@@ -1,0 +1,607 @@
+<title>Content Studio Wireframes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;600;700&family=Noto+Serif:wght@600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a review document — header, screen tabs, then each screen as a Wagtail-styled frame with numbered UX notes beside it. */
+:root {
+  --bg: #f4f5f4;            /* page ground, faint teal bias */
+  --paper: #ffffff;         /* admin content surface */
+  --ink: #1d2422;
+  --muted: #5d6764;
+  --line: #d9dedc;
+  --sidebar: #1f2624;       /* Wagtail-style dark sidebar */
+  --sidebar-ink: #e3e9e7;
+  --sidebar-muted: #9aa6a2;
+  --teal: #007d7e;          /* Wagtail primary action */
+  --teal-soft: #e2f1f1;
+  --note: #fff6dc;          /* annotation callouts */
+  --note-ink: #6b5410;
+  --ok: #1f7a3f; --ok-soft: #e3f3e8;
+  --warn: #a35d00; --warn-soft: #fdf0dc;
+  --bad: #b3261e; --bad-soft: #fbe5e3;
+  --info: #2c5a9a; --info-soft: #e5edf8;
+  --font-ui: "Noto Sans", "Segoe UI", system-ui, sans-serif;
+  --font-display: "Noto Serif", Georgia, serif;
+  --font-mono: "JetBrains Mono", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #121615; --paper: #1b211f; --ink: #e6ecea; --muted: #a1aca8; --line: #33403c;
+  --sidebar: #0c0f0e; --sidebar-ink: #e3e9e7; --sidebar-muted: #8a9692;
+  --teal: #2bb5b6; --teal-soft: #163a3a; --note: #3a3115; --note-ink: #f0d58a;
+  --ok: #6fd18f; --ok-soft: #173524; --warn: #f0b05a; --warn-soft: #3b2a12;
+  --bad: #f28b82; --bad-soft: #3d1b19; --info: #8fb4ec; --info-soft: #1a2a42; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #121615; --paper: #1b211f; --ink: #e6ecea; --muted: #a1aca8; --line: #33403c;
+  --sidebar: #0c0f0e; --sidebar-ink: #e3e9e7; --sidebar-muted: #8a9692;
+  --teal: #2bb5b6; --teal-soft: #163a3a; --note: #3a3115; --note-ink: #f0d58a;
+  --ok: #6fd18f; --ok-soft: #173524; --warn: #f0b05a; --warn-soft: #3b2a12;
+  --bad: #f28b82; --bad-soft: #3d1b19; --info: #8fb4ec; --info-soft: #1a2a42; color-scheme: dark }
+
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font: 15px/1.55 var(--font-ui); padding-inline: 16px; padding-block: 28px 64px; }
+.wrap { max-width: 1240px; margin-inline: auto; display: grid; gap: 24px; }
+h1, h2, h3 { text-wrap: balance; line-height: 1.25; margin: 0; }
+h1 { font: 600 clamp(1.6rem, 3vw, 2.2rem)/1.2 var(--font-display); }
+.lede { color: var(--muted); max-width: 68ch; margin: 6px 0 0; }
+.meta { display: flex; flex-wrap: wrap; gap: 8px 16px; color: var(--muted); font-size: .85rem; margin-top: 10px; }
+.meta b { color: var(--ink); font-weight: 600; }
+
+/* screen tabs */
+.tabs { display: flex; flex-wrap: wrap; gap: 6px; position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); padding-block: 8px; border-bottom: 1px solid var(--line); }
+.tabs button { font: 600 .85rem var(--font-ui); border: 1px solid var(--line); background: var(--paper); color: var(--ink); border-radius: 999px; padding: 6px 14px; cursor: pointer; }
+.tabs button[aria-selected="true"] { background: var(--teal); border-color: var(--teal); color: #fff; }
+.tabs button:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 3px solid var(--teal); outline-offset: 2px; }
+
+.screen { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 20px; align-items: start; }
+@media (max-width: 980px) { .screen { grid-template-columns: minmax(0, 1fr); } }
+.screen-head { grid-column: 1 / -1; display: grid; gap: 4px; }
+.screen-head h2 { font: 600 1.35rem var(--font-display); }
+.screen-head p { margin: 0; color: var(--muted); max-width: 75ch; }
+
+/* the wireframe frame */
+.frame-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--paper); min-width: 0; }
+.admin { display: grid; grid-template-columns: 200px minmax(0, 1fr); min-width: 900px; min-height: 560px; }
+.side { background: var(--sidebar); color: var(--sidebar-ink); padding: 14px 10px; display: grid; align-content: start; gap: 2px; font-size: .84rem; border-radius: 10px 0 0 10px; }
+.side .brand { font-weight: 700; padding: 4px 8px 12px; letter-spacing: .02em; }
+.side a { color: var(--sidebar-muted); text-decoration: none; padding: 6px 8px; border-radius: 6px; display: block; }
+.side a.on { background: rgba(255,255,255,.08); color: var(--sidebar-ink); }
+.side .sub { padding-left: 22px; }
+.main { display: grid; grid-template-rows: auto 1fr; min-width: 0; }
+.bar { display: flex; align-items: center; gap: 12px; padding: 14px 22px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.bar h3 { font-size: 1.15rem; }
+.crumbs { color: var(--muted); font-size: .8rem; }
+.spacer { flex: 1; }
+.body { padding: 18px 22px; display: grid; gap: 16px; align-content: start; min-width: 0; }
+
+.btn { font: 600 .82rem var(--font-ui); border-radius: 6px; padding: 7px 12px; border: 1px solid var(--line); background: var(--paper); color: var(--ink); cursor: pointer; white-space: nowrap; }
+.btn.primary { background: var(--teal); border-color: var(--teal); color: #fff; }
+.btn.danger { color: var(--bad); }
+.btn.small { padding: 4px 9px; font-size: .78rem; }
+select, input[type=text], textarea { font: .85rem var(--font-ui); color: var(--ink); background: var(--paper); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; }
+
+.tag { display: inline-flex; align-items: center; gap: 5px; font: 600 .72rem var(--font-ui); letter-spacing: .02em; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+.tag.ok { background: var(--ok-soft); color: var(--ok); }
+.tag.warn { background: var(--warn-soft); color: var(--warn); }
+.tag.bad { background: var(--bad-soft); color: var(--bad); }
+.tag.info { background: var(--info-soft); color: var(--info); }
+.tag.plain { background: var(--bg); color: var(--muted); }
+.mono { font-family: var(--font-mono); font-size: .8rem; font-variant-numeric: tabular-nums; }
+.muted { color: var(--muted); }
+
+.sect-title { font: 600 .74rem var(--font-ui); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); display: flex; gap: 8px; align-items: center; }
+.list { border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.row { display: grid; grid-template-columns: minmax(0, 2.2fr) minmax(0, 1.2fr) minmax(0, 1.4fr) auto; gap: 12px; align-items: center; padding: 10px 14px; border-top: 1px solid var(--line); font-size: .86rem; }
+.row:first-child { border-top: 0; }
+.row .t { font-weight: 600; }
+.row .sub { color: var(--muted); font-size: .78rem; }
+.progress { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
+.progress i { display: block; height: 100%; width: 45%; background: var(--teal); }
+
+.cols-2 { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 16px; }
+.box { border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; display: grid; gap: 8px; align-content: start; }
+.kv { display: flex; justify-content: space-between; gap: 10px; font-size: .84rem; }
+
+/* annotations */
+.n { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--note-ink); color: var(--note); font: 700 .7rem var(--font-ui); flex: none; vertical-align: middle; }
+.notes { background: var(--note); color: var(--note-ink); border-radius: 10px; padding: 14px 16px; display: grid; gap: 10px; font-size: .86rem; }
+.notes h3 { font-size: .8rem; letter-spacing: .08em; text-transform: uppercase; }
+.notes ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.notes li { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 8px; }
+.notes .why { opacity: .85; }
+
+/* wizard */
+.stepper { display: flex; gap: 6px; flex-wrap: wrap; font-size: .8rem; }
+.stepper span { padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
+.stepper span.on { border-color: var(--teal); color: var(--teal); font-weight: 600; }
+.stepper span.done { background: var(--teal-soft); color: var(--teal); border-color: transparent; }
+.cards { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+.card { border: 1px solid var(--line); border-radius: 8px; padding: 10px; font-size: .8rem; display: grid; gap: 4px; }
+.card b { font-size: .86rem; }
+.card.on { border: 2px solid var(--teal); background: var(--teal-soft); }
+.form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 14px; }
+.field { display: grid; gap: 4px; font-size: .8rem; }
+.field label { font-weight: 600; }
+.field .help { color: var(--muted); font-size: .74rem; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; border: 1px solid var(--line); border-radius: 6px; padding: 6px; min-height: 34px; }
+.chip { background: var(--teal-soft); color: var(--teal); border-radius: 4px; padding: 1px 7px; font-size: .78rem; }
+.steps-table { width: 100%; border-collapse: collapse; font-size: .82rem; }
+.steps-table th { text-align: left; color: var(--muted); font-weight: 600; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+.steps-table td { padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+
+/* run workspace */
+.ws { display: grid; grid-template-columns: 210px minmax(0, 1fr) 260px; gap: 0; min-height: 520px; }
+.timeline { border-right: 1px solid var(--line); padding: 14px 10px; display: grid; gap: 2px; align-content: start; }
+.tl { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 8px; align-items: start; padding: 7px 8px; border-radius: 6px; font-size: .82rem; cursor: pointer; border: 0; background: none; color: var(--ink); text-align: left; }
+.tl.on { background: var(--teal-soft); }
+.tl .dot { width: 12px; height: 12px; border-radius: 50%; margin-top: 4px; border: 2px solid var(--line); }
+.tl .dot.done { background: var(--ok); border-color: var(--ok); }
+.tl .dot.ready { background: var(--teal); border-color: var(--teal); box-shadow: 0 0 0 3px var(--teal-soft); }
+.tl .dot.run { border-color: var(--teal); border-style: dashed; }
+.tl small { display: block; color: var(--muted); font-size: .72rem; }
+.doc { padding: 16px 20px; display: grid; gap: 10px; align-content: start; min-width: 0; }
+.doc h4 { margin: 0; font-size: 1.05rem; }
+.doc .h2 { font-weight: 700; margin-top: 6px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.doc ul { margin: 0; padding-left: 18px; color: var(--muted); font-size: .84rem; }
+.verify { background: var(--warn-soft); color: var(--warn); border-radius: 3px; padding: 0 4px; font-size: .78rem; font-weight: 600; }
+.panel { border-left: 1px solid var(--line); padding: 14px 12px; display: grid; gap: 14px; align-content: start; font-size: .82rem; min-width: 0; }
+.panel .box { padding: 10px; }
+.gradebar { display: grid; grid-template-columns: minmax(0, 1fr) 40px; gap: 6px; align-items: center; font-size: .76rem; }
+.gradebar .track { height: 6px; background: var(--line); border-radius: 3px; position: relative; overflow: hidden; }
+.gradebar .track i { position: absolute; inset: 0 auto 0 0; background: var(--ok); border-radius: 3px; }
+.gradebar .track i.hi { background: var(--bad); }
+.gradebar .track i.mid { background: var(--warn); }
+.actionbar { display: flex; gap: 8px; flex-wrap: wrap; padding: 12px 20px; border-top: 1px solid var(--line); align-items: center; }
+
+/* review & edit */
+.substeps { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+.ss { border: 1px solid var(--line); border-radius: 6px; padding: 8px; font-size: .74rem; display: grid; gap: 4px; }
+.ss.done { background: var(--ok-soft); border-color: transparent; }
+.ss.on { border: 2px solid var(--teal); }
+.grade-table { width: 100%; border-collapse: collapse; font-size: .82rem; font-variant-numeric: tabular-nums; }
+.grade-table th, .grade-table td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: left; }
+.grade-table td.num { font-family: var(--font-mono); }
+.diff { font-family: var(--font-mono); font-size: .78rem; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.diff div { padding: 6px 10px; }
+.diff .del { background: var(--bad-soft); color: var(--bad); }
+.diff .add { background: var(--ok-soft); color: var(--ok); }
+
+/* metadata */
+.opt { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 8px 12px; border-top: 1px solid var(--line); font-size: .86rem; }
+.opt:first-child { border-top: 0; }
+.opt input { width: 16px; height: 16px; accent-color: var(--teal); }
+.addown { display: flex; gap: 8px; padding: 10px 12px; border-top: 1px dashed var(--line); flex-wrap: wrap; }
+.addown input { flex: 1; min-width: 180px; }
+.serp { border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; display: grid; gap: 2px; }
+.serp .u { color: var(--ok); font-size: .78rem; }
+.serp .t { color: var(--info); font-size: 1.05rem; }
+.serp .d { color: var(--muted); font-size: .84rem; }
+
+/* providers */
+.ptable { width: 100%; border-collapse: collapse; font-size: .82rem; }
+.ptable th { text-align: left; color: var(--muted); font-weight: 600; padding: 7px 8px; border-bottom: 1px solid var(--line); }
+.ptable td { padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+
+.questions { background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; display: grid; gap: 8px; }
+.questions h2 { font: 600 1.2rem var(--font-display); }
+.questions ol { margin: 0; padding-left: 20px; display: grid; gap: 6px; max-width: 80ch; }
+
+@media (prefers-reduced-motion: no-preference) { .progress i { animation: slide 2.4s ease-in-out infinite alternate; } }
+@keyframes slide { from { transform: translateX(-20%); } to { transform: translateX(140%); } }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Content Studio wireframes</h1>
+    <p class="lede">Milestone M3a. These are the screens of the content generation system inside your Wagtail admin. They are drawn with Wagtail's own look (dark sidebar, teal actions, its type and status tags), so they read as part of the admin. Click through the tabs; the yellow notes explain each decision. Example content is from the evaluation brief <span class="mono">b1-sds-retention</span>.</p>
+    <div class="meta"><span><b>Status:</b> draft for your review</span><span><b>Source:</b> docs/ux.md</span><span><b>Next:</b> your edits, then M3b build</span></div>
+  </header>
+
+  <nav class="tabs" role="tablist" aria-label="Screens">
+    <button role="tab" id="tab-dashboard" aria-controls="dashboard" aria-selected="true">1. Studio dashboard</button>
+    <button role="tab" id="tab-wizard" aria-controls="wizard" aria-selected="false">2. New brief</button>
+    <button role="tab" id="tab-workspace" aria-controls="workspace" aria-selected="false">3. Run workspace</button>
+    <button role="tab" id="tab-edit" aria-controls="edit" aria-selected="false">4. Review and edit</button>
+    <button role="tab" id="tab-metadata" aria-controls="metadata" aria-selected="false">5. Title and meta</button>
+    <button role="tab" id="tab-models" aria-controls="models" aria-selected="false">6. Models and providers</button>
+    <button role="tab" id="tab-crawl" aria-controls="crawl" aria-selected="false">7. Site crawl (guest posts)</button>
+  </nav>
+
+  <!-- 1. DASHBOARD -->
+  <section class="screen" id="dashboard" role="tabpanel" aria-labelledby="tab-dashboard">
+    <div class="screen-head"><h2>Studio dashboard</h2><p>The entry point. It answers "what needs me right now?" before anything else.</p></div>
+    <div class="frame-scroll"><div class="admin">
+      <aside class="side"><div class="brand">Wagtail</div><a>Dashboard</a><a>Pages</a><a>Images</a><a class="on">Content Studio</a><a class="sub on">Overview</a><a class="sub">Briefs</a><a class="sub">Runs</a><a class="sub">Prompt templates</a><a class="sub">Models and providers</a><a>Snippets</a><a>Reports</a><a>Settings</a></aside>
+      <div class="main">
+        <div class="bar"><h3>Content Studio</h3><span class="spacer"></span><button class="btn primary" type="button">New brief</button><span class="n">1</span></div>
+        <div class="body">
+          <div class="sect-title">Needs your review <span class="tag info">2</span><span class="n">2</span></div>
+          <div class="list">
+            <div class="row"><div><div class="t">How long to keep Safety Data Sheets</div><div class="sub">SEO blog · US · FKGL 9</div></div><div><span class="tag info">Outline ready</span></div><div class="sub">Qwen3.8 27B · local · 14 min ago</div><button class="btn primary small" type="button">Review</button></div>
+            <div class="row"><div><div class="t">Secondary container labelling</div><div class="sub">Guest post · UK · FKGL 8</div></div><div><span class="tag info">Draft ready</span></div><div class="sub">gpt-oss:120b · Ollama Cloud · 1 h ago</div><button class="btn primary small" type="button">Review</button></div>
+          </div>
+          <div class="sect-title">In progress <span class="tag plain">1</span><span class="n">3</span></div>
+          <div class="list">
+            <div class="row"><div><div class="t">SDS compliance checklist for small labs</div><div class="sub">Lead magnet · AU · FKGL 9</div></div><div><span class="tag plain">Drafting</span></div><div><div class="progress" aria-hidden="true"><i></i></div><div class="sub mono">6:42 elapsed · usually ~14 min · Qwen3.8 27B</div></div><button class="btn small" type="button">Open</button></div>
+          </div>
+          <div class="cols-2">
+            <div class="box"><div class="sect-title">Recently finished</div>
+              <div class="kv"><span>Chemical inventory audit guide</span><span class="tag ok">Published</span></div>
+              <div class="kv"><span>GHS pictograms explained (UK)</span><span class="tag ok">In moderation</span></div>
+              <div class="kv"><span>SDS authoring for importers</span><span class="tag bad">Rejected</span></div>
+            </div>
+            <div class="box"><div class="sect-title">Services and free quotas <span class="n">4</span></div>
+              <div class="kv"><span>Ollama on your PC</span><span class="tag ok">Running · Qwen3.8 27B loaded</span></div>
+              <div class="kv"><span>ComfyUI on your PC</span><span class="tag warn">Not running</span></div>
+              <div class="kv"><span>Cloudflare images today</span><span class="mono">520 / 10,000 neurons</span></div>
+              <div class="kv"><span>Gemini free tier</span><span class="tag ok">Available</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div></div>
+    <aside class="notes" aria-label="Notes for the dashboard"><h3>Why it looks like this</h3><ol>
+      <li><span class="n">1</span><div><b>One primary action.</b> <span class="why">"New brief" is the only teal button in the header, so the next step is never in doubt.</span></div></li>
+      <li><span class="n">2</span><div><b>Review queue first.</b> <span class="why">Your approval is the bottleneck, so items waiting on you sit at the top with the model that produced them.</span></div></li>
+      <li><span class="n">3</span><div><b>Honest progress for slow local models.</b> <span class="why">Elapsed time plus "usually ~14 min" (from past runs) instead of a fake percentage. You can leave the page; a notification brings you back.</span></div></li>
+      <li><span class="n">4</span><div><b>Problems visible before they bite.</b> <span class="why">If ComfyUI isn't running or a free quota is used up, you see it here, not as a failed step later.</span></div></li>
+    </ol></aside>
+  </section>
+
+  <!-- 2. WIZARD -->
+  <section class="screen" id="wizard" role="tabpanel" aria-labelledby="tab-wizard" hidden>
+    <div class="screen-head"><h2>New brief</h2><p>Four short steps. Sensible defaults per content type mean most briefs take under a minute.</p></div>
+    <div class="frame-scroll"><div class="admin">
+      <aside class="side"><div class="brand">Wagtail</div><a>Dashboard</a><a>Pages</a><a class="on">Content Studio</a><a class="sub">Overview</a><a class="sub on">Briefs</a><a class="sub">Runs</a></aside>
+      <div class="main">
+        <div class="bar"><div><div class="crumbs">Content Studio / Briefs</div><h3>New brief</h3></div><span class="spacer"></span><div class="stepper"><span class="done">1 Type</span><span class="on">2 Brief</span><span>3 Pipeline</span><span>4 Review</span></div></div>
+        <div class="body">
+          <div class="cards" role="radiogroup" aria-label="Content type"><span class="n">1</span>
+            <div class="card on"><b>SEO blog</b><span class="muted">For sdsmanager.com</span></div>
+            <div class="card"><b>Guest post</b><span class="muted">Third-party site</span></div>
+            <div class="card"><b>Lead magnet</b><span class="muted">Checklist, guide</span></div>
+            <div class="card"><b>Pillar page</b><span class="muted">Topic hub</span></div>
+          </div>
+          <div class="field"><label for="preset">Start from a preset <span class="n">2</span></label><div style="display:flex;gap:8px;flex-wrap:wrap"><select id="preset" style="flex:1;min-width:220px"><option>SDS Manager blog · US · FKGL 9 · subtle CTA</option><option>SDS Manager blog · UK · FKGL 9</option><option>Guest post · UK · informational · FKGL 8</option><option>Lead magnet checklist · AU · FKGL 9</option><option>No preset</option></select><button class="btn small" type="button">Save current as preset</button></div><span class="help">Fills region, reading grade, audience, CTA style and the model per step. You can still change any field. Manage presets under Content Studio › Presets.</span></div>
+          <div class="form">
+            <div class="field"><label for="topic">Topic</label><input type="text" id="topic" value="How long you must keep Safety Data Sheets: SDS retention rules under OSHA"></div>
+            <div class="field"><label for="pk">Primary keyword</label><input type="text" id="pk" value="SDS retention requirements"><span class="help">Goes in the title, the first 100 words and 2–3 headings.</span></div>
+            <div class="field"><label>Secondary keywords</label><div class="chips"><span class="chip">how long to keep safety data sheets ×</span></div></div>
+            <div class="field"><label for="aud">Audience</label><input type="text" id="aud" value="EHS managers at US manufacturing sites"></div>
+            <div class="field"><label for="wc">Target length</label><input type="text" id="wc" value="1,800 words"><span class="help">A guide, not a quota.</span></div>
+            <div class="field"><label for="fk">Reading grade (FKGL)</label><input type="text" id="fk" value="9"><span class="help">Soft target, checked per section in Review and edit.</span></div>
+            <div class="field"><label for="reg">Region</label><select id="reg"><option>US (OSHA, US spelling)</option><option>UK (HSE, COSHH)</option><option>AU (Safe Work Australia)</option></select></div>
+            <div class="field"><label for="comp">Reader's expertise</label><select id="comp"><option>Practitioner</option><option>Beginner</option><option>Expert</option></select></div>
+          </div>
+          <div class="sect-title">Next: pipeline <span class="n">3</span></div>
+          <table class="steps-table"><thead><tr><th>Step</th><th>Model</th><th>Wait for my approval</th></tr></thead><tbody>
+            <tr class="muted"><td>Site crawl <span class="tag plain">guest posts only</span></td><td>Reads the target site; no model needed for fetching</td><td><input type="checkbox" checked disabled aria-label="Approve site profile"></td></tr>
+            <tr><td>Research</td><td><select aria-label="Research model"><option>Recommended: gpt-oss:120b (Ollama Cloud, free)</option></select></td><td><input type="checkbox" checked aria-label="Approve research"></td></tr>
+            <tr><td>Outline</td><td><select aria-label="Outline model"><option>Recommended: Qwen3.8 27B (local, free)</option></select></td><td><input type="checkbox" checked aria-label="Approve outline"></td></tr>
+            <tr><td>Draft</td><td><select aria-label="Draft model"><option>Recommended: Qwen3.8 27B (local, free)</option></select></td><td><input type="checkbox" checked aria-label="Approve draft"></td></tr>
+            <tr><td>Hero image</td><td><select aria-label="Image model"><option>FLUX.2 klein 4B (Cloudflare, free)</option></select></td><td><input type="checkbox" checked aria-label="Approve image"></td></tr>
+          </tbody></table>
+          <div class="actionbar" style="padding-inline:0;border:0"><button class="btn" type="button">Back</button><span class="spacer"></span><button class="btn" type="button">Save brief only</button><button class="btn primary" type="button">Continue to pipeline</button></div>
+        </div>
+      </div>
+    </div></div>
+    <aside class="notes" aria-label="Notes for the brief wizard"><h3>Why it looks like this</h3><ol>
+      <li><span class="n">1</span><div><b>Type first.</b> <span class="why">The content type decides which fields and steps appear (guest posts add target site and narrative mode), so it comes before anything else.</span></div></li>
+      <li><span class="n">2</span><div><b>Presets (confirmed).</b> <span class="why">One dropdown fills the fields and models you repeat for every SDS Manager article. "Save current as preset" turns any brief into a new one; presets are managed in their own Content Studio screen.</span></div></li>
+      <li><span class="n">3</span><div><b>Model per step, with a recommendation.</b> <span class="why">Defaults come from the model evaluation. Every dropdown shows provider and whether it's free; you can override any step.</span></div></li>
+    </ol></aside>
+  </section>
+
+  <!-- 3. RUN WORKSPACE -->
+  <section class="screen" id="workspace" role="tabpanel" aria-labelledby="tab-workspace" hidden>
+    <div class="screen-head"><h2>Run workspace</h2><p>Everything about one piece of content in one place: the steps on the left, the output in the middle, the evidence and the model on the right.</p></div>
+    <div class="frame-scroll"><div class="admin">
+      <aside class="side"><div class="brand">Wagtail</div><a>Dashboard</a><a class="on">Content Studio</a><a class="sub">Overview</a><a class="sub">Briefs</a><a class="sub on">Runs</a></aside>
+      <div class="main">
+        <div class="bar"><div><div class="crumbs">Content Studio / Runs</div><h3>How long to keep Safety Data Sheets</h3></div><span class="tag info">Outline ready for review</span><span class="spacer"></span><button class="btn small" type="button">Brief</button></div>
+        <div class="ws">
+          <nav class="timeline" aria-label="Steps"><span class="n" style="margin:0 0 6px 6px">1</span>
+            <button class="tl" type="button"><span class="dot done"></span><span>Brief<small>Approved</small></span></button>
+            <button class="tl" type="button"><span class="dot done"></span><span>Research<small>Approved · gpt-oss:120b</small></span></button>
+            <button class="tl on" type="button" aria-current="step"><span class="dot ready"></span><span>Outline<small>Ready · v2 · Qwen3.8 27B</small></span></button>
+            <button class="tl" type="button"><span class="dot"></span><span>Draft<small>Waits for outline</small></span></button>
+            <button class="tl" type="button"><span class="dot"></span><span>Review and edit</span></button>
+            <button class="tl" type="button"><span class="dot"></span><span>Final cleanup<small>Automatic</small></span></button>
+            <button class="tl" type="button"><span class="dot"></span><span>Hero image</span></button>
+            <button class="tl" type="button"><span class="dot"></span><span>Publish</span></button>
+          </nav>
+          <div style="display:grid;grid-template-rows:1fr auto;min-width:0">
+            <article class="doc"><span class="n">2</span>
+              <h4>SDS Retention Requirements: How Long to Keep Safety Data Sheets</h4>
+              <div class="h2">What OSHA requires for SDS retention <span class="tag plain mono">FKGL 9.8</span></div>
+              <ul><li>Answer first: SDSs count as employee exposure records under 29 CFR 1910.1020.</li><li>You may discard an SDS if a record of the chemical's identity, where and when it was used is kept for 30 years. <span class="verify">[VERIFY]</span></li></ul>
+              <div class="h2">How long to keep safety data sheets in practice <span class="tag warn mono">FKGL 13.4</span></div>
+              <ul><li>Active chemicals: keep the current SDS accessible on every shift.</li><li>Discontinued chemicals: the 30-year record options compared.</li></ul>
+              <div class="h2">Digital SDS records and audits <span class="tag plain mono">FKGL 10.2</span></div>
+              <ul><li>What inspectors ask for; how a searchable SDS library shortens audits.</li></ul>
+            </article>
+            <div class="actionbar"><span class="n">3</span><button class="btn primary" type="button">Approve outline</button><button class="btn" type="button">Edit, then approve</button><button class="btn" type="button">Regenerate…</button><span class="spacer"></span><button class="btn danger" type="button">Reject run</button></div>
+          </div>
+          <aside class="panel" aria-label="Checks and model">
+            <div class="box"><div class="sect-title">Checks <span class="n">4</span></div>
+              <div class="kv"><span>Primary keyword in title</span><span class="tag ok">Yes</span></div>
+              <div class="kv"><span>…in first 100 words</span><span class="tag ok">Yes</span></div>
+              <div class="kv"><span>Secondary keyword</span><span class="tag ok">Used 1×</span></div>
+              <div class="kv"><span>Claims to verify</span><span class="tag warn">2</span></div>
+              <div class="kv"><span>Red-flag phrases</span><span class="tag ok">None</span></div>
+              <div class="gradebar"><span>Grade by section</span><span></span></div>
+              <div class="gradebar"><div class="track" title="FKGL 9.8"><i style="width:49%"></i></div><span class="mono">9.8</span></div>
+              <div class="gradebar"><div class="track" title="FKGL 13.4"><i class="hi" style="width:67%"></i></div><span class="mono">13.4</span></div>
+              <div class="gradebar"><div class="track" title="FKGL 10.2"><i class="mid" style="width:51%"></i></div><span class="mono">10.2</span></div>
+            </div>
+            <div class="box"><div class="sect-title">Model <span class="n">5</span></div>
+              <label class="muted" for="regen-model">Regenerate with</label>
+              <select id="regen-model">
+                <optgroup label="Local (free)"><option>Qwen3.8 27B · ~12 min</option><option>Ornith 35B-A3B · ~4 min</option></optgroup>
+                <optgroup label="Ollama Cloud (free)"><option>gpt-oss:120b · ~10 s</option><option>nemotron-3-ultra · ~40 s</option></optgroup>
+                <optgroup label="Unavailable"><option disabled>kimi-k3 · paid plan only</option><option disabled>gemini pro · no free quota</option></optgroup>
+              </select>
+              <textarea id="regen-note" rows="2" placeholder="Optional note, e.g. add a section on state plans"></textarea>
+            </div>
+            <div class="box"><div class="sect-title">Versions</div>
+              <div class="kv"><span>v2 · Qwen3.8 27B</span><span class="tag info">Current</span></div>
+              <div class="kv"><span>v1 · gpt-oss:120b</span><button class="btn small" type="button">Compare</button></div>
+            </div>
+          </aside>
+        </div>
+      </div>
+    </div></div>
+    <aside class="notes" aria-label="Notes for the run workspace"><h3>Why it looks like this</h3><ol>
+      <li><span class="n">1</span><div><b>Timeline as navigation.</b> <span class="why">Every step, its status in words and the model behind it. Click any finished step to reread it.</span></div></li>
+      <li><span class="n">2</span><div><b>Output reads like the article.</b> <span class="why">Headings keep their shape, each carries its grade, and <span class="mono">[VERIFY]</span> markers stand out so you check them before approving.</span></div></li>
+      <li><span class="n">3</span><div><b>Decisions in one bar.</b> <span class="why">Approve is primary; reject is set apart on the right and asks for a reason, so it can't be hit by accident.</span></div></li>
+      <li><span class="n">4</span><div><b>Evidence beside the text.</b> <span class="why">Keyword placement, claims to verify and grade per section, so you don't hunt through a separate report.</span></div></li>
+      <li><span class="n">5</span><div><b>Model dropdown with honest options.</b> <span class="why">Grouped by provider, with typical time per step. Paid-only or exhausted models stay listed but disabled with the reason.</span></div></li>
+    </ol></aside>
+  </section>
+
+  <!-- 4. REVIEW AND EDIT -->
+  <section class="screen" id="edit" role="tabpanel" aria-labelledby="tab-edit" hidden>
+    <div class="screen-head"><h2>Review and edit</h2><p>Your editing sequence as seven visible sub-steps, with grade changes per section and every edit reviewable.</p></div>
+    <div class="frame-scroll"><div class="admin">
+      <aside class="side"><div class="brand">Wagtail</div><a class="on">Content Studio</a><a class="sub on">Runs</a></aside>
+      <div class="main">
+        <div class="bar"><div><div class="crumbs">Runs / How long to keep Safety Data Sheets</div><h3>Review and edit</h3></div><span class="tag info">Ready for review</span></div>
+        <div class="body">
+          <div class="substeps" aria-label="Sub-steps"><span class="n">1</span>
+            <div class="ss done"><b>1 Grade scan</b><span>6 sections</span></div>
+            <div class="ss done"><b>2 De-slop</b><span>11 fixes</span></div>
+            <div class="ss done"><b>3 Clarity</b><span>4 fixes</span></div>
+            <div class="ss done"><b>4 Meta narration</b><span>3 removed</span></div>
+            <div class="ss done"><b>5 Word-level</b><span>2 sections &gt; 13</span></div>
+            <div class="ss done"><b>6 Re-scan</b><span>1 still high</span></div>
+            <div class="ss on"><b>7 Targeted splits</b><span>2 proposed</span></div>
+          </div>
+          <div class="sect-title">Grade by section <span class="n">2</span></div>
+          <div style="overflow-x:auto"><table class="grade-table"><thead><tr><th>Section</th><th>Start</th><th>After word-level edits</th><th>After splits</th><th>Target</th></tr></thead><tbody>
+            <tr><td>What OSHA requires for SDS retention</td><td class="num">9.8</td><td class="num">9.8</td><td class="num">9.8</td><td class="num">9</td></tr>
+            <tr><td>How long to keep safety data sheets in practice</td><td class="num">14.6</td><td class="num">13.1</td><td class="num"><span class="tag ok">10.4</span></td><td class="num">9</td></tr>
+            <tr><td>Digital SDS records and audits</td><td class="num">13.9</td><td class="num"><span class="tag ok">11.2</span></td><td class="num">11.2</td><td class="num">9</td></tr>
+          </tbody></table></div>
+          <div class="sect-title">Proposed split 1 of 2 <span class="n">3</span></div>
+          <div class="diff">
+            <div class="del">− If you stop using a chemical, OSHA lets you discard its SDS as long as you keep a record of the chemical's identity, where it was used and when, which must be retained for 30 years, and many sites keep the SDS itself because it is simpler.</div>
+            <div class="add">+ If you stop using a chemical, you may discard its SDS if you keep a record of the chemical's identity, where it was used and when. OSHA requires that record for 30 years. Many sites keep the SDS itself because it is simpler.</div>
+          </div>
+          <div class="kv"><span class="muted">Section grade 13.1 → 10.4 · meaning unchanged</span><span><button class="btn primary small" type="button">Accept split</button> <button class="btn small" type="button">Keep original</button></span></div>
+        </div>
+      </div>
+    </div></div>
+    <aside class="notes" aria-label="Notes for review and edit"><h3>Why it looks like this</h3><ol>
+      <li><span class="n">1</span><div><b>Your process, in order.</b> <span class="why">Word-level edits come before any splitting, exactly as you described. Each sub-step shows what it changed.</span></div></li>
+      <li><span class="n">2</span><div><b>Grade per section, over time.</b> <span class="why">You see which edits moved the number and which sections still sit above target.</span></div></li>
+      <li><span class="n">3</span><div><b>Splits are proposals, not edits.</b> <span class="why">Only splits that drop the grade sharply are offered, each with the before/after grade. You accept or keep the original one by one.</span></div></li>
+    </ol></aside>
+  </section>
+
+  <!-- 5. METADATA -->
+  <section class="screen" id="metadata" role="tabpanel" aria-labelledby="tab-metadata" hidden>
+    <div class="screen-head"><h2>Title and meta</h2><p>Options from the draft as a checklist, with your own additions alongside. This one is interactive: tick options or add your own.</p></div>
+    <div class="frame-scroll"><div class="admin">
+      <aside class="side"><div class="brand">Wagtail</div><a class="on">Content Studio</a><a class="sub on">Runs</a></aside>
+      <div class="main">
+        <div class="bar"><div><div class="crumbs">Runs / How long to keep Safety Data Sheets / Draft</div><h3>Title and meta</h3></div></div>
+        <div class="body">
+          <div class="cols-2">
+            <div style="display:grid;gap:12px;min-width:0">
+              <div class="sect-title">Title options <span class="n">1</span></div>
+              <div class="list" id="titles">
+                <label class="opt"><input type="checkbox" name="title" checked><span>SDS Retention Requirements: How Long to Keep SDSs</span><span class="mono muted">49/60</span></label>
+                <label class="opt"><input type="checkbox" name="title"><span>How Long to Keep Safety Data Sheets Under OSHA</span><span class="mono muted">46/60</span></label>
+                <label class="opt"><input type="checkbox" name="title"><span>SDS Retention Requirements Explained for EHS Teams</span><span class="mono muted">50/60</span></label>
+                <div class="addown"><label class="muted" for="own-title" style="flex-basis:100%">Add your own <span class="n">2</span></label><input type="text" id="own-title" maxlength="80" placeholder="Type a title"><span class="mono muted" id="own-title-count">0/60</span><button class="btn small" type="button" id="add-title">Add to list</button></div>
+              </div>
+              <div class="sect-title">Meta description options</div>
+              <div class="list">
+                <label class="opt"><input type="radio" name="meta" checked><span>OSHA treats SDSs as exposure records. Learn the SDS retention requirements, the 30-year record rule, and what to keep when a chemical leaves your site.</span><span class="mono muted">153/155</span></label>
+                <label class="opt"><input type="radio" name="meta"><span>How long to keep safety data sheets: the OSHA rules, the 30-year exception, and a simple retention policy for US manufacturing sites.</span><span class="mono muted">139/155</span></label>
+              </div>
+            </div>
+            <div style="display:grid;gap:12px;align-content:start;min-width:0">
+              <div class="sect-title">Search preview <span class="n">3</span></div>
+              <div class="serp" aria-live="polite"><span class="u">sdsmanager.com › blog › sds-retention-requirements</span><span class="t" id="serp-title">SDS Retention Requirements: How Long to Keep SDSs</span><span class="d">OSHA treats SDSs as exposure records. Learn the SDS retention requirements, the 30-year record rule, and what to keep when a chemical leaves your site.</span></div>
+              <div class="box"><div class="kv"><span>Primary keyword in selected title</span><span class="tag ok" id="kw-tag">Yes</span></div><div class="kv"><span>Titles selected</span><span class="mono" id="sel-count">1</span></div><span class="muted" style="font-size:.78rem">Ticking more than one title keeps them as A/B test options on the page.</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div></div>
+    <aside class="notes" aria-label="Notes for title and meta"><h3>Why it looks like this</h3><ol>
+      <li><span class="n">1</span><div><b>Checklist, not a single pick.</b> <span class="why">As you asked: tick one or more. Character counts against the limit sit on every option.</span></div></li>
+      <li><span class="n">2</span><div><b>Add your own joins the list.</b> <span class="why">Your option gets the same counter and keyword check, and is ticked automatically.</span></div></li>
+      <li><span class="n">3</span><div><b>See it as searchers will.</b> <span class="why">The preview updates as you tick, so length and keyword problems show before publishing.</span></div></li>
+    </ol></aside>
+  </section>
+
+  <!-- 6. MODELS -->
+  <section class="screen" id="models" role="tabpanel" aria-labelledby="tab-models" hidden>
+    <div class="screen-head"><h2>Models and providers</h2><p>What the dropdowns can offer, why anything is unavailable, and which model each profile uses by default.</p></div>
+    <div class="frame-scroll"><div class="admin">
+      <aside class="side"><div class="brand">Wagtail</div><a class="on">Content Studio</a><a class="sub on">Models and providers</a></aside>
+      <div class="main">
+        <div class="bar"><h3>Models and providers</h3><span class="muted" style="font-size:.8rem">Last checked 10 min ago</span><span class="spacer"></span><button class="btn" type="button">Re-check providers</button><span class="n">1</span></div>
+        <div class="body">
+          <div style="overflow-x:auto"><table class="ptable"><thead><tr><th>Provider</th><th>Status</th><th>Free models</th><th>Not available</th></tr></thead><tbody>
+            <tr><td><b>Ollama (your PC)</b></td><td><span class="tag ok">Running</span></td><td>Qwen3.8 27B, Ornith 35B-A3B, Ornith 9B, Qwythos 9B, glm-4.7-flash</td><td class="muted">None</td></tr>
+            <tr><td><b>Ollama Cloud</b></td><td><span class="tag ok">Key OK</span></td><td>nemotron-3-ultra, gpt-oss:120b, gemma4:31b</td><td class="muted">kimi-k3, deepseek-v4-pro, glm-5.3 (paid plan only)</td></tr>
+            <tr><td><b>Gemini</b></td><td><span class="tag ok">Key OK</span></td><td>gemini-3.8-flash, gemini-3.7-flash</td><td class="muted">Pro models (no free quota); 2.5 models (closed to new users)</td></tr>
+            <tr><td><b>Groq</b></td><td><span class="tag warn">Limited</span></td><td>gpt-oss-120b</td><td class="muted">qwen3.8-27b: 1,000 output tokens/min on free tier, too low for full drafts</td></tr>
+            <tr><td><b>Cloudflare images</b></td><td><span class="tag ok">520 / 10,000 today</span></td><td>FLUX.2 klein 4B, FLUX.1 schnell</td><td class="muted">FLUX.2 dev, klein 9B (non-commercial licence)</td></tr>
+          </tbody></table></div>
+          <div class="sect-title">Default model per profile <span class="n">2</span></div>
+          <div style="overflow-x:auto"><table class="ptable"><thead><tr><th>Profile</th><th>Used for</th><th>Default</th><th>Fallback</th></tr></thead><tbody>
+            <tr><td>Quality</td><td>Outline, draft</td><td><select aria-label="Quality default"><option>Set after evaluation</option></select></td><td><select aria-label="Quality fallback"><option>Set after evaluation</option></select></td></tr>
+            <tr><td>Fast</td><td>Research, summaries</td><td><select aria-label="Fast default"><option>Set after evaluation</option></select></td><td><select aria-label="Fast fallback"><option>Set after evaluation</option></select></td></tr>
+            <tr><td>Edit</td><td>Review and edit</td><td><select aria-label="Edit default"><option>Set after the M5 edit round</option></select></td><td>–</td></tr>
+            <tr><td>Image</td><td>Hero image</td><td><select aria-label="Image default"><option>FLUX.2 klein 4B</option></select></td><td><select aria-label="Image fallback"><option>FLUX.1 schnell</option></select></td></tr>
+          </tbody></table></div>
+        </div>
+      </div>
+    </div></div>
+    <aside class="notes" aria-label="Notes for models and providers"><h3>Why it looks like this</h3><ol>
+      <li><span class="n">1</span><div><b>One button to re-check.</b> <span class="why">Runs the same checks as <span class="mono">ai_smoke</span>, so free-plan changes show up without a terminal.</span></div></li>
+      <li><span class="n">2</span><div><b>Defaults come from evidence.</b> <span class="why">These are filled from your blind scores in the model evaluation, with a fallback for when a free quota runs out.</span></div></li>
+    </ol></aside>
+  </section>
+
+  <!-- 7. SITE CRAWL -->
+  <section class="screen" id="crawl" role="tabpanel" aria-labelledby="tab-crawl" hidden>
+    <div class="screen-head"><h2>Site crawl (guest posts)</h2><p>Its own step after the brief. It reads the host site and produces a site profile that shapes the outline and draft. You approve the profile before research starts.</p></div>
+    <div class="frame-scroll"><div class="admin">
+      <aside class="side"><div class="brand">Wagtail</div><a class="on">Content Studio</a><a class="sub on">Runs</a></aside>
+      <div class="main">
+        <div class="bar"><div><div class="crumbs">Content Studio / Runs</div><h3>Secondary container labelling</h3></div><span class="tag info">Site profile ready for review</span></div>
+        <div class="ws">
+          <nav class="timeline" aria-label="Steps">
+            <button class="tl" type="button"><span class="dot done"></span><span>Brief<small>Approved</small></span></button>
+            <button class="tl on" type="button" aria-current="step"><span class="dot ready"></span><span>Site crawl<small>Ready · 5 pages read</small></span></button>
+            <button class="tl" type="button"><span class="dot"></span><span>Research<small>Waits for site profile</small></span></button>
+            <button class="tl" type="button"><span class="dot"></span><span>Outline</span></button>
+            <button class="tl" type="button"><span class="dot"></span><span>Draft</span></button>
+            <button class="tl" type="button"><span class="dot"></span><span>Review and edit</span></button>
+            <button class="tl" type="button"><span class="dot"></span><span>Hero image</span></button>
+          </nav>
+          <div style="display:grid;grid-template-rows:1fr auto;min-width:0">
+            <article class="doc">
+              <div class="sect-title">Site profile <span class="n">1</span></div>
+              <div style="overflow-x:auto"><table class="ptable"><tbody>
+                <tr><td><b>Narrative mode</b></td><td>Informational (no first-person stories in any sampled article)</td></tr>
+                <tr><td><b>Voice</b></td><td>Practical, second person, short paragraphs; British spelling</td></tr>
+                <tr><td><b>Headings</b></td><td>Sentence case, 4–7 words, question-style H2s common, no numbering</td></tr>
+                <tr><td><b>Typical length</b></td><td class="mono">1,050–1,450 words (median 1,230)</td></tr>
+                <tr><td><b>Reading level</b></td><td class="mono">FKGL 7.9–9.4 (median 8.6) · your target 8 stays the goal</td></tr>
+                <tr><td><b>Links</b></td><td>2–4 external links per article, to HSE and trade bodies; no commercial links in body</td></tr>
+              </tbody></table></div>
+              <div class="sect-title">Pages read <span class="n">2</span></div>
+              <div class="list">
+                <div class="row"><div class="t">/ (home)</div><div><span class="tag ok">Direct</span></div><div class="sub">Landing page, section structure</div><span class="tag plain">Used</span></div>
+                <div class="row"><div class="t">/blog/forklift-safety-checks</div><div><span class="tag ok">Direct</span></div><div class="sub">1,310 words · FKGL 8.4</div><span class="tag plain">Used</span></div>
+                <div class="row"><div class="t">/blog/coshh-assessments-guide</div><div><span class="tag info">Reader service</span></div><div class="sub">1,180 words · FKGL 9.1</div><span class="tag plain">Used</span></div>
+                <div class="row"><div class="t">/members/resources</div><div><span class="tag warn">Skipped</span></div><div class="sub">Login required: never fetched</div><span class="tag plain">—</span></div>
+              </div>
+              <div class="addown" style="border:1px dashed var(--line);border-radius:8px"><label class="muted" for="crawl-url" style="flex-basis:100%">Add a page to read <span class="n">3</span></label><input type="text" id="crawl-url" placeholder="https://… (public article on the same site)"><button class="btn small" type="button">Read page</button></div>
+            </article>
+            <div class="actionbar"><button class="btn primary" type="button">Approve site profile</button><button class="btn" type="button">Edit profile</button><button class="btn" type="button">Re-crawl</button><span class="spacer"></span><button class="btn danger" type="button">Reject run</button></div>
+          </div>
+          <aside class="panel" aria-label="Crawl rules">
+            <div class="box"><div class="sect-title">Crawl rules <span class="n">4</span></div>
+              <div class="kv"><span>Public pages only</span><span class="tag ok">On</span></div>
+              <div class="kv"><span>robots.txt respected</span><span class="tag ok">Allowed</span></div>
+              <div class="kv"><span>Pace</span><span class="mono">1 page / 5 s</span></div>
+              <div class="kv"><span>Max pages</span><span class="mono">8</span></div>
+              <span class="muted" style="font-size:.76rem">Fetch order: direct request with an honest user agent, then a reader service, then a scraping API. A page that still fails is skipped and listed, never forced.</span>
+            </div>
+          </aside>
+        </div>
+      </div>
+    </div></div>
+    <aside class="notes" aria-label="Notes for the site crawl"><h3>Why it looks like this</h3><ol>
+      <li><span class="n">1</span><div><b>The profile is the deliverable.</b> <span class="why">It mirrors the SITE_PROFILE in your guest-post skill: narrative mode, voice, headings, length, reading level and link habits. Later steps read it, so you approve or correct it first.</span></div></li>
+      <li><span class="n">2</span><div><b>Every page accounted for.</b> <span class="why">You see which pages were read, how (direct or via the fallback), and which were skipped and why.</span></div></li>
+      <li><span class="n">3</span><div><b>Point it at better examples.</b> <span class="why">If the sample missed the site's typical article, add a URL and it's read the same way.</span></div></li>
+      <li><span class="n">4</span><div><b>Polite and lawful by design.</b> <span class="why">Public pages only, robots.txt respected, slow pace, a page cap. Login-only pages are never fetched.</span></div></li>
+    </ol></aside>
+  </section>
+
+  <section class="questions" aria-labelledby="q-head">
+    <h2 id="q-head">Questions for your review</h2>
+    <p class="muted" style="margin:0">Answered: presets (yes, screen 2) and site crawl as its own step (yes, screen 7).</p>
+    <ol>
+      <li>How many regenerated versions per step should stay visible: all, or the last three?</li>
+      <li>Notifications: admin only, or also email or Slack (via n8n)?</li>
+      <li>Anything missing from the run workspace that you use today in your skill workflow?</li>
+    </ol>
+  </section>
+</div>
+
+<script>
+(function () {
+  var tabs = Array.prototype.slice.call(document.querySelectorAll('[role="tab"]'));
+  function show(id) {
+    tabs.forEach(function (t) {
+      var on = t.getAttribute('aria-controls') === id;
+      t.setAttribute('aria-selected', on ? 'true' : 'false');
+      document.getElementById(t.getAttribute('aria-controls')).hidden = !on;
+    });
+    try { localStorage.setItem('cs-wire-tab', id); } catch (e) {}
+  }
+  tabs.forEach(function (t) { t.addEventListener('click', function () { show(t.getAttribute('aria-controls')); }); });
+  var start = (location.hash || '').replace('#', '');
+  if (!document.getElementById(start)) { try { start = localStorage.getItem('cs-wire-tab') || 'dashboard'; } catch (e) { start = 'dashboard'; } }
+  if (!document.getElementById(start)) start = 'dashboard';
+  show(start);
+
+  // Timeline selection in the run workspace
+  document.querySelectorAll('.tl').forEach(function (b) {
+    b.addEventListener('click', function () {
+      document.querySelectorAll('.tl').forEach(function (x) { x.classList.remove('on'); x.removeAttribute('aria-current'); });
+      b.classList.add('on'); b.setAttribute('aria-current', 'step');
+    });
+  });
+
+  // Title checklist: add your own, counts, preview
+  var list = document.getElementById('titles');
+  var own = document.getElementById('own-title');
+  var ownCount = document.getElementById('own-title-count');
+  var addBtn = document.getElementById('add-title');
+  var addRow = list.querySelector('.addown');
+  var KW = 'sds retention requirements';
+  function refresh() {
+    var checked = list.querySelectorAll('input[name="title"]:checked');
+    document.getElementById('sel-count').textContent = checked.length;
+    var first = checked.length ? checked[0].nextElementSibling.textContent : 'No title selected';
+    document.getElementById('serp-title').textContent = first;
+    var tag = document.getElementById('kw-tag');
+    var has = first.toLowerCase().indexOf(KW) !== -1;
+    tag.textContent = has ? 'Yes' : 'No';
+    tag.className = 'tag ' + (has ? 'ok' : 'warn');
+  }
+  list.addEventListener('change', refresh);
+  own.addEventListener('input', function () {
+    ownCount.textContent = own.value.length + '/60';
+    ownCount.style.color = own.value.length > 60 ? 'var(--bad)' : '';
+  });
+  function addOwn() {
+    var v = own.value.trim();
+    if (!v) { own.focus(); return; }
+    var label = document.createElement('label');
+    label.className = 'opt';
+    var box = document.createElement('input'); box.type = 'checkbox'; box.name = 'title'; box.checked = true;
+    var text = document.createElement('span'); text.textContent = v;
+    var count = document.createElement('span'); count.className = 'mono muted'; count.textContent = v.length + '/60';
+    if (v.length > 60) count.style.color = 'var(--bad)';
+    label.appendChild(box); label.appendChild(text); label.appendChild(count);
+    list.insertBefore(label, addRow);
+    own.value = ''; ownCount.textContent = '0/60';
+    refresh();
+  }
+  addBtn.addEventListener('click', addOwn);
+  own.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); addOwn(); } });
+  refresh();
+})();
+</script>

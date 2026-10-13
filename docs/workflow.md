@@ -13,13 +13,15 @@ The studio automates an existing, proven manual workflow that runs as a set of C
 | FKGL | Target Flesch-Kincaid grade level |
 | AUDIENCE | Who it is for (e.g. EHS managers) |
 | REGION | Market, for spelling, regulation and localisation (US, UK, AU, CA, NZ…) |
-| SITE, SITE_DOMAIN, NARRATIVE_MODE | Outbound pieces only: target site and its voice |
+| SITE, SITE_DOMAIN, NARRATIVE_MODE | Outbound pieces only: target site and its voice. NARRATIVE_MODE is proposed by the site crawl step |
+| Preset | Optional. Saved defaults for a content type (region, FKGL, audience, CTA style, model per step), e.g. "SDS Manager blog · US · FKGL 9" |
 
 ## Pipeline steps
 
 | # | Step | Output | Gate | Default profile |
 |---|---|---|---|---|
 | 0 | Accuracy gate (optional) | Findings: apply-now vs confirm-first | Approve | quality |
+| 0b | Site crawl (guest posts only) | Site profile: narrative mode, voice, heading style, typical length, reading level, link habits; list of pages read or skipped | Approve (edit allowed) | none (fetching) + fast (summarising) |
 | 1 | Research | Sources, claims, verification table | Approve | fast |
 | 2 | Outline | Detailed outline + headings-only outline + structure decisions | Approve (edit allowed) | quality |
 | 3 | Draft | Full draft, three metadata options per field, link map | Approve (optionally per H2) | quality |
@@ -75,3 +77,13 @@ The skills already contain deterministic Python helpers. The studio will vendor 
 | sds-hero-stock | `hero_compose.py`, `overlay.py`, `reframe.py`, `inner_logo.py` | House-style hero branding on generated images |
 
 Prompts for the generation steps will be adapted from each skill's `SKILL.md` instructions and stored as versioned prompt templates in the admin.
+
+## Site crawl step (guest posts)
+
+Runs after the brief for `outbound` content and mirrors the SITE_PROFILE in the `ehs-outbound-blog` skill. It reads the target site's landing page and at least three articles, preferring ones close to the topic, then summarises the dominant pattern. Rules:
+
+- Public pages only; pages that need a login are never fetched.
+- robots.txt is respected; pace is about one page every 5 seconds; at most 8 pages.
+- Pages are fetched with the `Fetch Page` fallback chain (direct request with an honest user agent, then a reader service, then a scraping API). A page that still fails is skipped and listed, never forced.
+- You can add a specific article URL to read, edit the profile, or re-crawl before approving.
+
