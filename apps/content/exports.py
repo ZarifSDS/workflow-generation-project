@@ -14,6 +14,28 @@ LANG = {"US": "en-US", "UK": "en-GB", "AU": "en-AU", "CA": "en-CA", "NZ": "en-NZ
 HERO_SIZE = (720, 405)  # what the CMS serves (sds-hero-stock)
 
 
+class _ExportResolver(markup.WagtailResolver):
+    """Absolute URLs (exports leave the admin), and remembers which image each URL came from."""
+
+    def __init__(self, **kwargs):
+        from django.conf import settings
+
+        super().__init__(base_url=settings.WAGTAILADMIN_BASE_URL, **kwargs)
+        self.images_by_url = {}
+
+    def images(self, ids):
+        from wagtail.images import get_image_model
+
+        found = super().images(ids)
+        library = get_image_model().objects.in_bulk(found.keys())
+        self.images_by_url.update({resolved.url: library[pk] for pk, resolved in found.items()})
+        return found
+
+
+def _resolver():
+    return _ExportResolver()
+
+
 class ArticleError(Exception):
     """The run has nothing approved to export or publish yet; the message says what's missing."""
 
@@ -90,13 +112,14 @@ def markdown_export(run, variant="final"):
         "studio_run": run.pk,
     }
     front_matter = yaml.safe_dump(front, sort_keys=False, allow_unicode=True).strip()
-    return f"---\n{front_matter}\n---\n\n{markup.strip_workflow_sections(content.text)}\n"
+    body = markup.resolve_references(markup.strip_workflow_sections(content.text), _resolver())
+    return f"---\n{front_matter}\n---\n\n{body}\n"
 
 
 def html_export(run, variant="final"):
     content = article_content(run, variant)
     meta = article_meta(run, content)
-    body = markup.markdown_to_html(markup.strip_workflow_sections(content.text))
+    body = markup.markdown_to_html(markup.strip_workflow_sections(content.text), _resolver())
     hero = (
         f'<img src="{escape(meta["slug"])}.webp" alt="" width="720" height="405">\n' if content.hero else ""
     )
@@ -160,14 +183,23 @@ def _add_hyperlink(paragraph, url, text):
 class _DocxWriter(HTMLParser):
     """Walks the sanitised article HTML and writes Word paragraphs, lists, tables and links."""
 
-    def __init__(self, document):
+    def __init__(self, document, images_by_url=None):
         super().__init__(convert_charrefs=True)
         self.doc = document
+        self.images_by_url = images_by_url or {}
         self.paragraph = None
-        self.bold = self.italic = self.code = self.quote = 0
+        self.bold = self.italic = self.code = self.quote = self.underline = self.strike = 0
+        self.caption = False
         self.link = None
         self.lists = []
         self.rows = self.row = self.cell = None
+
+    def _picture(self, src):
+        from docx.shared import Inches
+
+        image = self.images_by_url.get(src)
+        if image is not None:
+            self.doc.add_picture(io.BytesIO(_image_bytes(image)), width=Inches(6.5))
 
     def _new_paragraph(self, style=None):
         self.paragraph = self.doc.add_paragraph(style=style)
@@ -188,6 +220,16 @@ class _DocxWriter(HTMLParser):
             self.italic += 1
         elif tag == "code":
             self.code += 1
+        elif tag == "u":
+            self.underline += 1
+        elif tag == "s":
+            self.strike += 1
+        elif tag == "img":
+            self.paragraph = None
+            self._picture(dict(attrs).get("src", ""))
+        elif tag == "figcaption":
+            self._new_paragraph("Caption")
+            self.caption = True
         elif tag == "blockquote":
             self.quote += 1
         elif tag == "a":
@@ -202,8 +244,13 @@ class _DocxWriter(HTMLParser):
             self.cell = []
 
     def handle_endtag(self, tag):
-        if tag in {"h1", "h2", "h3", "h4", "h5", "h6", "p", "li"}:
+        if tag in {"h1", "h2", "h3", "h4", "h5", "h6", "p", "li", "figcaption"}:
             self.paragraph = None
+            self.caption = False if tag == "figcaption" else self.caption
+        elif tag == "u":
+            self.underline -= 1
+        elif tag == "s":
+            self.strike -= 1
         elif tag in {"ul", "ol"} and self.lists:
             self.lists.pop()
         elif tag in {"strong", "b"}:
@@ -240,6 +287,8 @@ class _DocxWriter(HTMLParser):
         run = self.paragraph.add_run(data)
         run.bold = bool(self.bold) or None
         run.italic = bool(self.italic) or None
+        run.underline = bool(self.underline) or None
+        run.font.strike = bool(self.strike) or None
         if self.code:
             run.font.name = "Consolas"
 
@@ -282,8 +331,10 @@ def docx_export(run, variant="final"):
     if content.hero is not None:
         document.add_picture(io.BytesIO(_image_bytes(content.hero)), width=Inches(6.5))
 
-    writer = _DocxWriter(document)
-    writer.feed(markup.markdown_to_html(markup.strip_workflow_sections(content.text)))
+    resolver = _resolver()
+    body = markup.markdown_to_html(markup.strip_workflow_sections(content.text), resolver)
+    writer = _DocxWriter(document, resolver.images_by_url)
+    writer.feed(body)
     writer.close()
     buffer = io.BytesIO()
     document.save(buffer)

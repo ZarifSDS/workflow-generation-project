@@ -1,0 +1,19 @@
+{% load wagtailadmin_tags %}
+{% panel id="studio-review" heading="Waiting for your review" classname="w-panel--dashboard" %}
+    {% if steps %}
+        <table class="listing listing--dashboard">
+            <thead class="w-sr-only"><tr><th>Article</th><th>Step</th><th>Ready since</th></tr></thead>
+            <tbody>
+                {% for step in steps %}
+                    <tr>
+                        <td class="title"><div class="title-wrapper"><a href="{% url 'studio:run' step.run_id %}?step={{ step.key }}">{{ step.run.brief.topic }}</a></div></td>
+                        <td>{{ step.label }}</td>
+                        <td>{% if step.finished_at %}{% timesince_last_update step.finished_at %}{% endif %}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p>Nothing is waiting for you. Steps you can approve appear here when they're ready. <a href="{% url 'studio:brief_new' %}">Write a brief</a> to start a run.</p>
+    {% endif %}
+{% endpanel %}

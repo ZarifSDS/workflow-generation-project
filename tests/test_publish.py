@@ -101,7 +101,7 @@ def test_to_stream_maps_headings_tables_and_rich_text():
     blocks = markup.to_stream(body)
     types = [block["type"] for block in blocks]
     assert types == ["paragraph", "heading", "paragraph", "heading", "paragraph", "table"]
-    assert blocks[1]["value"] == {"text": "What the rule says", "level": "h2"}
+    assert blocks[1]["value"] == {"text": "What the rule says", "level": "h2", "anchor": "what-the-rule-says"}
     assert blocks[3]["value"]["level"] == "h3"
     assert "<b>exposure records</b>" in blocks[0]["value"]
     assert "<i>30 years</i>" in blocks[0]["value"]
@@ -141,7 +141,11 @@ def test_publish_creates_draft_page_in_moderation(run):
     assert page.get_parent().specific_class is ArticleIndexPage
     assert page.workflow_in_progress
     assert page.current_workflow_state.workflow.name == "Moderators approval"
-    assert [block.block_type for block in page.body][:2] == ["paragraph", "heading"]
+    assert [block.block_type for block in page.body][:1] == ["heading"]
+    assert page.intro.startswith("OSHA treats safety data sheets as exposure records.")
+    assert page.category == "article"
+    draft = page.get_latest_revision_as_object()  # tags live in the draft revision until publishing
+    assert set(draft.tags.names()) == {"SDS retention requirements", "how long to keep safety data sheets"}
     version = step.latest_version
     assert "Moderators approval" in version.content
     assert "still marked [VERIFY]" in version.note
@@ -180,7 +184,8 @@ def test_published_page_renders(run, client):
     response = client.get(run.article_page.url)
     assert response.status_code == 200
     html = response.text
-    assert "<h2>What the rule says</h2>" in html
+    assert '<h2 id="what-the-rule-says">What the rule says</h2>' in html
+    assert "OSHA treats safety data sheets" in html  # the intro
     assert "Exposure log" in html
     assert "exposure records" in html
 
@@ -290,3 +295,99 @@ def test_run_again_button_requeues_publish(run, admin_client):
     assert run.steps.get(key="publish").status == StepRun.Status.QUEUED
     with pytest.raises(ValueError):
         services.rerun_step(run.steps.get(key="draft"))
+
+
+# ---- M9 phase 2: figures, embeds, FAQ, intro, author ----
+
+RICH_ARTICLE = """# Management of change
+
+A change can bring hazards the original risk assessment missed.
+
+## What counts {#what-counts}
+
+Some ++temporary bypasses++ and ~~old~~ new rules. See [the SDS page](wagtail://page?id={page_id}).
+
+![Engineer at the panel](wagtail://image?id={image_id} "Every change needs a reviewer.")
+
+![MOC explained](wagtail://media?url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3Dabc123)
+
+:::faq
+### Does a temporary change need MOC?
+
+Yes, with an end date.
+:::
+"""
+
+
+def _rich_run(run):
+    image = _hero_image()
+    page_id = publishing.article_index().pk
+    text = RICH_ARTICLE.replace("{page_id}", str(page_id)).replace("{image_id}", str(image.pk))
+    for key in ("draft", "cleanup"):
+        step = run.steps.get(key=key)
+        services.add_version(step, text)
+    return image, page_id
+
+
+def test_build_article_maps_every_block_type(run):
+    image, page_id = _rich_run(run)
+    _, body = markup.split_h1(run.steps.get(key="cleanup").latest_version.content)
+    article = markup.build_article(body)
+    assert article.intro == "A change can bring hazards the original risk assessment missed."
+    types = [block["type"] for block in article.blocks]
+    assert types == ["heading", "paragraph", "figure", "embed", "faq"]
+    assert article.blocks[0]["value"]["anchor"] == "what-counts"
+    paragraph = article.blocks[1]["value"]
+    assert "<u>temporary bypasses</u>" in paragraph and "<s>old</s>" in paragraph
+    assert (
+        f'<a id="{page_id}" linktype="page">' in paragraph or f'linktype="page" id="{page_id}"' in paragraph
+    )
+    figure = article.blocks[2]["value"]
+    assert figure["image"] == {"image": image.pk, "decorative": False, "alt_text": "Engineer at the panel"}
+    assert figure["caption"] == "Every change needs a reviewer."
+    assert article.blocks[3]["value"] == "https://www.youtube.com/watch?v=abc123"
+    faq = article.blocks[4]["value"]["items"][0]
+    assert faq["question"] == "Does a temporary change need MOC?" and "end date" in faq["answer"]
+    assert article.warnings == []
+
+
+def test_missing_image_is_a_publish_warning(run):
+    article = markup.build_article('## Heading\n\n![Gone](wagtail://image?id=99999 "Caption")')
+    assert [block["type"] for block in article.blocks] == ["heading"]
+    assert any("99999" in warning for warning in article.warnings)
+
+
+def test_published_page_shows_figure_faq_and_author(run, client, admin_user):
+    from apps.content.models import Author
+
+    _rich_run(run)
+    Author.objects.create(name="Dana Okafor", role="EHS consultant", user=admin_user)
+    _run_publish(run)
+    page = run.article_page
+    assert page.author.name == "Dana Okafor"
+    page.get_latest_revision().publish()
+    html = client.get(page.url).text
+    assert 'alt="Engineer at the panel"' in html
+    assert "<figcaption>Every change needs a reviewer.</figcaption>" in html
+    assert "Does a temporary change need MOC?" in html
+    assert "By Dana Okafor, EHS consultant" in html
+    assert 'id="what-counts"' in html
+
+
+def test_exports_resolve_references(run):
+    from docx import Document
+
+    image, page_id = _rich_run(run)
+    markdown = exports.markdown_export(run)
+    assert "wagtail://" not in markdown
+    assert "[MOC explained](https://www.youtube.com/watch?v=abc123)" in markdown
+    html = exports.html_export(run)
+    assert "<figcaption>Every change needs a reviewer.</figcaption>" in html
+    assert 'src="http' in html  # absolute image URL
+    document = Document(io.BytesIO(exports.docx_export(run)))
+    assert len(document.inline_shapes) == 2  # hero + figure
+    assert ("Caption", "Every change needs a reviewer.") in [
+        (p.style.name, p.text) for p in document.paragraphs
+    ]
+    underlined = [r.text for p in document.paragraphs for r in p.runs if r.underline]
+    assert "temporary bypasses" in underlined

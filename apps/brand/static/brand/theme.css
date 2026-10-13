@@ -1,0 +1,133 @@
+/*
+ * Content Studio admin theme: warm graphite neutrals with one muted teal accent (palette B).
+ *
+ * Works through Wagtail's own CSS custom properties, so every admin screen follows it and Wagtail's
+ * light/dark/system themes, "more contrast" and density settings keep working. Only variables that
+ * exist in Wagtail 8.0's core.css are set; tests/test_theme.py fails if Wagtail drops one.
+ */
+
+@font-face {
+  font-family: "Outfit";
+  src: url("fonts/Outfit-Variable.ttf") format("truetype");
+  font-weight: 300 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* ---- Light ---- */
+:root {
+  /* Wagtail derives its ramps from these roots. */
+  --w-color-primary-hue: 60;          /* sidebar and labels: #23231F */
+  --w-color-primary-saturation: 6%;
+  --w-color-primary-lightness: 13%;
+  --w-color-secondary-hue: 177;       /* buttons and links: #1F6F6B */
+  --w-color-secondary-saturation: 56%;
+  --w-color-secondary-lightness: 28%;
+  --w-color-grey-800-hue: 60;         /* one warm grey family */
+  --w-color-grey-800-saturation: 6%;
+  --w-color-grey-800-lightness: 11%;
+  --w-color-grey-50-hue: 60;          /* Wagtail shifts grey-50 by 240deg (purple); keep it warm */
+  --w-color-grey-50-saturation: 9%;
+
+  --w-color-surface-page: #f5f5f3;
+  --w-color-surface-header: #f5f5f3;
+  --w-color-surface-field: #ffffff;
+  --w-color-surface-dashboard-panel: #ffffff;
+  --w-color-text-label: #1c1c1a;
+  --w-color-text-context: #3d3d38;
+  --w-color-text-meta: #66665f;
+  --w-color-border-furniture: #e2e1db;
+  --w-color-focus: #2b8a84;
+
+  --studio-highlight: #e9b949;
+  --studio-font-display: "Outfit", var(--w-font-sans);
+  --studio-shadow: 0 1px 2px hsl(60 6% 11% / 0.06), 0 4px 16px hsl(60 6% 11% / 0.05);
+}
+
+/* ---- Dark (explicit choice, or "system" on a dark OS) ---- */
+.w-theme-dark {
+  --w-color-surface-page: #141413;
+  --w-color-surface-header: #181816;
+  --w-color-surface-field: #1d1d1b;
+  --w-color-surface-field-inactive: #232320;
+  --w-color-surface-menus: #0e0e0d;
+  --w-color-surface-menu-item-active: #23231f;
+  --w-color-surface-dashboard-panel: #1d1d1b;
+  --w-color-surface-tooltip: #2a2a26;
+  --w-color-surface-button-default: #5fb3ac;
+  --w-color-surface-button-hover: #7cc2bb;
+  --w-color-text-button: #141413;
+  --w-color-text-label: #e8e8e4;
+  --w-color-text-context: #d1d1cb;
+  --w-color-text-meta: #a3a39c;
+  --w-color-text-link-default: #5fb3ac;
+  --w-color-text-link-hover: #8ccbc5;
+  --w-color-text-button-outline-default: #5fb3ac;
+  --w-color-text-button-outline-hover: #8ccbc5;
+  --w-color-border-button-outline-default: #5fb3ac;
+  --w-color-border-button-outline-hover: #8ccbc5;
+  --w-color-border-furniture: #30302c;
+  --w-color-border-field-default: #4a4a44;
+  --w-color-icon-primary: #a3a39c;
+  --w-color-focus: #e9b949;
+  --studio-shadow: 0 1px 2px hsl(60 6% 3% / 0.4), 0 6px 20px hsl(60 6% 3% / 0.35);
+}
+@media (prefers-color-scheme: dark) {
+  .w-theme-system {
+    --w-color-surface-page: #141413;
+    --w-color-surface-header: #181816;
+    --w-color-surface-field: #1d1d1b;
+    --w-color-surface-field-inactive: #232320;
+    --w-color-surface-menus: #0e0e0d;
+    --w-color-surface-menu-item-active: #23231f;
+    --w-color-surface-dashboard-panel: #1d1d1b;
+    --w-color-surface-tooltip: #2a2a26;
+    --w-color-surface-button-default: #5fb3ac;
+    --w-color-surface-button-hover: #7cc2bb;
+    --w-color-text-button: #141413;
+    --w-color-text-label: #e8e8e4;
+    --w-color-text-context: #d1d1cb;
+    --w-color-text-meta: #a3a39c;
+    --w-color-text-link-default: #5fb3ac;
+    --w-color-text-link-hover: #8ccbc5;
+    --w-color-text-button-outline-default: #5fb3ac;
+    --w-color-text-button-outline-hover: #8ccbc5;
+    --w-color-border-button-outline-default: #5fb3ac;
+    --w-color-border-button-outline-hover: #8ccbc5;
+    --w-color-border-furniture: #30302c;
+    --w-color-border-field-default: #4a4a44;
+    --w-color-icon-primary: #a3a39c;
+    --w-color-focus: #e9b949;
+    --studio-shadow: 0 1px 2px hsl(60 6% 3% / 0.4), 0 6px 20px hsl(60 6% 3% / 0.35);
+  }
+}
+
+/* ---- Typography ---- */
+.w-header__title,
+.w-panel__heading,
+.w-dialog__title,
+.w-summary h2,
+.content h1,
+.content h2,
+.studio h1,
+.studio h2,
+.studio h3 {
+  font-family: var(--studio-font-display);
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+.w-header__title { font-weight: 600; }
+.content p,
+.studio .s-output p { text-wrap: pretty; }
+
+/* ---- Interaction ---- */
+.button,
+.w-panel__toggle,
+.sidebar-menu-item__link {
+  transition: background-color 180ms ease, color 180ms ease, border-color 180ms ease, transform 120ms ease;
+}
+.button:active:not([disabled]) { transform: translateY(1px); }
+@media (prefers-reduced-motion: reduce) {
+  .button, .w-panel__toggle, .sidebar-menu-item__link { transition: none; }
+  .button:active:not([disabled]) { transform: none; }
+}

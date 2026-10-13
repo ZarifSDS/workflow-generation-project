@@ -1,0 +1,7 @@
+{% load wagtailcore_tags %}
+<section class="article__faq" aria-label="Frequently asked questions">
+    {% for item in value.items %}
+        <h3>{{ item.question }}</h3>
+        {{ item.answer|richtext }}
+    {% endfor %}
+</section>

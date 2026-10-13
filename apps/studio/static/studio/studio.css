@@ -4,7 +4,8 @@
   --s-surface: var(--w-color-surface-page, #fff);
   --s-muted: var(--w-color-text-meta, #5c5c5c);
   --s-label: var(--w-color-text-label, #1d1d1d);
-  --s-primary: var(--w-color-primary, #007d7e);
+  --s-primary: var(--w-color-text-link-default, #1f6f6b); /* the one accent (teal), in both themes */
+  --s-raise: var(--studio-shadow, none);
   /* Tints are mixed from the foreground colours so they stay legible in light and dark themes
      (Wagtail's *-50 tints don't switch in dark mode). */
   --s-ok: var(--w-color-positive-100, #1b8666); --s-ok-bg: color-mix(in srgb, var(--s-ok) 14%, transparent);
@@ -15,7 +16,7 @@
   --s-info-bg: color-mix(in srgb, var(--s-primary) 14%, transparent);
   display: grid; gap: 1.5rem; padding-bottom: 3rem;
 }
-.studio h2.s-section { font-size: .8rem; letter-spacing: .08em; text-transform: uppercase; color: var(--s-muted); margin: 0; display: flex; align-items: center; gap: .5rem; }
+.studio h2.s-section, .studio h3.s-section { font-family: var(--studio-font-display, inherit); font-size: 1rem; font-weight: 600; letter-spacing: -0.005em; color: var(--s-label); margin: 0; display: flex; align-items: center; gap: .5rem; }
 .studio .s-muted { color: var(--s-muted); }
 .studio .s-mono { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-variant-numeric: tabular-nums; }
 .studio .s-row-actions { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }

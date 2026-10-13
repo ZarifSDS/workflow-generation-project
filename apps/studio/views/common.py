@@ -56,7 +56,7 @@ class StudioPage(WagtailAdminTemplateMixin, TemplateView):
     (apps/studio/permissions.py).
     """
 
-    header_icon = "rocket"
+    header_icon = "draft"
     breadcrumbs_items = None
     permission_required = permissions.ACCESS
     post_permission = None

@@ -8,6 +8,7 @@ from django.utils import timezone
 
 from apps.ai import catalog
 from apps.ai.evaluation import metrics as text_metrics
+from apps.content.markup import strip_dialect
 from apps.quality import review as quality_review
 from apps.quality import scans as quality_scans
 
@@ -83,7 +84,7 @@ def _safe_metrics(content, step):
         return {}
     computed = {}
     try:
-        computed = text_metrics.compute(content, step.run.brief.as_prompt_dict())
+        computed = text_metrics.compute(strip_dialect(content), step.run.brief.as_prompt_dict())
     except Exception as error:  # noqa: BLE001 - a broken metric must not lose a 20-minute generation
         logger.exception("Metrics failed for step %s", step.pk)
         computed["metrics_error"] = f"{error.__class__.__name__}: {str(error)[:200]}"

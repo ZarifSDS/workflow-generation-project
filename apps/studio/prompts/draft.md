@@ -21,6 +21,14 @@ Approved outline:
 
 {{outline}}
 {{regenerate_block}}
+If the outline has an FAQ section, write it in this form (one `###` question per item, then its answer):
+
+:::faq
+### The question a reader would ask?
+
+The answer, in one or two short paragraphs.
+:::
+
 Write the article first. Then, after it, add this section exactly:
 
 ## Metadata options

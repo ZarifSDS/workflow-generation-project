@@ -2,14 +2,15 @@ from django import template
 from django.utils.safestring import mark_safe
 
 from apps.ai import catalog
-from apps.content.markup import markdown_to_html
+from apps.content.markup import WagtailResolver, markdown_to_html
 
 register = template.Library()
 
 
 @register.filter
 def render_markdown(text):
-    return mark_safe(markdown_to_html(text))  # noqa: S308 - sanitised by nh3 in markdown_to_html
+    """Step output as HTML for the admin: wagtail:// images, pages and documents are resolved."""
+    return mark_safe(markdown_to_html(text, WagtailResolver()))  # noqa: S308 - sanitised by nh3
 
 
 STATUS_STYLE = {

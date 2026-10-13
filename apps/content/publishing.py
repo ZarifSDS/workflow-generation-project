@@ -14,7 +14,7 @@ from django.utils.text import slugify
 from wagtail.models import Site
 
 from . import exports, markup
-from .models import ArticleIndexPage, ArticlePage
+from .models import ArticleIndexPage, ArticlePage, Author
 
 logger = logging.getLogger(__name__)
 
@@ -91,14 +91,24 @@ def save_draft(run, user=None):
     page.seo_title = meta["seo_title"][:255] if meta["seo_title"] != meta["title"] else ""
     page.search_description = meta["meta_description"]
     page.slug = _unique_slug(index, meta["slug"], None if created else page)
-    page.body = markup.to_stream(body)
+    article = markup.build_article(body)
+    page.body = article.blocks
+    page.intro = page.intro or article.intro  # an intro an editor wrote in Wagtail is kept
     page.hero_image = content.hero
     page.region = run.brief.region
     page.primary_keyword = run.brief.pkeyword
+    page.category = page.category or ArticlePage.Category.ARTICLE
+    if page.author_id is None and run.created_by_id:
+        page.author = Author.objects.filter(user_id=run.created_by_id).first()
     page.run = run
+    warnings.extend(article.warnings)
+    if not page.intro:
+        warnings.append("No intro: start the article with one short paragraph before the first heading.")
 
     if created:
         index.add_child(instance=page)
+    if not page.tags.exists():
+        page.tags.add(*[tag for tag in [run.brief.pkeyword, *(run.brief.skeywords or [])] if tag][:6])
     page.save_revision(user=user, log_action=True)
 
     result = PublishResult(page=page, created=created, warnings=warnings)
@@ -132,7 +142,8 @@ def notify_webhook(run, result):
         "workflow": result.workflow,
         "admin_url": admin_edit_url(page),
         "warnings": result.warnings,
-        "markdown": exports.markdown_export(run),
+        "markdown": exports.markdown_export(run),  # wagtail:// references resolved to URLs
+        "markdown_source": exports.article_content(run).text,  # the studio's own dialect (ADR 0007)
     }
     body = json.dumps(payload).encode()
     headers = {"Content-Type": "application/json", "User-Agent": settings.AI_USER_AGENT}

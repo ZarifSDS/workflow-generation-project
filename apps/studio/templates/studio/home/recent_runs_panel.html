@@ -1,0 +1,18 @@
+{% load wagtailadmin_tags %}
+{% if runs %}
+    {% panel id="studio-recent-runs" heading="Recent runs" classname="w-panel--dashboard" %}
+        <table class="listing listing--dashboard">
+            <thead class="w-sr-only"><tr><th>Article</th><th>Status</th><th>Updated</th></tr></thead>
+            <tbody>
+                {% for run in runs %}
+                    <tr>
+                        <td class="title"><div class="title-wrapper"><a href="{% url 'studio:run' run.pk %}">{{ run.brief.topic }}</a></div></td>
+                        <td>{% status run.get_status_display classname="w-status--primary" %}</td>
+                        <td>{% timesince_last_update run.updated_at %}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <p><a href="{% url 'studio:runs' %}">All runs</a></p>
+    {% endpanel %}
+{% endif %}

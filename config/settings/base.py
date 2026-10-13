@@ -27,6 +27,7 @@ INSTALLED_APPS = [
     "apps.studio",
     "apps.ai",
     "apps.content",
+    "apps.brand",  # admin theme (palette, typography)
     "wagtail.contrib.forms",
     "wagtail.contrib.redirects",
     "wagtail.contrib.settings",

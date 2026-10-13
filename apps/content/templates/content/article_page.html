@@ -5,12 +5,20 @@
 
 {% block content %}
     <article class="article">
+        <p class="site__eyebrow">{{ page.get_category_display }}</p>
         <h1>{{ page.title }}</h1>
+        {% if page.intro %}<p class="site__lede">{{ page.intro }}</p>{% endif %}
+        {% if page.author %}
+            <p class="article__byline">By {{ page.author.name }}{% if page.author.role %}, {{ page.author.role }}{% endif %}</p>
+        {% endif %}
         {% if page.hero_image %}
             {% image page.hero_image width-1440 class="article__hero" alt="" %}
         {% endif %}
         {% for block in page.body %}
             {% include_block block %}
         {% endfor %}
+        {% with tags=page.tags.all %}{% if tags %}
+            <ul class="article__tags" aria-label="Tags">{% for tag in tags %}<li>{{ tag.name }}</li>{% endfor %}</ul>
+        {% endif %}{% endwith %}
     </article>
 {% endblock %}

@@ -96,7 +96,7 @@ def test_admin_user_without_studio_role_is_kept_out(client):
     user.user_permissions.add(Permission.objects.get(codename="access_admin"))
     client.force_login(user)
     assert _denied(client.get(reverse("studio:dashboard")))
-    assert "Content Studio" not in client.get(reverse("wagtailadmin_home")).text
+    assert "content-studio" not in client.get(reverse("wagtailadmin_home")).text  # the menu item
 
 
 def test_only_operators_recheck_providers(client):

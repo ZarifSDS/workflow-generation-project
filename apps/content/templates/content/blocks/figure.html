@@ -1,0 +1,5 @@
+{% load wagtailimages_tags %}
+<figure class="article__figure">
+    {% image value.image max-1440x1440 alt=value.image.contextual_alt_text %}
+    {% if value.caption %}<figcaption>{{ value.caption }}</figcaption>{% endif %}
+</figure>
