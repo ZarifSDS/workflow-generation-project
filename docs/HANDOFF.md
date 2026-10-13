@@ -8,7 +8,7 @@ Read this first in a new session. Also see `docs/roadmap.md`, `docs/workflow.md`
 | Milestone | State | Commit |
 |---|---|---|
 | M1 Bootstrap (Wagtail 8 / Django 6.1, Docker: web, worker, db, migrate; CI) | Done, **pushed** | 4731851 … c6786ca |
-| M2 AI provider layer + blind model evaluation | Built; **outline evaluation waiting for your scores** | c9e65a6 |
+| M2 AI provider layer + blind model evaluation | Built; **outline round complete (36/36), waiting for your blind scores** | c9e65a6 |
 | M3a UX (wireframes: https://claude.ai/artifact/GjFjc7himFSZiHNYkKV9tw, copy in `docs/wireframes/`) | Done | 51ab651, 2c47c69 |
 | M3b Content Studio screens in the Wagtail admin | Done | c84881e |
 | M4 Background generation (worker runs steps, fallback, retry, notifications) | Done, verified live (run 9) | 67641ab |
@@ -21,10 +21,15 @@ Read this first in a new session. Also see `docs/roadmap.md`, `docs/workflow.md`
 
 ## Evaluation (M2)
 
-- Run folder: `eval/runs/r1-outline/` (git-ignored). 35 of 36 outlines done; `b1-sds-retention/K` (Qwythos 9B) came back empty (spent its budget reasoning).
-- Next: set `think: false` for the two 9B models in `eval/candidates.yaml`, delete their non-ok entries in `results.json`, and resume:
+- Run folder: `eval/runs/r1-outline/` (git-ignored). **All 36 outlines are done (12 models × 3 briefs).**
+- Reasoning settings, which matter when you interpret scores:
+    - Qwen3.8 27B: reasoning on, all briefs.
+    - glm-4.7-flash: reasoning off, all briefs (on, it returned empty output).
+    - Qwythos 9B: reasoning off for `b1-sds-retention` only; the other two briefs ran with the model's default (on) before the empty output appeared. `eval/candidates.yaml` now has it off.
+    - Ornith 9B: model default.
+- Run long evals in a **one-off container**:
   `docker compose run --rm --no-deps -T web python manage.py eval_models --round outline --run-dir eval/runs/r1-outline`
-  (run long evals in a **one-off container**; an `exec` into `web` dies if the dev server reloads on a code error).
+  (an `exec` into `web` dies if the dev server reloads on a code error).
 - Then score `eval/runs/r1-outline/scorecard.md` blind (open `key.json` only after), run `python manage.py eval_report eval/runs/r1-outline`, pick defaults, set `AI_PROFILES` in `config/settings/base.py` and `AI_PROFILES_INTERIM = False`.
 - Later rounds: draft (best outline per brief in `eval/outlines/`), image, and edit (one draft per brief in `eval/drafts/`).
 
