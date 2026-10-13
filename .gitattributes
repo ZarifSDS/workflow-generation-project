@@ -1,0 +1,5 @@
+# Keep LF line endings in the working tree: files are bind-mounted into Linux containers.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.webp binary
