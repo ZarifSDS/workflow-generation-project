@@ -100,6 +100,14 @@
 .studio .s-bar i.bad { background: var(--s-bad); }
 .studio details.s-disclosure summary { cursor: pointer; font-weight: 600; }
 .studio textarea.s-editor { width: 100%; min-height: 24rem; font-family: ui-monospace, Consolas, monospace; font-size: .85rem; }
+/* Editing step output (the visual editor enhances this form, frontend/src/editor.js) */
+.studio .s-edit__form { display: grid; gap: .6rem; margin-top: .5rem; }
+.studio details.s-edit.is-editing .s-edit__form { margin-top: 0; }
+/* While editing, the checks panel moves below the text so the editor gets the width. */
+.studio.is-editing .s-workspace { grid-template-columns: 13rem minmax(0, 1fr); }
+.studio.is-editing .s-panel { grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--s-line); }
+@media (max-width: 50em) { .studio.is-editing .s-workspace { grid-template-columns: minmax(0, 1fr); } }
+.studio .s-edit__actions { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
 
 /* Diff */
 .studio .s-diff { font-family: ui-monospace, Consolas, monospace; font-size: .82rem; border: 1px solid var(--s-line); border-radius: .4rem; overflow-x: auto; }

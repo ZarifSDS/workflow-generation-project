@@ -1,8 +1,13 @@
 {% extends "wagtailadmin/generic/base.html" %}
-{% load studio_tags %}
+{% load static studio_tags %}
+
+{% block extra_css %}
+    {{ block.super }}
+    {% if can_edit %}<link rel="stylesheet" href="{% static 'studio/editor/editor.css' %}">{% endif %}
+{% endblock %}
 
 {% block main_content %}
-<div class="studio">
+<div class="studio" data-editor-root{% if step and step.status != "ready" %} data-editor-clear="{{ run.pk }}:{{ step.key }}"{% endif %}>
     <div class="s-row-actions">
         <span class="s-tag s-tag--{{ run.status|status_style }}">{{ run.get_status_display }}</span>
         <span class="s-muted">{{ brief.get_content_type_display }} · {{ brief.region }} · FKGL {{ brief.fkgl }}{% if brief.wordcount %} · {{ brief.wordcount }} words{% endif %}</span>
@@ -93,7 +98,23 @@
                                 {% endif %}
                             </section>
                         {% endif %}
-                        <div class="s-output">{{ version.content|render_markdown }}</div>
+                        <div class="s-output" data-editor-output>{{ version.content|render_markdown }}</div>
+                        {% if can_edit %}
+                            <details class="s-disclosure s-edit">
+                                <summary>Edit this text</summary>
+                                <form method="post" class="s-edit__form" data-editor-form data-autosave-key="studio:draft:{{ run.pk }}:{{ step.key }}:{{ version.number }}" data-refs-id="editor-refs">{% csrf_token %}
+                                    <input type="hidden" name="step" value="{{ step.key }}">
+                                    <input type="hidden" name="base_version" value="{{ version.number }}">
+                                    <label for="edit-content" class="w-sr-only">{{ step.label }}: text in Markdown</label>
+                                    <textarea id="edit-content" name="content" class="s-editor">{{ version.content }}</textarea>
+                                    <div class="s-edit__actions" data-editor-actions>
+                                        <button class="button" type="submit" name="action" value="edit_approve">Save and approve</button>
+                                        <button class="button button-secondary" type="submit" name="action" value="save_version">Save as new version</button>
+                                    </div>
+                                </form>
+                            </details>
+                            {{ editor_refs|json_script:"editor-refs" }}
+                        {% endif %}
                     {% endif %}
                     {% if step.status == "running" %}
                         <div class="s-callout s-callout--info" role="status">
@@ -132,16 +153,8 @@
 
             {% if can_review %}
                 <div class="s-actionbar">
-                    <form method="post">{% csrf_token %}<input type="hidden" name="step" value="{{ step.key }}"><button class="button" type="submit" name="action" value="approve">Approve {{ step.label|lower }}</button></form>
-                    <details class="s-disclosure" style="flex:1 1 100%">
-                        <summary>Edit, then approve</summary>
-                        <form method="post" style="display:grid;gap:.5rem;margin-top:.5rem">{% csrf_token %}
-                            <input type="hidden" name="step" value="{{ step.key }}">
-                            <label for="edit-content" class="w-sr-only">Edit the {{ step.label|lower }}</label>
-                            <textarea id="edit-content" name="content" class="s-editor">{{ version.content }}</textarea>
-                            <div><button class="button" type="submit" name="action" value="edit_approve">Save edit and approve</button></div>
-                        </form>
-                    </details>
+                    <form method="post">{% csrf_token %}<input type="hidden" name="step" value="{{ step.key }}">{% if version %}<input type="hidden" name="base_version" value="{{ version.number }}">{% endif %}<button class="button" type="submit" name="action" value="approve">Approve {{ step.label|lower }}</button></form>
+                    {% if can_edit %}<button class="button button-secondary" type="button" data-editor-open hidden>Edit</button>{% endif %}
                     <details class="s-disclosure" style="flex:1 1 100%">
                         <summary>Reject this run</summary>
                         <form method="post" style="display:grid;gap:.5rem;margin-top:.5rem">{% csrf_token %}
@@ -260,6 +273,7 @@
 
 {% block extra_js %}
     {{ block.super }}
+    {% if can_edit %}<script src="{% static 'studio/editor/editor.js' %}" defer></script>{% endif %}
     <script>
     (function () {
         // Live elapsed time for a running step.

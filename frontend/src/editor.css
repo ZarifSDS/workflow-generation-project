@@ -1,0 +1,221 @@
+/* Step-output editor. Uses the studio's tokens (studio.css) and Wagtail's admin variables, so the light and
+   dark themes and palette B carry over. */
+
+.se {
+  --se-line: var(--w-color-border-furniture, #d4d4d4);
+  --se-field: var(--w-color-border-field-default, #8a8a8a);
+  --se-surface: var(--w-color-surface-field, #fff);
+  --se-bar: var(--w-color-surface-page, #fff);
+  --se-text: var(--w-color-text-context, #1d1d1d);
+  --se-muted: var(--w-color-text-meta, #5c5c5c);
+  --se-accent: var(--w-color-text-link-default, #1f6f6b);
+  --se-accent-bg: color-mix(in srgb, var(--se-accent) 14%, transparent);
+  --se-warn: var(--w-color-warning-100, #b85c00);
+  --se-focus: var(--w-color-focus, #ffbf47);
+  border: 1px solid var(--se-line);
+  border-radius: 0.5rem;
+  background: var(--se-surface);
+  min-width: 0;
+}
+
+.se { scroll-margin-top: calc(var(--se-sticky-top, 0px) + 0.5rem); }
+/* Sticks under Wagtail's sticky header; editor.js measures it into --se-sticky-top. */
+.se-head {
+  position: sticky;
+  top: var(--se-sticky-top, 0px);
+  z-index: 3;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.5rem;
+  border-bottom: 1px solid var(--se-line);
+  border-radius: 0.5rem 0.5rem 0 0;
+  background: var(--se-bar);
+}
+
+.se-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 0.5rem; flex: 0 1 auto; min-width: 0; }
+.se-toolbar[inert] { opacity: 0.45; }
+.se-group { display: flex; gap: 0.125rem; padding-inline-start: 0.5rem; border-inline-start: 1px solid var(--se-line); }
+
+.se-block {
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.3rem 1.8rem 0.3rem 0.5rem;
+  border-radius: 0.35rem;
+  width: auto;
+  min-width: 8.5rem;
+}
+
+.se-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 0.35rem;
+  background: transparent;
+  color: var(--se-text);
+  font: 600 0.95rem/1 Georgia, "Times New Roman", serif;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+.se-btn svg { width: 1.15rem; height: 1.15rem; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.se-btn svg circle { fill: currentColor; stroke: none; }
+.se-btn:hover:not(:disabled) { background: var(--se-accent-bg); }
+.se-btn:active:not(:disabled) { transform: translateY(1px); }
+.se-btn[aria-pressed="true"] { background: var(--se-accent-bg); border-color: var(--se-accent); color: var(--se-accent); }
+.se-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.se-btn:focus-visible, .se-mode:focus-visible, .se-chip:focus-visible { outline: 3px solid var(--se-focus); outline-offset: 1px; }
+
+.se-modes { display: inline-flex; border: 1px solid var(--se-line); border-radius: 0.4rem; overflow: hidden; margin-inline-start: auto; }
+.se-mode {
+  padding: 0.3rem 0.75rem;
+  border: 0;
+  background: transparent;
+  color: var(--se-muted);
+  font: 600 0.8rem/1.4 inherit;
+  font-family: inherit;
+  cursor: pointer;
+}
+.se-mode + .se-mode { border-inline-start: 1px solid var(--se-line); }
+.se-mode[aria-pressed="true"] { background: var(--se-accent-bg); color: var(--se-accent); }
+
+.se-tablebar { display: flex; flex-wrap: wrap; gap: 0.35rem; padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--se-line); }
+.se-tablebar[hidden] { display: none; }
+.se-chip {
+  padding: 0.2rem 0.6rem;
+  border: 1px solid var(--se-line);
+  border-radius: 1rem;
+  background: transparent;
+  color: var(--se-text);
+  font: 0.78rem/1.4 inherit;
+  font-family: inherit;
+  cursor: pointer;
+}
+.se-chip:hover { border-color: var(--se-accent); color: var(--se-accent); }
+
+/* The writing surface: reads like the rendered output (.s-output), with room to type. */
+.se-surface { padding: 1rem 1.25rem 1.5rem; }
+.se-surface[hidden] { display: none; }
+.se-prose { min-height: 22rem; margin-inline: auto; outline: none; color: var(--se-text); }
+/* The whole editor shows focus (Wagtail's outline around the text area alone looked like an error). */
+/* Wagtail's core.css sets :focus-visible { outline … !important }. */
+.se .se-prose:focus, .se .se-prose:focus-visible { outline: none !important; box-shadow: none; }
+.se:focus-within { border-color: var(--se-accent); box-shadow: 0 0 0 2px var(--se-accent); }
+.se-prose p.is-editor-empty:first-child::before { content: attr(data-placeholder); color: var(--se-muted); float: left; height: 0; pointer-events: none; }
+.se-prose h1[data-anchor]::after,
+.se-prose h2[data-anchor]::after,
+.se-prose h3[data-anchor]::after,
+.se-prose h4[data-anchor]::after {
+  content: "#" attr(data-anchor);
+  margin-inline-start: 0.5rem;
+  padding: 0 0.4rem;
+  border-radius: 0.3rem;
+  background: var(--se-accent-bg);
+  color: var(--se-accent);
+  font: 500 0.72rem/1.6 ui-monospace, "Cascadia Mono", Consolas, monospace;
+  vertical-align: middle;
+}
+/* Wagtail's core.css sets `form ul, form li { list-style: none }`; show markers as the page will. */
+.se-prose li { list-style: inherit; }
+.se-prose ul { list-style: disc; padding-inline-start: 1.5rem; }
+.se-prose ol { list-style: decimal; padding-inline-start: 1.6rem; }
+.se-prose li > p { margin: 0.15rem 0; }
+.se-prose blockquote { margin: 0.75rem 0; padding-inline-start: 0.9rem; border-inline-start: 3px solid var(--se-line); color: var(--se-muted); }
+.se-prose table { border-collapse: collapse; width: 100%; table-layout: fixed; }
+.se-prose th, .se-prose td { border: 1px solid var(--se-line); padding: 0.35rem 0.5rem; vertical-align: top; position: relative; }
+.se-prose th { background: color-mix(in srgb, var(--se-text) 5%, transparent); }
+.se-prose .selectedCell::after { content: ""; position: absolute; inset: 0; background: var(--se-accent-bg); pointer-events: none; }
+.se-prose a { color: var(--se-accent); text-decoration: underline; }
+.se-prose .ProseMirror-selectednode { outline: 3px solid var(--se-accent); outline-offset: 2px; }
+
+.se-figure { margin: 1rem 0; display: grid; gap: 0.35rem; cursor: pointer; }
+.se-figure img { max-width: 100%; height: auto; border-radius: 0.35rem; }
+.se-figure figcaption { display: flex; flex-wrap: wrap; gap: 0.25rem 0.75rem; font-size: 0.82rem; color: var(--se-muted); }
+.se-figure__alt { font-style: italic; }
+.se-figure__alt.is-missing { color: var(--se-text); font-style: normal; font-weight: 600; }
+.se-figure__alt.is-missing::before { content: "⚠ "; color: var(--se-warn); }
+.se-figure__missing { display: grid; place-items: center; min-height: 7rem; border: 1px dashed var(--se-line); border-radius: 0.35rem; color: var(--se-muted); font-size: 0.85rem; }
+
+.se-embed { margin: 1rem 0; display: flex; gap: 0.6rem; align-items: center; padding: 0.7rem 0.9rem; border: 1px solid var(--se-line); border-radius: 0.4rem; }
+.se-embed__kind { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--se-muted); }
+
+.se-faq { margin: 1.25rem 0; padding: 0.4rem 1rem 0.6rem; border: 1px solid var(--se-line); border-inline-start: 4px solid var(--se-accent); border-radius: 0.4rem; }
+.se-faq::before { content: "FAQ"; display: block; margin-top: 0.3rem; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.06em; color: var(--se-accent); }
+
+.se-verify {
+  display: inline-block;
+  padding: 0 0.4rem;
+  border: 1px solid var(--se-warn);
+  border-radius: 0.3rem;
+  background: color-mix(in srgb, var(--se-warn) 16%, transparent);
+  font: 700 0.72rem/1.5 ui-monospace, "Cascadia Mono", Consolas, monospace;
+  letter-spacing: 0.03em;
+  vertical-align: 0.1em;
+}
+.se-raw { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: 0.85em; color: var(--se-muted); }
+
+/* Markdown mode: the original textarea. */
+.se-markdown {
+  display: block;
+  width: 100%;
+  min-height: 24rem;
+  margin-top: -1px;
+  font: 0.88rem/1.6 ui-monospace, "Cascadia Mono", Consolas, monospace;
+  border-radius: 0 0 0.5rem 0.5rem;
+}
+.se[data-mode="visual"] + .se-markdown { display: none; }
+.se[data-mode="markdown"] { border-bottom: 0; border-radius: 0.5rem 0.5rem 0 0; }
+.se-status { margin: 0.4rem 0 0; min-height: 1.2em; font-size: 0.8rem; color: var(--se-muted); }
+
+/* Bubble menu over selected text */
+.se-bubble {
+  display: flex;
+  gap: 0.125rem;
+  padding: 0.2rem;
+  border: 1px solid var(--se-line, #d4d4d4);
+  border-radius: 0.45rem;
+  background: var(--w-color-surface-page, #fff);
+  box-shadow: 0 6px 18px -8px rgb(0 0 0 / 0.35);
+}
+
+/* Dialogs */
+.se-dialog {
+  width: min(32rem, calc(100vw - 2rem));
+  padding: 1.25rem;
+  border: 1px solid var(--w-color-border-furniture, #d4d4d4);
+  border-radius: 0.6rem;
+  background: var(--w-color-surface-page, #fff);
+  color: var(--w-color-text-context, #1d1d1d);
+}
+.se-dialog::backdrop { background: rgb(0 0 0 / 0.45); }
+.se-dialog__title { margin: 0 0 0.9rem; font-size: 1.1rem; }
+.se-dialog__fields { display: grid; gap: 0.9rem; }
+.se-field { display: grid; gap: 0.3rem; }
+.se-field label { font-weight: 600; font-size: 0.88rem; }
+.se-field--check { grid-template-columns: auto 1fr; align-items: center; gap: 0.5rem; }
+.se-field__hint { margin: 0; font-size: 0.8rem; color: var(--w-color-text-meta, #5c5c5c); }
+.se-dialog__error { margin: 0.75rem 0 0; color: var(--w-color-text-error, #cd4444); font-weight: 600; font-size: 0.88rem; }
+.se-dialog__actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 1.1rem; }
+
+/* Restore banner, editing state of the disclosure */
+.se-restore { display: grid; gap: 0.5rem; }
+.se-restore p { margin: 0; }
+.se-restore__actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+details.is-enhanced:not(.is-editing) { display: none; }
+details.is-editing > summary { display: none; }
+
+@media (max-width: 40em) {
+  /* One scrolling row, so the sticky toolbar doesn't cover the text on a phone. */
+  .se-toolbar { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: thin; width: 100%; }
+  .se-group { flex: none; padding-inline-start: 0.25rem; }
+  .se-block { min-width: 7.5rem; }
+  .se-surface { padding: 0.75rem; }
+  .se-modes { margin-inline-start: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .se-btn { transition: none; }
+}

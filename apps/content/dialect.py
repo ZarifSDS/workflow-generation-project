@@ -19,12 +19,14 @@ Rendering modes:
 - "stream": references are kept as `wagtail://` URLs for apps.content.markup.to_stream.
 """
 
+import html
 import re
 import unicodedata
 import xml.etree.ElementTree as etree
 from dataclasses import dataclass, field
 from urllib.parse import parse_qs, urlsplit
 
+from markdown import util
 from markdown.blockprocessors import BlockProcessor
 from markdown.extensions import Extension
 from markdown.inlinepatterns import SimpleTagInlineProcessor
@@ -33,6 +35,7 @@ from markdown.treeprocessors import Treeprocessor
 REFERENCE_SCHEME = "wagtail"
 ANCHOR_RE = re.compile(r"\s*\{#([A-Za-z0-9][A-Za-z0-9_-]*)\}\s*$")
 FAQ_OPEN, FAQ_CLOSE = ":::faq", ":::"
+TITLE_ESCAPE_RE = re.compile(r"\\([\\\"'])")
 
 
 def slugify(text):
@@ -121,12 +124,24 @@ class HeadingIdProcessor(Treeprocessor):
             if heading.tag not in ("h2", "h3", "h4"):
                 continue
             explicit = self._take_anchor(heading)
-            base = explicit or slugify("".join(heading.itertext()))
+            base = explicit or slugify(self._plain_text(heading))
             anchor, number = base, 2
             while anchor in used:
                 anchor, number = f"{base}-{number}", number + 1
             used.add(anchor)
             heading.set("id", anchor)
+
+    def _plain_text(self, heading):
+        """The heading's text as a reader sees it. Entities such as &amp; are stashed by Python-Markdown
+        and show up as placeholders here; put them back and decode them, as the editor's slug does."""
+        blocks = self.md.htmlStash.rawHtmlBlocks
+
+        def stashed(match):
+            index = int(match.group(1))
+            return str(blocks[index]) if index < len(blocks) else ""
+
+        text = util.HTML_PLACEHOLDER_RE.sub(stashed, "".join(heading.itertext()))
+        return html.unescape(re.sub(r"<[^>]*>", "", text.replace(util.AMP_SUBSTITUTE, "&")))
 
     @staticmethod
     def _take_anchor(heading):
@@ -177,7 +192,8 @@ class ReferenceProcessor(Treeprocessor):
         img.tail = None
         if kind == "media":
             paragraph.set("data-embed", params.get("url", ""))
-        caption = img.attrib.pop("title", "")
+        # Python-Markdown leaves backslash escapes in titles; CommonMark (and the editor) removes them.
+        caption = TITLE_ESCAPE_RE.sub(r"\1", img.attrib.pop("title", ""))
         if caption and kind == "image":
             figcaption = etree.SubElement(paragraph, "figcaption")
             figcaption.text = caption
@@ -283,6 +299,8 @@ class DialectExtension(Extension):
         super().__init__(**kwargs)
 
     def extendMarkdown(self, md):  # noqa: N802 - Python-Markdown API name
+        # \~ and \+ escape the dialect's own markers (the visual editor writes \~ for a literal tilde).
+        md.ESCAPED_CHARS.extend(char for char in "~+" if char not in md.ESCAPED_CHARS)
         md.inlinePatterns.register(SimpleTagInlineProcessor(r"(\+\+)(.+?)\+\+", "u"), "underline", 65)
         md.inlinePatterns.register(SimpleTagInlineProcessor(r"(~~)(.+?)~~", "s"), "strike", 64)
         md.parser.blockprocessors.register(FAQBlockProcessor(md.parser, self.state), "faq", 105)

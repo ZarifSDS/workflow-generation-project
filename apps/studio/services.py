@@ -151,11 +151,65 @@ def refresh_run_status(run):
     return run
 
 
+def _lock(step):
+    """Lock the step row for this transaction and reload it, so two reviewers can't race."""
+    StepRun.objects.select_for_update().filter(pk=step.pk).exists()
+    step.refresh_from_db()
+
+
+def _normalise_edit(content):
+    """Browsers post CRLF; versions store LF."""
+    return content.replace("\r\n", "\n").replace("\r", "\n")
+
+
+def _check_base(step, base_version):
+    """Refuse an edit or approval based on an older version than the latest (someone saved since)."""
+    if base_version in (None, ""):
+        return
+    try:
+        base = int(base_version)
+    except (TypeError, ValueError):
+        raise ValueError("The edit doesn't say which version it started from. Reload the page.") from None
+    latest = step.latest_version
+    if latest and latest.number != base:
+        raise ValueError(
+            f"Version {latest.number} was saved after you opened version {base}. "
+            "Your edit is kept in this browser; reload the page to see the new version."
+        )
+
+
 @transaction.atomic
-def approve_step(step, user, edited_content=None):
+def save_edit(step, user, content, base_version=None):
+    """Save your edit as a new version without approving. Returns the version, or None if unchanged."""
+    _lock(step)
+    if step.status != StepRun.Status.READY:
+        raise ValueError("Only a step that is ready for review can be edited.")
+    _check_base(step, base_version)
+    latest = step.latest_version
+    content = _normalise_edit(content)
+    if not content.strip():
+        raise ValueError("The edit is empty.")
+    if latest and content.strip() == latest.content.strip():
+        return None
+    return add_version(
+        step,
+        content,
+        source=StepVersion.Source.EDIT,
+        user=user,
+        provider=latest.provider if latest else "",
+        model=latest.model if latest else "",
+    )
+
+
+@transaction.atomic
+def approve_step(step, user, edited_content=None, base_version=None):
+    _lock(step)
     if step.status != StepRun.Status.READY:
         raise ValueError("Only a step that is ready for review can be approved.")
+    _check_base(step, base_version)
     latest = step.latest_version
+    if edited_content is not None:
+        edited_content = _normalise_edit(edited_content)
     if edited_content is not None and latest and edited_content.strip() != latest.content.strip():
         add_version(
             step,

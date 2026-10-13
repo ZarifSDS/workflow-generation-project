@@ -81,6 +81,24 @@ def _export_links(run):
     return links
 
 
+def _editor_refs(version):
+    """Previews for the images the version references, for the visual editor ({"images": {id: ...}})."""
+    from apps.content import dialect, markup
+
+    ids = set()
+    for url in markup.REF_DESTINATION.findall(version.content if version else ""):
+        kind, params = dialect.parse_ref(url) or (None, {})
+        if kind == "image" and params.get("id", "").isdigit():
+            ids.add(int(params["id"]))
+    found = markup.WagtailResolver(rendition="max-800x600").images(ids) if ids else {}
+    return {
+        "images": {
+            str(pk): {"url": image.url, "width": image.width, "height": image.height}
+            for pk, image in found.items()
+        }
+    }
+
+
 def _hero(version):
     """Hero branding results for the checks panel, with the unbranded photo."""
     from wagtail.images import get_image_model
@@ -122,6 +140,12 @@ class RunWorkspaceView(StudioPage):
         version = step.latest_version if step else None
         versions = list(step.versions.order_by("-number")) if step else []
         kind = step.definition.kind if step else "text"
+        can_review = bool(
+            step
+            and step.status == StepRun.Status.READY
+            and self.run.status != GenerationRun.Status.REJECTED
+            and permissions.can_review(user, step)
+        )
         context.update(
             run=self.run,
             brief=self.run.brief,
@@ -138,12 +162,10 @@ class RunWorkspaceView(StudioPage):
             else None,
             model_groups=catalog.grouped(kind) if kind in ("text", "image") else [],
             current_model_key=f"{step.provider}::{step.model}" if step and step.model else "",
-            can_review=bool(
-                step
-                and step.status == StepRun.Status.READY
-                and self.run.status != GenerationRun.Status.REJECTED
-                and permissions.can_review(user, step)
-            ),
+            can_review=can_review,
+            # Text output (the model steps and Final cleanup) can be edited; the hero and Publish can't.
+            can_edit=can_review and kind != "image" and step.key != "publish",
+            editor_refs=_editor_refs(version) if can_review and kind != "image" else None,
             user_can_act=bool(step and permissions.can_review(user, step)),
             user_can_retry=bool(step and permissions.can_act(user, step, "retry")),
             user_can_recover=bool(
@@ -177,16 +199,31 @@ class RunWorkspaceView(StudioPage):
                 + (f"; it's for {permissions.describe_role(step)}." if step else "."),
             )
             return redirect(url)
+        # The version the page showed; edits and approvals are refused if a newer one was saved since.
+        base_version = request.POST.get("base_version")
         try:
             if action == "recover":
                 services.recover_step(step, request.user)
                 messages.success(request, f"Marked {step.label.lower()} as failed. Retry it when ready.")
             elif action == "approve":
-                services.approve_step(step, request.user)
+                services.approve_step(step, request.user, base_version=base_version)
                 messages.success(request, f"Approved {step.label.lower()}.")
             elif action == "edit_approve":
-                services.approve_step(step, request.user, edited_content=request.POST.get("content", ""))
+                services.approve_step(
+                    step,
+                    request.user,
+                    edited_content=request.POST.get("content", ""),
+                    base_version=base_version,
+                )
                 messages.success(request, f"Saved your edit and approved {step.label.lower()}.")
+            elif action == "save_version":
+                saved = services.save_edit(
+                    step, request.user, request.POST.get("content", ""), base_version=base_version
+                )
+                if saved:
+                    messages.success(request, f"Saved your edit as version {saved.number}.")
+                else:
+                    messages.info(request, "Nothing changed, so no new version was saved.")
             elif action == "regenerate":
                 services.request_regenerate(step, request.POST.get("model", ""), request.POST.get("note", ""))
                 messages.success(request, f"{step.label} is queued with the chosen model.")

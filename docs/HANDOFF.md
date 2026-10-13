@@ -1,4 +1,4 @@
-# Handoff: Content Workflow Studio (state on 2026-10-13: M8 built, M9 UI/UX overhaul phases 1-3 done)
+# Handoff: Content Workflow Studio (state on 2026-10-13: M8 built, M9 UI/UX overhaul phases 1-4 done)
 
 Read this first in a new session. Then `docs/development.md` (code map, how-tos, process) and `docs/tools-and-processes.md`. Also see `docs/roadmap.md`, `docs/workflow.md`, `docs/ux.md`,
 `docs/providers.md`, `docs/model-eval.md` and `AGENTS.md`.
@@ -10,6 +10,12 @@ Read this first in a new session. Then `docs/development.md` (code map, how-tos,
 Session 2026-10-13 ended here on purpose: the user will test and polish in a new chat. Last changes after eb5778d: the handoff/plan doc and upload limits (10 MB per image, 25 MB per document/PDF). Everything is committed and pushed; the dev stack is running.
 
 The user's direction: a fast, functional, visually better version of the current Wagtail CMS with better UX. No rebranding (the "Content Studio" logo/titles were reverted).
+
+## Latest session (2026-10-13, evening)
+
+- **SVG and WebP images** (user spec): WebP was already a Wagtail default; SVG added to `WAGTAILIMAGES_EXTENSIONS`. SVG media is served with a sandboxing CSP (`SvgSandboxMiddleware` in dev, Caddy in share/production) and rasterised with CairoSVG for DOCX (`libcairo2` in the image). Tests: `tests/test_image_formats.py`.
+- **Phase 4 (editor)** built: `frontend/` (Tiptap 3.31.3), **Edit** button in the run workspace with Visual/Markdown, **Save as new version** / **Save and approve**, autosave in the browser with restore, conflict check on `base_version`. Details and deviations: `docs/ui-ux-plan.md` › Phase 4. The dev stack now has a `frontend` service that rebuilds the bundle.
+- Committed and pushed on 2026-10-13. **Next: phase 5** (choosers, image upload, embeds).
 
 ## Restarting after the PC was off
 

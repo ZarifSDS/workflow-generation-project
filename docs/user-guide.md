@@ -81,12 +81,23 @@ Steps run in the background. A local model can take 20 minutes on a draft; the p
 | Action | What it does |
 |---|---|
 | **Approve** | Accepts the output and queues the next step |
-| **Edit & approve** | Lets you change the text first; your version is what later steps use |
+| **Edit** | Opens the text in the editor (below). **Save as new version** keeps the step waiting for review; **Save and approve** saves and approves in one go. Your version is what later steps use |
 | **Regenerate** | Runs the step again with the model you pick, plus an optional note for that attempt (for example "add a section on state plans") |
 | **Reject run** | Stops the run and records your reason |
 | **Retry** | On a failed step: runs it again with the same model |
 | **Run again** | On Final cleanup and Publish (they have no model): runs the step again |
 | **Compare** | Shows two versions of a step side by side |
+
+### Editing text
+
+**Edit** swaps the step's text for an editor with a toolbar: text style (paragraph, heading 2–4), bold, italic, underline, strikethrough, links, bulleted and numbered lists, quotes, tables, FAQ blocks and dividers. Selecting text shows a small menu for the common marks. Shortcuts: Ctrl+B, Ctrl+I, Ctrl+U, Ctrl+K (link), Ctrl+Z / Ctrl+Shift+Z.
+
+- **Visual / Markdown** switches between the editor and the Markdown underneath. Both edit the same text; nothing is lost when you switch.
+- Claims to check show as a **VERIFY** chip. Images from the library show with their alt text and caption: double-click one (or use the image button) to change the alt text, mark it decorative, or edit the caption. Alt text is required unless the image is decorative.
+- Links can go to a web address, `mailto:`, `tel:` or a heading in the same text (`#anchor`). Headings with a fixed anchor show it as a small `#name` tag.
+- The text is only rewritten if you change something in the visual editor, so opening it and saving without changes doesn't touch the formatting.
+- **Your edit is kept in this browser** while you type. If the page closes before you save, you're offered **Restore my edit** next time you open the step. If someone else saved a newer version in the meantime, saving is refused with a message, so you don't overwrite their work; restore your edit and compare before saving it again.
+- **Cancel** discards your changes (after asking).
 
 Each step keeps its first version and the last three. Failed steps say why in plain language (free limit reached, provider not reachable, key missing) and what was already tried: every call is retried, and a backup model is used once before a step fails.
 
@@ -130,7 +141,7 @@ Before approving a page:
 
 ## Uploads
 
-Images can be up to 10 MB each and documents (PDFs) up to 25 MB. Larger files are refused with a message; compress or resize them first.
+Images can be JPEG, PNG, WebP, SVG, AVIF or GIF, up to 10 MB each and documents (PDFs) up to 25 MB. Larger files are refused with a message; compress or resize them first.
 
 ## 6. Exports
 

@@ -139,7 +139,7 @@ def test_model_output_is_sanitised(admin_client, brief):
     )
     response = admin_client.get(reverse("studio:run", args=[run.pk]) + "?step=research")
     html = response.content.decode()
-    rendered = html.split('class="s-output">', 1)[1].split("</div>", 1)[0]
+    rendered = html.split('class="s-output" data-editor-output>', 1)[1].split("</div>", 1)[0]
     assert "<script" not in rendered and "<img" not in rendered and "onerror" not in rendered
     assert "<script>alert(1)" not in html  # only ever present escaped, e.g. in the edit textarea
 

@@ -1,6 +1,6 @@
 # UI/UX overhaul plan (M9) — status and next steps
 
-Approved 2026-10-13. Phases 1–3 are built and pushed (eb5778d); **phases 4–6 are next**. A fresh session should read this file, then `docs/HANDOFF.md`.
+Approved 2026-10-13. Phases 1–3 are built and pushed (eb5778d); **phase 4 is built** (see below); **phases 5–6 are next**. A fresh session should read this file, then `docs/HANDOFF.md`.
 
 ## Goal (user's words, condensed)
 
@@ -23,15 +23,19 @@ A **fast, functional, visually better version of the current Wagtail CMS with be
 | 1 Dialect + renderers | **Done** | `apps/content/dialect.py`, `apps/content/markup.py` (`render`, `WagtailResolver`, `strip_dialect`, `resolve_references`), prompts `_rules.md`/`draft.md`, `tests/test_dialect.py`, fixture `tests/fixtures/dialect/article.md` |
 | 2 Page model, publishing, exports | **Done** | `apps/content/blocks.py`, `models.py` (Author, ArticlePageTag), migration `content/0002`, `apps/content/wagtail_hooks.py` (underline + sanitiser rules), `markup.build_article`, `publishing.py`, `exports.py`, templates `content/blocks/*`, `tests/test_publish.py` |
 | 3 Admin theme | **Done** (branding reverted) | `apps/brand/` (theme.css, font, hook), dashboard panels in `apps/studio/wagtail_hooks.py` + `studio/home/*.html`, `tests/test_theme.py` |
-| 4 Toolchain + core editor | **Next** | see below |
-| 5 Wagtail integrations | Planned | see below |
+| 4 Toolchain + core editor | **Done** | `frontend/` (`src/schema.js`, `nodes.js`, `editor.js`, `editor.css`, `test/roundtrip.test.js`), Dockerfile `frontend` stage, dev service `frontend`, CI job `frontend`, `services.save_edit`, `run_workspace.html`, `tests/test_editing.py` |
+| 5 Wagtail integrations | **Next** | see below |
 | 6 Polish | Planned | see below |
 
-Also done after phase 3: upload limits of **10 MB per image and 25 MB per document (PDF)** (settings + `tests/test_security.py::test_upload_size_limits`; Caddy request cap 30 MB).
+Also done after phase 3: upload limits of **10 MB per image and 25 MB per document (PDF)** (settings + `tests/test_security.py::test_upload_size_limits`; Caddy request cap 30 MB). **SVG and WebP images** (user spec 2026-10-13): WebP is a Wagtail default; SVG added to `WAGTAILIMAGES_EXTENSIONS`, sandboxed by a CSP header on media, rasterised for DOCX (`tests/test_image_formats.py`).
 
 Deferred from phase 3 into phase 4 (the run workspace template is rewritten there anyway): move the studio templates' inline `style=` attributes into `studio.css` classes, add hover/active/focus and loading/empty/error states per the redesign-skill audit, sentence-case copy, `tabular-nums` on metrics.
 
 ## Phase 4 — toolchain and core editor
+
+Built on 2026-10-13. Deviations from the plan below: Tiptap is pinned at **3.31.3** (3.32.0 was released the same day; the rule is versions at least two weeks old), vitest 5.0.1, happy-dom 20.14.5, esbuild 0.28.2. The FAQ is one `faq` container node (questions are `###` headings inside it) rather than `faq`/`faqItem`: it round-trips the dialect exactly and keeps editing simple. Inline images the dialect doesn't model are kept verbatim (`rawInline`). Findings from round-tripping the real step outputs in the database: `*` bullets become `-`, trailing spaces go, tables are padded, a list right after a paragraph line becomes a real list (as CommonMark reads it); the server renders the rest identically. Fixed on the server along the way: heading ids picked up Python-Markdown placeholders for entities (`&amp;`), `\~`/`\+` weren't escapes, and escaped quotes stayed in captions. Not verifiable in the built-in browser pane (no animation frames there): the scroll to the editor on **Edit**.
+
+The original plan:
 
 1. `frontend/`: `package.json` (exact pins: `@tiptap/core`, `@tiptap/starter-kit`, `@tiptap/markdown`, `@tiptap/extension-underline`, `-link`, `-table`/`-table-row`/`-table-cell`/`-table-header`, `-placeholder`, `-file-handler`, `@tiptap/suggestion`; dev: `esbuild`, `vitest`, `happy-dom`), committed `package-lock.json`, `build.mjs` (ESM, minified, metafile), `src/`, `test/`.
 2. Output `apps/studio/static/studio/editor/editor.{js,css}` (git-ignored). Dockerfile: first stage `FROM node:24-alpine` (pin digest) runs `npm ci && npm run build`; runtime stage `COPY --from=frontend` **before** `collectstatic`. Dev: compose service `frontend` (`npm run watch`, profile `dev`) writing into the bind mount (the dev mount `.:/app` hides image-built files). CI job `frontend` (build, vitest, gzip budget ≤ 250 KB).
@@ -43,7 +47,7 @@ Deferred from phase 3 into phase 4 (the run workspace template is rewritten ther
 ## Phase 5 — Wagtail integrations
 
 - `apps/studio/views/editor_api.py` under `studio/editor/` (JSON, `permissions.ACCESS` + Wagtail permission policies, CSRF from `wagtailConfig.CSRF_TOKEN`):
-  - `POST images/` (file, alt, decorative) through Wagtail's image form, so the limits apply (**10 MB per image**, `WAGTAILIMAGES_MAX_UPLOAD_SIZE`; documents/PDFs **25 MB**, `WAGTAILDOCS_MAX_UPLOAD_SIZE`; Caddy allows 30 MB per request for form overhead). Show the limit in the drop zone and a clear error when a file is too big. `description=alt`; returns `{id, ref, preview_url, width, height}`.
+  - `POST images/` (file, alt, decorative) through Wagtail's image form, so the limits apply (**10 MB per image**, `WAGTAILIMAGES_MAX_UPLOAD_SIZE`; documents/PDFs **25 MB**, `WAGTAILDOCS_MAX_UPLOAD_SIZE`; Caddy allows 30 MB per request for form overhead). Accept AVIF, GIF, JPEG, PNG, WebP and SVG (`accept=` on the file input from `WAGTAILIMAGES_EXTENSIONS`); SVG previews use the original (no raster rendition). Show the limit and the types in the drop zone and a clear error when a file is too big. `description=alt`; returns `{id, ref, preview_url, width, height}`.
   - `GET refs/?image=..&page=..&document=..` batched titles/previews (reuse `markup.WagtailResolver`).
   - `GET embed/?url=` via `wagtail.embeds.get_embed` (title + thumbnail); restrict `WAGTAILEMBEDS_FINDERS` to oEmbed YouTube/Vimeo.
 - Editor: link popover types URL / page / document / #anchor (from the document's headings) / mailto / tel; image drag/paste/upload with alt-text dialog (required unless decorative) and caption, plus "choose existing"; embed and FAQ nodes; `/` slash menu; shortcuts.

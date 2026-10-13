@@ -41,6 +41,27 @@ def test_heading_ids_explicit_auto_and_unique():
     assert "{#" not in html
 
 
+def test_heading_ids_ignore_entities_and_inline_html():
+    """The visual editor may write & as &amp;; the id must not pick up Python-Markdown placeholders."""
+    html, _ = markup.render("## Procedural &amp; Organizational Changes\n\n## R&D *plans* &lt;2026&gt;")
+    assert '<h2 id="procedural-organizational-changes">' in html
+    assert '<h2 id="r-d-plans-2026">' in html
+    assert "wzxhzdk" not in html
+
+
+def test_caption_quotes_escaped_by_the_editor():
+    html, _ = markup.render('![Panel](wagtail://image?id=42 "Say \\"stop\\" first")', FakeResolver())
+    assert (
+        "<figcaption>Say &quot;stop&quot; first</figcaption>" in html
+        or '<figcaption>Say "stop" first' in html
+    )
+
+
+def test_escaped_dialect_markers_are_literal():
+    html, _ = markup.render("Cuts time by \\~40 % and adds \\+\\+ signs.")
+    assert "by ~40 %" in html and "adds ++ signs" in html and "\\" not in html
+
+
 def test_slug_rule():
     assert dialect.slugify("  Safety Data Sheets: 2026 update! ") == "safety-data-sheets-2026-update"
     assert dialect.slugify("Über Größe") == "uber-groe"

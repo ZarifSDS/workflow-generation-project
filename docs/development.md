@@ -14,6 +14,7 @@ For developers and AI coding agents (Claude Code, Codex and others). The rules a
 | `apps/home/`, `apps/search/` | Wagtail starter apps |
 | `eval/` | Evaluation briefs, candidates and prompts; `eval/runs/` is git-ignored |
 | `comfyui/workflows/` | ComfyUI workflows exported in API format |
+| `frontend/` | The step-output editor (Tiptap 3 + `@tiptap/markdown`, vanilla JS, esbuild): `src/schema.js` (extensions shared by browser and tests), `src/nodes.js` (dialect nodes: anchored headings, Wagtail images, embeds, FAQ, `[VERIFY]`), `src/editor.js` (toolbar, Visual/Markdown, autosave), `test/` (vitest round trips over `tests/fixtures/dialect/`). Bundles to `apps/studio/static/studio/editor/` (git-ignored) |
 | `tests/` | pytest-django tests, one file per area |
 | `docs/` | Guides, architecture, ADRs, roadmap, handoff |
 
@@ -61,6 +62,8 @@ sequenceDiagram
 | Example data | `docker compose exec web python manage.py studio_demo` |
 | Shell | `docker compose exec web python manage.py shell` |
 | Pick up code changes in the worker | `docker compose restart worker` |
+| Editor bundle | Rebuilt automatically by the dev `frontend` service (`docker compose logs frontend`); by hand: `cd frontend && npm ci && npm run build` |
+| Editor tests | `cd frontend && npm test` (or `docker compose exec frontend npm test`) |
 | Long evaluation runs | `docker compose run --rm --no-deps -T web python manage.py eval_models …` (a one-off container survives dev-server reloads) |
 
 ## Testing patterns
@@ -90,6 +93,16 @@ Edit `apps/studio/prompts/<step>.md`. Templates have `## system` and `## user` s
 - **A provider with an OpenAI-compatible API:** add it to `AI_PROVIDERS` in `config/settings/base.py` with `api_key_env`, add the key to `.env.example`, and add a check model in `apps/ai/checks.py`.
 - **A new API shape:** write an adapter in `apps/ai/adapters/` (text) or `apps/ai/images/` (images) that returns `GenerationResult` / `ImageResult` and raises `ProviderError` with the right `kind` (retryable kinds: `rate_limited`, `server`, `network`), then register it in `TEXT_ADAPTERS` / `IMAGE_ADAPTERS` in `apps/ai/service.py`.
 - Changing which model a step uses by default means changing `AI_PROFILES`; do that from evaluation results ([model-eval.md](model-eval.md)).
+
+### Change the editor
+
+The editor bundle is built three ways: the Dockerfile's `frontend` stage (images), the dev compose service `frontend` (`npm run watch` into the bind mount; esbuild polls, so it works on Windows), and `npm run build` by hand. Packages are pinned exactly in `frontend/package.json` with a committed lock file; pick versions at least two weeks old.
+
+- A new Markdown construct needs a node in `frontend/src/nodes.js` (with `markdownTokenizer`, `parseMarkdown`, `renderMarkdown`), the matching Python in `apps/content/dialect.py`, a line in ADR 0007, and a case in `frontend/test/roundtrip.test.js`.
+- `@tiptap/markdown` HTML-encodes `&`, `<` and `>` in all text; `PlainTextEncoding` in `schema.js` replaces that with minimal encoding. Python-Markdown is told about `\~` and `\+` escapes and unescapes caption quotes, so both sides read what the other writes.
+- The textarea holds the Markdown that is posted; the visual editor writes back only after a visual change. Saving posts `base_version`; `services.save_edit` / `approve_step` refuse it if a newer version exists.
+- Wagtail's `core.css` gets in the way in places (`:focus-visible` outline with `!important`, `form li { list-style: none }`); `editor.css` overrides those explicitly.
+- CI job `frontend`: `npm test`, `npm run build`, and a 250 KB gzip budget for `editor.js` (about 170 KB now).
 
 ### Change the article page
 
