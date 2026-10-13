@@ -1,28 +1,34 @@
-# Handoff: Content Workflow Studio (state on 2026-10-13: M8 built, M9 UI/UX overhaul complete, provider keys in the admin)
+# Handoff: Content Workflow Studio (state on 2026-10-14: M1–M9 built, provider keys in the admin)
 
-Read this first in a new session. Then `docs/development.md` (code map, how-tos, process) and `docs/tools-and-processes.md`. Also see `docs/roadmap.md`, `docs/workflow.md`, `docs/ux.md`,
-`docs/providers.md`, `docs/model-eval.md` and `AGENTS.md`.
+Read this first in a new session. Then `docs/development.md` (code map, how-tos, process) and `docs/tools-and-processes.md`. Also see `docs/roadmap.md`, `docs/workflow.md`, `docs/ui-ux-plan.md`, `docs/security.md`, `docs/providers.md`, `docs/model-eval.md` and `AGENTS.md`.
 
-## Continue here: UI/UX overhaul (M9)
+## Where we are
 
-**Read [`docs/ui-ux-plan.md`](ui-ux-plan.md) first.** It holds the approved plan, decisions, per-phase status and the exact next steps. Phases 1-3 (Markdown dialect, richer article pages and exports, admin theme) are pushed in eb5778d; **start with phase 4 (Tiptap editor + frontend build)**, then 5 (Wagtail choosers, image upload, embeds) and 6 (polish, docs).
+**Everything is committed and pushed; CI is green at 12d43c6** (lint and tests, frontend, Docker build, secret scan). The dev stack is running (`docker compose up -d`, http://localhost:8000/admin/). No step is queued or running.
 
-Session 2026-10-13 ended here on purpose: the user will test and polish in a new chat. Last changes after eb5778d: the handoff/plan doc and upload limits (10 MB per image, 25 MB per document/PDF). Everything is committed and pushed; the dev stack is running.
+The user's direction: a fast, functional, visually better version of the current Wagtail CMS with better UX. No rebranding (the "Content Studio" logo/titles were reverted). The user asks before each commit and push.
 
-The user's direction: a fast, functional, visually better version of the current Wagtail CMS with better UX. No rebranding (the "Content Studio" logo/titles were reverted).
+**There is no planned next milestone.** Ask the user what to do; the open items are under **Start here** below. The most important one is still theirs: blind scores for the outline evaluation.
 
-## Latest session (2026-10-13, evening)
+## What was built on 2026-10-13/14 (after M8)
 
-- **SVG and WebP images** (user spec): WebP was already a Wagtail default; SVG added to `WAGTAILIMAGES_EXTENSIONS`. SVG media is served with a sandboxing CSP (`SvgSandboxMiddleware` in dev, Caddy in share/production) and rasterised with CairoSVG for DOCX (`libcairo2` in the image). Tests: `tests/test_image_formats.py`.
-- **Phase 4 (editor)** built: `frontend/` (Tiptap 3.31.3), **Edit** button in the run workspace with Visual/Markdown, **Save as new version** / **Save and approve**, autosave in the browser with restore, conflict check on `base_version`. Details and deviations: `docs/ui-ux-plan.md` › Phase 4. The dev stack now has a `frontend` service that rebuilds the bundle.
-- Committed and pushed on 2026-10-13 (2fef876, 45ee088).
+| Commit | What | Where to read |
+|---|---|---|
+| 2fef876 | **SVG and WebP images**: SVG added to `WAGTAILIMAGES_EXTENSIONS`, served with a sandboxing CSP (`SvgSandboxMiddleware`, Caddy), rasterised by CairoSVG for DOCX | `docs/operations.md`, `tests/test_image_formats.py` |
+| 45ee088 | **M9 phase 4**: Tiptap 3.31.3 editor in `frontend/` (vanilla JS, esbuild), Edit → Save as new version / Save and approve, Visual/Markdown, browser autosave + restore, `base_version` conflict check | `docs/ui-ux-plan.md` › Phase 4 |
+| a097fa2 | **Provider keys in the admin** (ADR 0008): Settings › AI providers (superusers): set/replace/remove keys, add OpenAI-compatible providers (OpenRouter) and models; Fernet under `STUDIO_SECRETS_KEY` from `.env`; write-only, last-4 hint, history entries; `rotate_provider_keys` | `docs/security.md` › Provider keys, `docs/adr/0008-*` |
+| bdf7c79 | **M9 phase 5**: Wagtail page/document/image choosers in the editor, upload by button/drag/paste (alt required), YouTube/Vimeo embeds (`WAGTAILEMBEDS_FINDERS`), `/` menu, writers get image/document add+choose | `docs/ui-ux-plan.md` › Phase 5 |
+| 12d43c6 | **M9 phase 6**: word-level and rendered Compare, link tooltips and shortcut list in the editor, studio templates without inline styles, public article CSS for figures/embeds/FAQ/tags, draft-prompt FAQ aligned with the blog skill, end-to-end check through Publish | `docs/ui-ux-plan.md` › Phase 6 |
 
-## Latest session (2026-10-14)
+The Content Studio Handbook artifact (https://claude.ai/artifact/Cp91uDDbGKT2H2qqPa8Cn4, private) was updated on 2026-10-14 to match.
 
-- **Provider keys in the admin** (user request; ADR 0008): Settings › AI providers, superusers only. Keys are encrypted with `STUDIO_SECRETS_KEY` (in `.env`, generated on 2026-10-14; back up `.env` separately), write-only, shown as `••••` + last four, and override `.env`. Add OpenAI-compatible providers (OpenRouter) and their models (paid ones are selectable once added), remove keys/providers/models after a confirmation page, every change in Reports › Site history. Rotation: `manage.py rotate_provider_keys`. Docs: `docs/security.md` › Provider keys.
-- **Phase 5 built**: Wagtail choosers for page/document links and library images, upload by button, drag or paste (alt text required), YouTube/Vimeo embeds, `/` menu. Details: `docs/ui-ux-plan.md` › Phase 5.
-- Committed and pushed: a097fa2 (keys), bdf7c79 (phase 5).
-- **Phase 6 built (M9 complete)**: word-level and rendered Compare, link tooltips and a shortcut list in the editor, studio templates without inline styles, public article styles for figures/embeds/FAQ/tags, the draft prompt's FAQ follows the skill, docs. An end-to-end check through Publish passed. **Next: whatever the user picks from Start here** (model evaluation scores are still pending).
+### Things a new session must know
+
+- **`STUDIO_SECRETS_KEY` is in `.env`** (generated 2026-10-14). It encrypts admin-stored provider keys; database backups don't contain it. Back up `.env` separately. No keys are stored in the admin yet; all providers still use `.env`.
+- **Share mode needs `--build` once**: the images changed (Node stage for the editor bundle, `libcairo2`, `cairosvg`, `cryptography`). Dev was rebuilt already.
+- **Dev has a `frontend` service** (`npm ci && npm run watch`, node_modules in a named volume) that rebuilds `apps/studio/static/studio/editor/` (git-ignored) on changes. By hand: `cd frontend && npm run build`; tests: `npm test`.
+- **Restart the worker after prompt changes**; the draft prompt changed on 2026-10-14 (done then).
+- Built-in browser pane limits (for testing the editor): no animation frames, `<dialog>` close events don't fire, screenshots miss the dialog top layer, synthetic double-clicks don't select words. Check behaviour through the DOM (`form.studioEditor` is the editor instance).
 
 ## Restarting after the PC was off
 
@@ -31,12 +37,12 @@ Nothing needs to be re-generated: no step was queued or running at shutdown, and
 0. `cd D:\workflow-generation-project` first: compose looks for its files in the current folder.
 1. Start Docker Desktop (`D:\Docker\Docker Desktop.exe`) and wait for "Engine running".
 2. Start Ollama from the Start menu (needed for the local `quality` models: outline, draft).
-3. Start the studio in one mode (images are already built; add `--build` only after code changes):
+3. Start the studio in one mode (the dev image is built; **share mode needs `--build` once** after the 2026-10-14 changes, then only after code changes):
    - Shared over ngrok: `docker compose -f docker-compose.yml -f docker-compose.share.yml up -d --scale web=2 --scale worker=2`. The public URL is the same (`docker compose -f docker-compose.yml -f docker-compose.share.yml logs ngrok`).
    - Dev only: `docker compose up -d` (http://localhost:8000/admin/).
 4. Check: `docker compose ps` (add the same `-f` files in share mode) shows db healthy, web healthy, worker and backup running; the dashboard's Services panel shows Ollama reachable. The `backup` service takes a backup on start.
 
-Waiting for review at shutdown (4 steps): run 11 Research and run 12 Outline ("management of change safety"), run 10 Review and edit, run 9 Publish ([Live test]). The `[Example]` demo runs 5–8 were deleted on 2026-10-13 (briefs kept; backup `backups/db-20261013-120342.dump` taken just before).
+Waiting for review (4 steps, unchanged since 2026-10-13; throwaway test runs 13–16 and page 6 were deleted): run 11 Research and run 12 Outline ("management of change safety"), run 10 Review and edit, run 9 Publish ([Live test]). The `[Example]` demo runs 5–8 were deleted on 2026-10-13 (briefs kept; backup `backups/db-20261013-120342.dump` taken just before).
 
 ## Start here
 
@@ -44,8 +50,9 @@ Waiting for review at shutdown (4 steps): run 11 Research and run 12 Outline ("m
 2. Optional: install ComfyUI and export the workflow (`docs/setup.md` step 6) to test local hero images live.
 3. Review run 9's article (page 5) before a moderator approves it: two claims are still marked [VERIFY], and its meta description says "30 days after last use federally" (OSHA's records rule talks about 30 years).
 4. Put teammates into the four groups (Writers, Editors, Moderators, Operators) under Settings › Users.
-5. Copy `backups/` off the PC now and then; `D:\backups\docker-2026-10-13\` (manual backups from the disk-full incident) can be deleted once everything is confirmed working.
-6. Optional: point the publish webhook at an n8n workflow (`docs/setup.md` step 7); move to a server with `docker-compose.prod.yml` when ready (`docs/deployment.md`).
+5. Try the editor on a real step (Edit on run 11's Research or run 12's Outline) and say what to polish; optionally add an OpenRouter key and models under Settings › AI providers.
+6. Copy `backups/` (and `.env`, separately) off the PC now and then; `D:\backups\docker-2026-10-13\` (manual backups from the disk-full incident) can be deleted once everything is confirmed working.
+7. Optional: point the publish webhook at an n8n workflow (`docs/setup.md` step 7); move to a server with `docker-compose.prod.yml` when ready (`docs/deployment.md`).
 
 ## Where things stand
 
@@ -61,7 +68,11 @@ Waiting for review at shutdown (4 steps): run 11 Research and run 12 Outline ("m
 | M7 Publish (ArticlePage, moderation, exports, n8n hook) | Built, verified live on run 9 (draft page 5 in Moderators approval; MD/HTML/DOCX/WebP exports); webhook mocked | see git log |
 | M8 Hardening (roles, login protection, secret review, backups, production compose) | Built; see `docs/security.md` | see git log |
 
-Everything through M8 and the stuck-step fix is pushed to `main`; CI (tests, image build, secret scan) is green at 44b3209.
+| SVG/WebP images | Done | 2fef876 |
+| M9 UI/UX overhaul (dialect, article page, theme, editor, choosers, compare) | Done, verified end to end | eb5778d, 45ee088, bdf7c79, 12d43c6 |
+| Provider keys in the admin (ADR 0008) | Done | a097fa2 |
+
+Everything is pushed to `main`; CI (lint and tests, frontend, image build, secret scan) is green at 12d43c6.
 
 ## Evaluation (M2)
 
