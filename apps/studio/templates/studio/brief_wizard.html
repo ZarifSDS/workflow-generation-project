@@ -1,0 +1,96 @@
+{% extends "wagtailadmin/generic/base.html" %}
+{% load static studio_tags %}
+
+{% block main_content %}
+<form method="post" class="studio" novalidate data-studio-wizard>
+    {% csrf_token %}
+    {{ presets|json_script:"studio-presets" }}
+
+    <fieldset class="s-step">
+        <legend><span class="s-step-num" aria-hidden="true">1</span>Content type</legend>
+        <div class="s-types" role="radiogroup" aria-label="Content type">
+            {% for choice in form.content_type %}
+                <label class="s-type">{{ choice.tag }}<b>{{ choice.choice_label }}</b><span class="s-muted">{{ type_help|get_item:choice.data.value }}</span></label>
+            {% endfor %}
+        </div>
+        {% if form.content_type.errors %}<p class="error-message">{{ form.content_type.errors|join:" " }}</p>{% endif %}
+    </fieldset>
+
+    <fieldset class="s-step">
+        <legend><span class="s-step-num" aria-hidden="true">2</span>Brief</legend>
+        {% include "wagtailadmin/shared/field.html" with field=form.preset %}
+        <div class="s-form-grid">
+            <div class="s-full">{% include "wagtailadmin/shared/field.html" with field=form.topic %}</div>
+            {% include "wagtailadmin/shared/field.html" with field=form.pkeyword %}
+            {% include "wagtailadmin/shared/field.html" with field=form.skeywords_text %}
+            {% include "wagtailadmin/shared/field.html" with field=form.audience %}
+            {% include "wagtailadmin/shared/field.html" with field=form.comprehension %}
+            {% include "wagtailadmin/shared/field.html" with field=form.wordcount %}
+            {% include "wagtailadmin/shared/field.html" with field=form.fkgl %}
+            {% include "wagtailadmin/shared/field.html" with field=form.region %}
+            {% include "wagtailadmin/shared/field.html" with field=form.cta_style %}
+            <div data-types="outbound">{% include "wagtailadmin/shared/field.html" with field=form.site %}</div>
+            <div data-types="outbound">{% include "wagtailadmin/shared/field.html" with field=form.site_domain %}</div>
+            <div data-types="outbound">{% include "wagtailadmin/shared/field.html" with field=form.narrative_mode %}</div>
+            <div class="s-full">{% include "wagtailadmin/shared/field.html" with field=form.notes %}</div>
+        </div>
+    </fieldset>
+
+    <fieldset class="s-step">
+        <legend><span class="s-step-num" aria-hidden="true">3</span>Pipeline</legend>
+        {% if profiles_interim %}<p class="s-callout s-callout--info">Default models are interim until the model evaluation is scored. You can change any step.</p>{% endif %}
+        <div class="s-table-wrap">
+            <table class="s-table">
+                <thead><tr><th scope="col">Step</th><th scope="col">Model</th><th scope="col">Wait for my approval</th></tr></thead>
+                <tbody>
+                {% for row in rows %}
+                    <tr data-types="{{ row.types }}">
+                        <th scope="row">
+                            {% if row.def.optional %}
+                                <label><input type="checkbox" name="step_{{ row.def.key }}_enabled" {% if row.def.default_on %}checked{% endif %}> {{ row.def.label }}</label>
+                            {% else %}{{ row.def.label }}{% endif %}
+                            {% if row.def.key == "site_crawl" %}<div class="s-muted" style="font-weight:400;font-size:.8rem">Guest posts only. Reads public pages of the target site.</div>{% endif %}
+                        </th>
+                        <td>
+                            {% if row.groups %}
+                                <select name="step_{{ row.def.key }}_model" aria-label="Model for {{ row.def.label }}" data-step-model="{{ row.def.key }}">
+                                    {% for group, items in row.groups %}
+                                        <optgroup label="{{ group }}">
+                                            {% for item in items %}
+                                                <option value="{{ item.key }}" {% if not item.selectable %}disabled{% endif %} {% if item.key == row.default %}selected{% endif %}>{{ item.label }}{% if item.typical_seconds %} · {{ item.typical_seconds|duration }}{% endif %}{% if item.reason %} · {{ item.reason }}{% endif %}</option>
+                                            {% endfor %}
+                                        </optgroup>
+                                    {% endfor %}
+                                </select>
+                            {% else %}<span class="s-muted">No model needed</span>{% endif %}
+                        </td>
+                        <td>{% if row.def.kind != "none" or row.def.key == "publish" %}<input type="checkbox" name="step_{{ row.def.key }}_gate" aria-label="Wait for approval after {{ row.def.label }}" {% if row.def.gate %}checked{% endif %}>{% else %}<span class="s-muted">Automatic</span>{% endif %}</td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </fieldset>
+
+    <details class="s-disclosure">
+        <summary>Save these settings as a preset</summary>
+        <div class="s-row-actions" style="margin-top:.5rem">
+            <label for="preset_name" class="w-sr-only">Preset name</label>
+            <input type="text" id="preset_name" name="preset_name" placeholder="e.g. SDS Manager blog · US · FKGL 9">
+            <button class="button button-secondary" type="submit" name="action" value="save_preset">Save as preset</button>
+        </div>
+    </details>
+
+    <div class="s-sticky-actions">
+        <button class="button" type="submit" name="action" value="start">{% if brief %}Save and start a new run{% else %}Start run{% endif %}</button>
+        <button class="button button-secondary" type="submit" name="action" value="save">Save brief only</button>
+        <span class="s-spacer"></span>
+        <a href="{% url 'studio:briefs' %}">Cancel</a>
+    </div>
+</form>
+{% endblock %}
+
+{% block extra_js %}
+    {{ block.super }}
+    <script src="{% static 'studio/studio.js' %}" defer></script>
+{% endblock %}

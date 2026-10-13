@@ -1,0 +1,16 @@
+{% extends "wagtailadmin/generic/base.html" %}
+{% load studio_tags %}
+
+{% block main_content %}
+<div class="studio">
+    <p class="s-muted" style="margin:0">{{ step.label }}: version {{ old.number }} ({% if old.source == "edit" %}your edit{% else %}{% model_label old.provider old.model %}{% endif %}) compared with version {{ new.number }} ({% if new.source == "edit" %}your edit{% else %}{% model_label new.provider new.model %}{% endif %}). Removed lines are marked −, added lines +.</p>
+    {% if lines %}
+        <div class="s-diff" role="region" aria-label="Differences">
+            {% for kind, line in lines %}<div class="{{ kind }}">{{ line }}</div>{% endfor %}
+        </div>
+    {% else %}
+        <p>These versions are identical.</p>
+    {% endif %}
+    <div><a class="button button-secondary" href="{% url 'studio:run' run.pk %}?step={{ step.key }}">Back to the run</a></div>
+</div>
+{% endblock %}

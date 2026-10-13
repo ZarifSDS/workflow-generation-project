@@ -1,0 +1,43 @@
+{% extends "wagtailadmin/generic/base.html" %}
+{% load studio_tags %}
+
+{% block main_content %}
+<div class="studio">
+    <form method="post" class="s-row-actions">{% csrf_token %}
+        <span class="s-muted">{% if last_checked %}Last checked {{ last_checked|timesince }} ago{% else %}Not checked yet{% endif %}</span>
+        <span class="s-spacer"></span>
+        <button class="button button-secondary" type="submit" data-controller="w-progress" data-action="w-progress#activate" data-w-progress-active-value="Checking…">Re-check providers</button>
+    </form>
+
+    <div class="s-table-wrap">
+        <table class="s-table">
+            <thead><tr><th scope="col">Provider</th><th scope="col">Status</th><th scope="col">Available models</th><th scope="col">Not available</th></tr></thead>
+            <tbody>
+            {% for row in rows %}
+                <tr>
+                    <th scope="row">{{ row.label }}</th>
+                    <td>
+                        {% if not row.configured %}<span class="s-tag s-tag--warn">Not configured</span>
+                        {% elif row.check %}{% if row.check.ok %}<span class="s-tag s-tag--ok">OK</span>{% else %}<span class="s-tag s-tag--bad">Problem</span><div class="s-muted" style="font-size:.78rem">{{ row.check.detail }}</div>{% endif %}
+                        {% else %}<span class="s-tag s-tag--neutral">Not checked</span>{% endif %}
+                    </td>
+                    <td>{% for m in row.available %}{{ m.label }}{% if m.status == "limited" %} <span class="s-tag s-tag--warn" title="{{ m.reason }}">Limited</span>{% endif %}{% if not forloop.last %}, {% endif %}{% empty %}<span class="s-muted">–</span>{% endfor %}</td>
+                    <td class="s-muted">{% for m in row.unavailable %}{{ m.label }} ({{ m.reason }}){% if not forloop.last %}; {% endif %}{% empty %}–{% endfor %}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <section aria-labelledby="profiles-head" style="display:grid;gap:.75rem">
+        <h2 class="s-section" id="profiles-head">Default model per profile</h2>
+        {% if profiles_interim %}<p class="s-callout s-callout--info" style="margin:0">These defaults are interim. They're replaced by your blind scores from the model evaluation; each run can still pick its own model per step.</p>{% endif %}
+        <div class="s-table-wrap">
+            <table class="s-table">
+                <thead><tr><th scope="col">Profile</th><th scope="col">Used for</th><th scope="col">Default</th><th scope="col">Fallback</th></tr></thead>
+                <tbody>{% for p in profiles %}<tr><th scope="row">{{ p.name }}</th><td>{{ p.use }}</td><td>{{ p.main }}</td><td>{{ p.fallback }}</td></tr>{% endfor %}</tbody>
+            </table>
+        </div>
+    </section>
+</div>
+{% endblock %}

@@ -98,6 +98,12 @@ def write_scorecard(path, key, round_name):
     Path(path).write_text("\n".join(lines), encoding="utf-8")
 
 
+def _scorecard_section(text, brief_id):
+    """All table text under every '## <brief_id>' heading (a brief can appear twice after extension)."""
+    parts = text.split("\n## ")
+    return "\n".join(part for part in parts if part.split("\n", 1)[0].strip() == brief_id)
+
+
 class Runner:
     def __init__(
         self,
@@ -128,12 +134,35 @@ class Runner:
         self.results = {}
 
     def _load_or_create_key(self):
+        """Create the blind key, or extend an existing one.
+
+        On resume, each existing entry's options are refreshed from the current candidates file
+        (so a fixed option applies to reruns), and candidates added since get new shuffled letters.
+        """
         key_path = self.run_dir / "key.json"
-        if key_path.exists():
-            return json.loads(key_path.read_text(encoding="utf-8"))
-        key = assign_labels(list(self.briefs), self.candidates, self.seed)
+        if not key_path.exists():
+            key = assign_labels(list(self.briefs), self.candidates, self.seed)
+            key_path.write_text(json.dumps(key, indent=2), encoding="utf-8")
+            return key, False
+
+        key = json.loads(key_path.read_text(encoding="utf-8"))
+        current = {(c["provider"], c["model"]): c for c in self.candidates}
+        rng = random.Random(self.seed)
+        extended = False
+        for brief_id in self.briefs:
+            labels = key.setdefault(brief_id, {})
+            for label, entry in labels.items():
+                if (entry["provider"], entry["model"]) in current:
+                    labels[label] = current[(entry["provider"], entry["model"])]
+            present = {(e["provider"], e["model"]) for e in labels.values()}
+            new = [c for ident, c in current.items() if ident not in present]
+            rng.shuffle(new)
+            free = [letter for letter in string.ascii_uppercase if letter not in labels]
+            for letter, candidate in zip(free, new, strict=False):
+                labels[letter] = candidate
+                extended = True
         key_path.write_text(json.dumps(key, indent=2), encoding="utf-8")
-        return key
+        return key, extended
 
     def _save_results(self):
         path = self.run_dir / "results.json"
@@ -191,12 +220,28 @@ class Runner:
 
     def run(self, workers_per_provider=1):
         self.run_dir.mkdir(parents=True, exist_ok=True)
-        key = self._load_or_create_key()
+        key, extended = self._load_or_create_key()
         results_path = self.run_dir / "results.json"
         if results_path.exists():
             self.results = json.loads(results_path.read_text(encoding="utf-8"))
-        if not (self.run_dir / "scorecard.md").exists():
-            write_scorecard(self.run_dir / "scorecard.md", key, self.round)
+        scorecard = self.run_dir / "scorecard.md"
+        if not scorecard.exists():
+            write_scorecard(scorecard, key, self.round)
+        elif extended:
+            # Add rows for new labels without touching any scores already entered.
+            existing = scorecard.read_text(encoding="utf-8")
+            extra = {}
+            for brief_id, labels in key.items():
+                section = _scorecard_section(existing, brief_id)
+                missing = {lbl: c for lbl, c in labels.items() if f"| {lbl} |" not in section}
+                if missing:
+                    extra[brief_id] = missing
+            if extra:
+                addition = self.run_dir / "_extra.md"
+                write_scorecard(addition, extra, self.round)
+                rows = addition.read_text(encoding="utf-8").split("\n## ", 1)[1]
+                scorecard.write_text(existing.rstrip() + "\n\n## " + rows, encoding="utf-8")
+                addition.unlink()
 
         # Group jobs by provider: providers run in parallel, each provider's jobs run in order.
         # Local Ollama must stay sequential (one model in memory at a time).

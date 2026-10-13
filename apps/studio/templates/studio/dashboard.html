@@ -1,0 +1,76 @@
+{% extends "wagtailadmin/generic/base.html" %}
+{% load studio_tags %}
+
+{% block main_content %}
+<div class="studio">
+    <div class="s-row-actions">
+        <a class="button" href="{% url 'studio:brief_new' %}">New brief</a>
+        <a class="button button-secondary" href="{% url 'studio:runs' %}">All runs</a>
+    </div>
+
+    {% if not has_any %}
+        <div class="s-empty">
+            <h2 class="s-section">Nothing here yet</h2>
+            <p>Create a brief, choose the steps and models, and start a run. Each step waits for your approval before the next one starts.</p>
+            <a class="button" href="{% url 'studio:brief_new' %}">New brief</a>
+        </div>
+    {% endif %}
+
+    <section aria-labelledby="review-head">
+        <h2 class="s-section" id="review-head">Needs your review <span class="s-tag s-tag--info">{{ review|length }}</span></h2>
+        {% if review %}
+            <div class="s-list">
+                {% for run in review %}{% with step=run.current_step %}
+                    <div class="s-item">
+                        <div><div class="s-item__title">{{ run.brief.topic }}</div><div class="s-item__sub">{{ run.brief.get_content_type_display }} · {{ run.brief.region }} · FKGL {{ run.brief.fkgl }}</div></div>
+                        <div><span class="s-tag s-tag--info">{{ step.label }} ready</span></div>
+                        <div class="s-item__sub">{% model_label step.provider step.model %} · {{ run.updated_at|timesince }} ago</div>
+                        <a class="button button-small" href="{% url 'studio:run' run.pk %}?step={{ step.key }}">Review</a>
+                    </div>
+                {% endwith %}{% endfor %}
+            </div>
+        {% else %}
+            <p class="s-muted">Nothing is waiting for you.</p>
+        {% endif %}
+    </section>
+
+    <section aria-labelledby="progress-head">
+        <h2 class="s-section" id="progress-head">In progress <span class="s-tag s-tag--neutral">{{ in_progress|length }}</span></h2>
+        {% if in_progress %}
+            <div class="s-list">
+                {% for run in in_progress %}{% with step=run.current_step %}
+                    <div class="s-item">
+                        <div><div class="s-item__title">{{ run.brief.topic }}</div><div class="s-item__sub">{{ run.brief.get_content_type_display }} · {{ run.brief.region }}</div></div>
+                        <div><span class="s-tag s-tag--{{ step.status|status_style }}">{{ step.label }}: {{ step.get_status_display }}</span></div>
+                        <div class="s-item__sub">{% model_label step.provider step.model %}{% if not generation_connected and step.status == "queued" %} · runs once generation is connected (M4){% endif %}</div>
+                        <a class="button button-small button-secondary" href="{% url 'studio:run' run.pk %}">Open</a>
+                    </div>
+                {% endwith %}{% endfor %}
+            </div>
+        {% else %}
+            <p class="s-muted">No runs in progress.</p>
+        {% endif %}
+    </section>
+
+    <div class="s-columns">
+        <section class="s-box" aria-labelledby="recent-head">
+            <h2 class="s-section" id="recent-head">Recently finished</h2>
+            {% for run in recent %}
+                <div class="s-kv"><a href="{% url 'studio:run' run.pk %}">{{ run.brief.topic }}</a><span class="s-tag s-tag--{{ run.status|status_style }}">{{ run.get_status_display }}</span></div>
+            {% empty %}
+                <p class="s-muted">Finished and rejected runs appear here.</p>
+            {% endfor %}
+        </section>
+        <section class="s-box" aria-labelledby="svc-head">
+            <h2 class="s-section" id="svc-head">Services</h2>
+            {% for service in services %}
+                <div class="s-kv"><span>{{ service.name }}</span>{% if service.ok %}<span class="s-tag s-tag--ok">Running</span>{% else %}<span class="s-tag s-tag--warn" title="{{ service.fix }}">Not running</span>{% endif %}</div>
+            {% endfor %}
+            {% for check in checks %}
+                <div class="s-kv"><span>{{ check.provider }}</span>{% if check.ok %}<span class="s-tag s-tag--ok">OK</span>{% else %}<span class="s-tag s-tag--bad" title="{{ check.detail }}">Problem</span>{% endif %}</div>
+            {% endfor %}
+            <a href="{% url 'studio:providers' %}">Models and providers</a>
+        </section>
+    </div>
+</div>
+{% endblock %}

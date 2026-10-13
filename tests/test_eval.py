@@ -97,3 +97,28 @@ def test_dry_run_round_and_report(tmp_path):
     doc.write_text("# Model evaluation\n")
     report.write_into_doc(doc, report.to_markdown(rows, "Run test"))
     assert "### Run test" in doc.read_text() and report.START in doc.read_text()
+
+
+def test_run_can_be_extended_with_new_candidates(tmp_path, settings):
+    run_dir = tmp_path / "run"
+    base = [
+        "--round",
+        "outline",
+        "--run-dir",
+        str(run_dir),
+        "--dry-run",
+        "--seed",
+        "3",
+        "--only-briefs",
+        "b1-sds-retention",
+    ]
+    call_command("eval_models", *base, "--models", "gpt-oss:120b")
+    first = json.loads((run_dir / "key.json").read_text())["b1-sds-retention"]
+    assert sorted(first) == ["A"]
+
+    call_command("eval_models", *base, "--models", "gpt-oss:120b,gemma4")
+    key = json.loads((run_dir / "key.json").read_text())["b1-sds-retention"]
+    assert key["A"] == first["A"]  # existing label kept
+    assert sorted(key) == ["A", "B"]
+    scorecard = (run_dir / "scorecard.md").read_text()
+    assert "| A |" in scorecard and "| B |" in scorecard

@@ -1,0 +1,56 @@
+{% extends "wagtailadmin/generic/base.html" %}
+
+{% block main_content %}
+<div class="studio">
+    <div class="s-columns">
+        <div style="display:grid;gap:1.25rem;min-width:0">
+            <form method="post" id="selection-form" style="display:grid;gap:1.25rem">{% csrf_token %}
+                {% for group in groups %}
+                    <section aria-labelledby="g-{{ group.kind }}">
+                        <h2 class="s-section" id="g-{{ group.kind }}">{{ group.label }} options{% if group.multiple %} <span class="s-muted" style="text-transform:none;letter-spacing:0">(tick one or more)</span>{% endif %}</h2>
+                        <div class="s-list">
+                            {% for option in group.items %}
+                                <label class="s-opt">
+                                    {% if group.multiple %}<input type="checkbox" name="selected" value="{{ option.pk }}" {% if option.selected %}checked{% endif %}>{% else %}<input type="radio" name="choice_{{ group.kind }}" value="{{ option.pk }}" {% if option.selected %}checked{% endif %}>{% endif %}
+                                    <span>{{ option.text }}{% if option.source == "edit" %} <span class="s-tag s-tag--neutral">Yours</span>{% endif %}</span>
+                                    <span class="s-mono {% if option.too_long %}s-over{% else %}s-muted{% endif %}">{{ option.text|length }}/{{ group.limit }}</span>
+                                </label>
+                            {% empty %}
+                                <p class="s-muted" style="padding:.6rem .9rem;margin:0">The draft step hasn't suggested any yet. Add your own below.</p>
+                            {% endfor %}
+                        </div>
+                    </section>
+                {% endfor %}
+                <div><button class="button" type="submit" name="action" value="save">Save selection</button></div>
+            </form>
+
+            <section class="s-box" aria-labelledby="add-head">
+                <h2 class="s-section" id="add-head">Add your own</h2>
+                {% for group in groups %}
+                    <form method="post" class="s-addown" style="border:0;padding:0">{% csrf_token %}
+                        <input type="hidden" name="kind" value="{{ group.kind }}">
+                        <label for="own_{{ group.kind }}" style="flex-basis:100%">{{ group.label }} <span class="s-muted">(limit {{ group.limit }} characters)</span></label>
+                        <input type="text" id="own_{{ group.kind }}" name="own_{{ group.kind }}" maxlength="300">
+                        <button class="button button-small button-secondary" type="submit" name="action" value="add">Add to list</button>
+                    </form>
+                {% endfor %}
+            </section>
+        </div>
+
+        <aside style="display:grid;gap:1rem;align-content:start;min-width:0">
+            <h2 class="s-section">Search preview</h2>
+            <div class="s-serp">
+                <span class="s-serp__url">sdsmanager.com › blog › {% if selected.slug %}{{ selected.slug.text }}{% else %}(choose a slug){% endif %}</span>
+                <span class="s-serp__title">{% if selected.title %}{{ selected.title.text }}{% else %}Choose a title{% endif %}</span>
+                <span class="s-serp__desc">{% if selected.meta %}{{ selected.meta.text }}{% else %}Choose a meta description.{% endif %}</span>
+            </div>
+            <div class="s-box">
+                <div class="s-kv"><span>Primary keyword in selected title</span><span class="s-tag s-tag--{% if keyword_in_title %}ok">Yes{% else %}warn">No{% endif %}</span></div>
+                <div class="s-kv"><span>Titles selected</span><span class="s-mono">{{ titles_selected }}</span></div>
+                <p class="s-muted" style="margin:0;font-size:.8rem">With more than one title ticked, the extra titles are kept as A/B test options.</p>
+            </div>
+            <a class="button button-secondary" href="{% url 'studio:run' run.pk %}">Back to the run</a>
+        </aside>
+    </div>
+</div>
+{% endblock %}

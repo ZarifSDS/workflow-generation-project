@@ -1,0 +1,142 @@
+{% extends "wagtailadmin/generic/base.html" %}
+{% load studio_tags %}
+
+{% block main_content %}
+<div class="studio">
+    <div class="s-row-actions">
+        <span class="s-tag s-tag--{{ run.status|status_style }}">{{ run.get_status_display }}</span>
+        <span class="s-muted">{{ brief.get_content_type_display }} · {{ brief.region }} · FKGL {{ brief.fkgl }}{% if brief.wordcount %} · {{ brief.wordcount }} words{% endif %}</span>
+        <span class="s-spacer"></span>
+        {% if has_metadata %}<a class="button button-secondary button-small" href="{% url 'studio:metadata' run.pk %}">Title and meta</a>{% endif %}
+        <a class="button button-secondary button-small" href="{% url 'studio:brief_edit' brief.pk %}">Brief</a>
+    </div>
+
+    {% if run.status == "rejected" %}
+        <div class="s-callout"><strong>Rejected.</strong> {{ run.reject_reason }}</div>
+    {% endif %}
+
+    <div class="s-workspace">
+        <nav aria-label="Steps">
+            <ol class="s-timeline">
+                {% for s in steps %}
+                    <li>
+                        <a class="s-tl" href="?step={{ s.key }}" {% if step and s.pk == step.pk %}aria-current="step"{% endif %}>
+                            <span class="s-dot s-dot--{{ s.status|status_style }}" aria-hidden="true"></span>
+                            <span>{{ s.label }}<small>{{ s.get_status_display }}{% if s.model %} · {% model_label s.provider s.model %}{% endif %}</small></span>
+                        </a>
+                    </li>
+                {% endfor %}
+            </ol>
+        </nav>
+
+        <div style="display:grid;grid-template-rows:1fr auto;min-width:0">
+            <article class="s-doc" aria-labelledby="step-head">
+                {% if step %}
+                    <h2 id="step-head" style="margin:0">{{ step.label }}</h2>
+                    {% if version %}
+                        <p class="s-muted" style="margin:0">Version {{ version.number }} · {{ version.get_source_display }}{% if version.model %} · {% model_label version.provider version.model %}{% endif %} · {{ version.created_at|date:"j M H:i" }}</p>
+                        {% if version.image %}<img src="{{ version.image.file.url }}" alt="Generated hero image for {{ brief.topic }}" style="max-width:100%;border-radius:.4rem">{% endif %}
+                        <div class="s-output">{{ version.content|render_markdown }}</div>
+                    {% elif step.status == "queued" or step.status == "pending" %}
+                        <div class="s-callout s-callout--info">
+                            {% if step.status == "queued" %}<strong>Queued</strong> with {% model_label step.provider step.model %}.{% else %}<strong>Waiting</strong> for the previous step to be approved.{% endif %}
+                            {% if not generation_connected %} Generation is connected in milestone M4; until then steps don't run automatically.{% endif %}
+                        </div>
+                    {% elif step.status == "skipped" %}
+                        <p class="s-muted">This step is switched off for this run.</p>
+                    {% elif step.status == "failed" %}
+                        <div class="s-callout"><strong>This step failed.</strong> {{ step.error|default:"No details were recorded." }} Choose another model on the right and regenerate.</div>
+                    {% endif %}
+                {% else %}
+                    <p class="s-muted">This run has no steps.</p>
+                {% endif %}
+            </article>
+
+            {% if can_review %}
+                <div class="s-actionbar">
+                    <form method="post">{% csrf_token %}<input type="hidden" name="step" value="{{ step.key }}"><button class="button" type="submit" name="action" value="approve">Approve {{ step.label|lower }}</button></form>
+                    <details class="s-disclosure" style="flex:1 1 100%">
+                        <summary>Edit, then approve</summary>
+                        <form method="post" style="display:grid;gap:.5rem;margin-top:.5rem">{% csrf_token %}
+                            <input type="hidden" name="step" value="{{ step.key }}">
+                            <label for="edit-content" class="w-sr-only">Edit the {{ step.label|lower }}</label>
+                            <textarea id="edit-content" name="content" class="s-editor">{{ version.content }}</textarea>
+                            <div><button class="button" type="submit" name="action" value="edit_approve">Save edit and approve</button></div>
+                        </form>
+                    </details>
+                    <details class="s-disclosure" style="flex:1 1 100%">
+                        <summary>Reject this run</summary>
+                        <form method="post" style="display:grid;gap:.5rem;margin-top:.5rem">{% csrf_token %}
+                            <input type="hidden" name="step" value="{{ step.key }}">
+                            <label for="reject-reason">Why are you rejecting it?</label>
+                            <textarea id="reject-reason" name="reason" rows="2" required></textarea>
+                            <div><button class="button no" type="submit" name="action" value="reject">Reject run</button></div>
+                        </form>
+                    </details>
+                </div>
+            {% endif %}
+        </div>
+
+        <aside class="s-panel" aria-label="Checks, model and versions">
+            {% if checks %}
+                <section class="s-box" aria-labelledby="checks-head">
+                    <h3 class="s-section" id="checks-head">Checks</h3>
+                    <div class="s-kv"><span>Primary keyword in title</span><span class="s-tag s-tag--{% if checks.pk_title %}ok">Yes{% else %}warn">No{% endif %}</span></div>
+                    <div class="s-kv"><span>…in first 100 words</span><span class="s-tag s-tag--{% if checks.pk_first100 %}ok">Yes{% else %}warn">No{% endif %}</span></div>
+                    <div class="s-kv"><span>…in headings</span><span class="s-mono">{{ checks.pk_headings }}</span></div>
+                    {% for kw, count in checks.skeywords.items %}<div class="s-kv"><span title="{{ kw }}">“{{ kw|truncatechars:24 }}”</span><span class="s-tag s-tag--{% if count %}ok">Used {{ count }}×{% else %}warn">Not used{% endif %}</span></div>{% endfor %}
+                    <div class="s-kv"><span>Claims to verify</span><span class="s-tag s-tag--{% if checks.verify %}warn{% else %}ok{% endif %}">{{ checks.verify }}</span></div>
+                    <div class="s-kv"><span>Red-flag phrases</span><span class="s-tag s-tag--{% if checks.red_flags %}bad{% else %}ok{% endif %}">{% if checks.red_flags %}{{ checks.red_flags }}{% else %}None{% endif %}</span></div>
+                    {% if checks.meta_narration %}<div class="s-kv"><span>Meta narration</span><span class="s-tag s-tag--warn">{{ checks.meta_narration }}</span></div>{% endif %}
+                    {% if checks.spelling %}<div class="s-kv"><span>Wrong spelling variant</span><span class="s-tag s-tag--warn">{{ checks.spelling|length }}</span></div>{% endif %}
+                    {% if checks.fkgl is not None %}<div class="s-kv"><span>Grade overall</span><span class="s-mono">{{ checks.fkgl }} (target {{ checks.target }})</span></div>{% endif %}
+                    {% if checks.sections %}
+                        <div class="s-muted" style="font-size:.78rem">Grade by section</div>
+                        {% for section in checks.sections %}
+                            <div class="s-grade" title="{{ section.heading }}: FKGL {{ section.fkgl }}">
+                                <span class="s-grade__label">{{ section.heading }}</span>
+                                <div class="s-bar" aria-hidden="true"><i class="{{ section.fkgl|fkgl_level:checks.target }}" style="width:{{ section.fkgl|fkgl_width }}%"></i></div>
+                                <span class="s-mono">{{ section.fkgl }}</span>
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+                </section>
+            {% endif %}
+
+            {% if model_groups and run.status != "rejected" %}
+                <section class="s-box" aria-labelledby="model-head">
+                    <h3 class="s-section" id="model-head">Model</h3>
+                    <p class="s-muted" style="margin:0">Now: {% model_label step.provider step.model %}</p>
+                    <form method="post" style="display:grid;gap:.5rem">{% csrf_token %}
+                        <input type="hidden" name="step" value="{{ step.key }}">
+                        <label for="regen-model">Regenerate with</label>
+                        <select id="regen-model" name="model">
+                            {% for group, items in model_groups %}
+                                <optgroup label="{{ group }}">
+                                    {% for item in items %}<option value="{{ item.key }}" {% if not item.selectable %}disabled{% endif %} {% if item.key == current_model_key %}selected{% endif %}>{{ item.label }}{% if item.typical_seconds %} · {{ item.typical_seconds|duration }}{% endif %}{% if item.reason %} · {{ item.reason }}{% endif %}</option>{% endfor %}
+                                </optgroup>
+                            {% endfor %}
+                        </select>
+                        <label for="regen-note">Note for the model (optional)</label>
+                        <textarea id="regen-note" name="note" rows="2" placeholder="e.g. add a section on state plans"></textarea>
+                        <div><button class="button button-secondary" type="submit" name="action" value="regenerate">Regenerate</button></div>
+                    </form>
+                </section>
+            {% endif %}
+
+            {% if versions %}
+                <section class="s-box" aria-labelledby="versions-head">
+                    <h3 class="s-section" id="versions-head">Versions</h3>
+                    {% for v in versions %}
+                        <div class="s-kv">
+                            <span>v{{ v.number }} · {% if v.source == "edit" %}your edit{% elif v.number == first_version.number %}first draft{% else %}{% model_label v.provider v.model %}{% endif %}</span>
+                            {% if v.number == version.number %}<span class="s-tag s-tag--info">Current</span>{% else %}<a class="button button-small button-secondary" href="{% url 'studio:compare' run.pk step.key v.number version.number %}">Compare</a>{% endif %}
+                        </div>
+                    {% endfor %}
+                    <p class="s-muted" style="margin:0;font-size:.75rem">Keeps the first draft and the last three versions.</p>
+                </section>
+            {% endif %}
+        </aside>
+    </div>
+</div>
+{% endblock %}

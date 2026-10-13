@@ -1,0 +1,33 @@
+{% extends "wagtailadmin/generic/base.html" %}
+{% load studio_tags %}
+
+{% block main_content %}
+<div class="studio">
+    <form method="get" class="s-row-actions">
+        <label for="status" class="w-sr-only">Status</label>
+        <select id="status" name="status"><option value="">All statuses</option>{% for value, label in statuses %}<option value="{{ value }}" {% if value == status %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+        <button class="button button-secondary" type="submit">Filter</button>
+        <span class="s-spacer"></span>
+        <a class="button" href="{% url 'studio:brief_new' %}">New brief</a>
+    </form>
+    {% if runs %}
+        <div class="s-table-wrap">
+            <table class="s-table">
+                <thead><tr><th scope="col">Content</th><th scope="col">Status</th><th scope="col">Current step</th><th scope="col">Updated</th></tr></thead>
+                <tbody>
+                {% for run in runs %}{% with step=run.current_step %}
+                    <tr>
+                        <td><a href="{% url 'studio:run' run.pk %}"><strong>{{ run.brief.topic }}</strong></a><div class="s-muted" style="font-size:.8rem">{{ run.brief.get_content_type_display }} · {{ run.brief.region }}</div></td>
+                        <td><span class="s-tag s-tag--{{ run.status|status_style }}">{{ run.get_status_display }}</span></td>
+                        <td>{% if step %}{{ step.label }} <span class="s-muted">({{ step.get_status_display|lower }})</span>{% endif %}</td>
+                        <td class="s-mono">{{ run.updated_at|date:"j M Y H:i" }}</td>
+                    </tr>
+                {% endwith %}{% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <div class="s-empty"><p>No runs{% if status %} with this status{% endif %}.</p><a class="button" href="{% url 'studio:brief_new' %}">New brief</a></div>
+    {% endif %}
+</div>
+{% endblock %}

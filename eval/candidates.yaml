@@ -3,8 +3,12 @@
 
 text:
   - {provider: ollama, model: "huihui_ai/Qwen3.8-abliterated:latest", options: {num_ctx: 32768, think: true}}
-  - {provider: ollama, model: "glm-4.7-flash:latest", options: {num_ctx: 32768}}
+  # think: false — with reasoning on, glm-4.7-flash spent its whole 16k budget thinking (empty output).
+  - {provider: ollama, model: "glm-4.7-flash:latest", options: {num_ctx: 32768, think: false}}
   - {provider: ollama, model: "hf.co/mradermacher/Huihui-Ornith-1.5-35B-A3B-abliterated-i1-GGUF:latest", options: {num_ctx: 32768}}
+  # 9B Qwen-family fine-tunes: ~6-7 GB, nearly fit in 8 GB VRAM (fast-tier candidates).
+  - {provider: ollama, model: "hf.co/mradermacher/Huihui-Ornith-1.5-9B-abliterated-GGUF:latest", options: {num_ctx: 32768}}
+  - {provider: ollama, model: "hf.co/huihui-ai/Huihui-Qwythos-9B-Claude-Mythos-5-1M-abliterated-GGUF:latest", options: {num_ctx: 32768}}
   - {provider: ollama_cloud, model: "nemotron-3-ultra"}
   - {provider: ollama_cloud, model: "gpt-oss:120b"}
   - {provider: ollama_cloud, model: "gemma4:31b"}

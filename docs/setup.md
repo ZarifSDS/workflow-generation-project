@@ -92,6 +92,8 @@ Set `DJANGO_ALLOWED_HOSTS` and `DJANGO_CSRF_TRUSTED_ORIGINS` in `.env` for the h
 | Lint and format | `docker compose exec web ruff check .` and `docker compose exec web ruff format .` |
 | New migrations | `docker compose exec web python manage.py makemigrations` |
 | Django shell | `docker compose exec web python manage.py shell` |
+| Example data for the Content Studio | `docker compose exec web python manage.py studio_demo` (topics start with "[Example]"; rerunning replaces them) |
+| Check AI providers | `docker compose exec web python manage.py ai_smoke` (or **Content Studio › Models and providers › Re-check providers**) |
 | Stop (keeps data) | `docker compose down` |
 | Back up the database | `docker compose exec db pg_dump -U studio studio > backup.sql` |
 

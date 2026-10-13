@@ -10,3 +10,5 @@ openai==3.29.0
 httpx==0.28.1
 textstat==0.7.13
 PyYAML==6.0.3
+Markdown==3.11
+nh3==0.3.7

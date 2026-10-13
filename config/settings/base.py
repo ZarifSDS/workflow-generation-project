@@ -188,10 +188,36 @@ AI_PROVIDERS = {
     },
 }
 
-# Profiles map pipeline steps to a provider and model. Filled in after the model
-# evaluation (docs/model-eval.md); M3 makes them editable in the admin.
+# Profiles map pipeline steps to a provider and model.
+# INTERIM defaults so the UI has a sensible preselection; they are replaced by the
+# evaluation results (docs/model-eval.md). Every step can override them per run.
 # Shape: {"quality": {"provider": ..., "model": ..., "options": {...}, "fallback": {...}}}
-AI_PROFILES = {}
+AI_PROFILES = {
+    "quality": {
+        "provider": "ollama",
+        "model": "huihui_ai/Qwen3.8-abliterated:latest",
+        "options": {"num_ctx": 32768, "think": True},
+        "fallback": {"provider": "ollama_cloud", "model": "gpt-oss:120b"},
+    },
+    "fast": {
+        "provider": "ollama_cloud",
+        "model": "gpt-oss:120b",
+        "fallback": {"provider": "groq", "model": "openai/gpt-oss-120b"},
+    },
+    "edit": {
+        "provider": "ollama",
+        "model": "huihui_ai/Qwen3.8-abliterated:latest",
+        "options": {"num_ctx": 32768},
+        "fallback": {"provider": "ollama_cloud", "model": "gpt-oss:120b"},
+    },
+    "image": {
+        "provider": "cloudflare",
+        "model": "@cf/black-forest-labs/flux-2-klein-4b",
+        "options": {"width": 1024, "height": 576},
+        "fallback": {"provider": "cloudflare", "model": "@cf/black-forest-labs/flux-1-schnell"},
+    },
+}
+AI_PROFILES_INTERIM = True  # flips to False once docs/model-eval.md records the chosen defaults
 
 AI_RETRIES = 3
 AI_RETRY_BACKOFF = 5  # seconds; grows 5, 15, 45
