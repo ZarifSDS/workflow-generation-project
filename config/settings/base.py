@@ -25,9 +25,11 @@ INSTALLED_APPS = [
     "apps.search",
     "apps.studio",
     "apps.ai",
+    "apps.content",
     "wagtail.contrib.forms",
     "wagtail.contrib.redirects",
     "wagtail.contrib.settings",
+    "wagtail.contrib.table_block",
     "wagtail.embeds",
     "wagtail.sites",
     "wagtail.users",
@@ -240,6 +242,10 @@ AI_PROFILES_INTERIM = True  # flips to False once docs/model-eval.md records the
 STUDIO_EXECUTE_STEPS = True
 STUDIO_CRAWL_MAX_PAGES = 8
 STUDIO_CRAWL_PACE_SECONDS = 5
+# Optional: the Publish step POSTs the saved draft here (e.g. an n8n Webhook node; docs/workflow.md).
+# With a secret, requests carry X-Studio-Signature: sha256=<HMAC of the body>.
+STUDIO_PUBLISH_WEBHOOK_URL = os.environ.get("STUDIO_PUBLISH_WEBHOOK_URL", "")
+STUDIO_WEBHOOK_SECRET = os.environ.get("STUDIO_WEBHOOK_SECRET", "")
 
 AI_RETRIES = 3
 AI_RETRY_BACKOFF = 5  # seconds; grows 5, 15, 45

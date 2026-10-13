@@ -36,6 +36,25 @@
                     {% if version and step.status != "running" %}
                         <p class="s-muted" style="margin:0">Version {{ version.number }} · {{ version.get_source_display }}{% if version.model %} · {% model_label version.provider version.model %}{% endif %} · {{ version.created_at|date:"j M H:i" }}</p>
                         {% if version.image %}<img src="{{ version.image.file.url }}" alt="Generated hero image for {{ brief.topic }}" style="max-width:100%;border-radius:.4rem">{% endif %}
+                        {% if article_page %}
+                            <section class="s-box" aria-labelledby="page-head">
+                                <h3 class="s-section" id="page-head">Article page</h3>
+                                <div class="s-kv"><span>{{ article_page.title }}</span><span class="s-tag s-tag--{% if article_page.live %}ok">Live{% else %}info">Draft{% endif %}</span></div>
+                                {% with state=article_page.current_workflow_state %}{% if state %}<div class="s-kv"><span>Moderation</span><span class="s-mono">{{ state.workflow.name }}: {{ state.get_status_display }}</span></div>{% endif %}{% endwith %}
+                                <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+                                    <a class="button button-small button-secondary" href="{% url 'wagtailadmin_pages:edit' article_page.pk %}">Open in the page editor</a>
+                                    <a class="button button-small button-secondary" href="{% url 'wagtailadmin_pages:view_draft' article_page.pk %}" target="_blank" rel="noopener">View draft</a>
+                                </div>
+                            </section>
+                        {% endif %}
+                        {% if exports %}
+                            <section class="s-box" aria-labelledby="exports-head">
+                                <h3 class="s-section" id="exports-head">Export</h3>
+                                <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+                                    {% for url, label in exports %}<a class="button button-small button-secondary" href="{{ url }}" download>{{ label }}</a>{% endfor %}
+                                </div>
+                            </section>
+                        {% endif %}
                         {% if review %}
                             <section class="s-box" aria-labelledby="review-head">
                                 <h3 class="s-section" id="review-head">Review sequence</h3>
@@ -179,6 +198,16 @@
                 </section>
             {% endif %}
 
+            {% if can_review and not step.definition.profile %}
+                <section class="s-box" aria-labelledby="rerun-head">
+                    <h3 class="s-section" id="rerun-head">Run again</h3>
+                    <p class="s-muted" style="margin:0;font-size:.85rem">{% if step.key == "publish" %}Changed the title, meta description or an earlier step? Run Publish again to update the same page.{% else %}Runs this step again on the current approved input.{% endif %}</p>
+                    <form method="post">{% csrf_token %}
+                        <input type="hidden" name="step" value="{{ step.key }}">
+                        <button class="button button-secondary button-small" type="submit" name="action" value="rerun">Run {{ step.label|lower }} again</button>
+                    </form>
+                </section>
+            {% endif %}
             {% if model_groups and run.status != "rejected" %}
                 <section class="s-box" aria-labelledby="model-head">
                     <h3 class="s-section" id="model-head">Model</h3>

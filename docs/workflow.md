@@ -29,7 +29,7 @@ The studio automates an existing, proven manual workflow that runs as a set of C
 | 5 | Final cleanup | Hidden-Unicode removal, final mechanical sweep | Auto | none (deterministic) |
 | 6 | Hero image | Generated photo, vision check, branded hero ([details below](#hero-image-step-m6)) | Approve | image + vision |
 | 7 | Localise (optional) | Regional or language variants | Approve | quality |
-| 8 | Publish | `ArticlePage` draft → Wagtail moderation workflow | Wagtail workflow | none |
+| 8 | Publish | `ArticlePage` draft → Wagtail moderation workflow; exports ([details below](#publish-step-m7)) | Approve, then the Wagtail workflow | none |
 
 **Profiles** map to a provider and model in configuration (see [providers.md](providers.md)):
 
@@ -93,6 +93,18 @@ Follows the sds-hero-stock skill, with the photo generated instead of picked fro
 
 The checks panel shows whether the hero is branded, the headline fit and contrast, the photo check, where the subject starts, and how many problems were found.
 
+## Publish step (M7)
+
+1. **Article:** the approved Final cleanup output (else Review and edit, else Draft). Leftover workflow sections (`## Changelog`, `## Metadata options`, `## Localisation notes`) are dropped.
+2. **Page fields:** the article's H1 is the page title; the selected title option is the SEO title, the selected meta description the search description, and the selected slug the slug (made unique under Articles). The approved hero is the hero image. Primary keyword and region are stored on the page.
+3. **Body:** Markdown becomes StreamField blocks: H2 and H3 are heading blocks, Markdown tables are table blocks, and everything between is rich text (bold, italic, links, lists, H4, quotes, code). Model output is sanitised first; scripts, images and unsafe links are dropped.
+4. **Draft and moderation:** the page is saved as a draft revision under **Articles** (created under the home page on first use) and Wagtail's workflow for that part of the tree starts (the default **Moderators approval**). A moderator approves and publishes it in Wagtail. Running Publish again updates the same page with a new revision and doesn't restart a workflow already in progress.
+5. **Warnings** in the version notes: claims still marked `[VERIFY]`, a missing meta description, no approved hero.
+6. **Webhook (optional):** with `STUDIO_PUBLISH_WEBHOOK_URL` set, the worker POSTs JSON (`event: article.draft_saved`, run and page IDs, title, SEO title, slug, meta description, region, keywords, workflow, admin URL, warnings, and the Markdown export) after saving. With `STUDIO_WEBHOOK_SECRET`, the request carries `X-Studio-Signature: sha256=<HMAC-SHA256 of the body>`. A failed webhook is reported in the notes and doesn't fail the step.
+7. **Exports** on the Publish step: Markdown with YAML front matter, a standalone HTML file, Word (metadata block, hero, headings, lists, tables, links), and the hero as the 720×405 WebP the CMS serves. If the Localise step is approved, the localised variant is exported too (Markdown, Word).
+
+While the Publish step waits for review, **Run publish again** updates the page after you change the title, meta description or slug. Approving the Publish step finishes the run. The article page links back to the run in the page editor.
+
 ## Site crawl step (guest posts)
 
 Runs after the brief for `outbound` content and mirrors the SITE_PROFILE in the `ehs-outbound-blog` skill. It reads the target site's landing page and at least three articles, preferring ones close to the topic, then summarises the dominant pattern. Rules:
@@ -113,5 +125,5 @@ Runs after the brief for `outbound` content and mirrors the SITE_PROFILE in the 
 - Review and edit runs the seven-part sequence (`apps/quality/review.py`). Grades use the skill's own `metrics.py` formula. Every rewrite is checked before it's accepted (headings kept, no large loss of text); a rejected rewrite leaves the text unchanged and says why. Sentence splits are **proposals only**: each must lower its section by at least one grade, and you apply the ones you tick.
 - Final cleanup runs the clean-user-facing-text `clean_text.py` script (built-in cleaner as fallback).
 - Drafts, edits, cleanups and localisations get **quality scans** from the vendored skill scripts (slop index, AI-tell findings, unclear references, repeated frames, mechanical-sweep blockers, hidden characters), shown in the run workspace.
-- Publish is a final confirmation; creating the Wagtail page and exports arrive in M7.
+- Publish saves the article as a Wagtail page draft and starts moderation ([below](#publish-step-m7)).
 

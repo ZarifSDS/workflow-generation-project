@@ -23,7 +23,7 @@ The GPU and large models stay on the Windows host. Containers reach them at `hos
 | Content Studio | `apps/studio/` | Admin menu, overview, briefs, runs, approvals and the pipeline engine (M3–M4) |
 | AI layer | `apps/ai/` (M2) | Provider registry. One OpenAI-compatible client for all text providers; image providers for ComfyUI and Cloudflare. |
 | Quality checks | `apps/quality/` (M5) | Readability, AI-tell scans, hidden-Unicode cleaning, SEO checks. These wrap the user's existing skill scripts. |
-| Content | `apps/content/` (M7) | `ArticlePage`, the published destination for approved output |
+| Content | `apps/content/` (M7) | `ArticleIndexPage` and `ArticlePage` (StreamField body: headings, rich text, tables); Markdown → blocks conversion; publishing into the moderation workflow; Markdown/HTML/DOCX/WebP exports; the optional publish webhook |
 | Home, search | `apps/home/`, `apps/search/` | Wagtail starter apps (public site root and search) |
 
 ## Request and job flow
@@ -32,7 +32,7 @@ The GPU and large models stay on the Windows host. Containers reach them at `hos
 2. `web` enqueues the first step as a task in Postgres (`django-tasks-db`).
 3. `worker` picks it up, renders the prompt, calls the configured provider, runs the quality checks and stores the output.
 4. If the step has an approval gate, the run waits. When you approve (or edit and approve), `web` enqueues the next step.
-5. The final step creates an `ArticlePage` draft, which goes through Wagtail's moderation workflow.
+5. The final step creates (or updates) the run's `ArticlePage` as a draft revision and starts Wagtail's moderation workflow; a moderator publishes it from Wagtail. If `STUDIO_PUBLISH_WEBHOOK_URL` is set, the worker then POSTs the draft to it (for example an n8n workflow).
 
 ## Background tasks
 

@@ -1,53 +1,15 @@
-import markdown as md
-import nh3
 from django import template
 from django.utils.safestring import mark_safe
 
 from apps.ai import catalog
+from apps.content.markup import markdown_to_html
 
 register = template.Library()
-
-# Model output is untrusted: render Markdown, then allow only harmless tags. Raw HTML in the
-# output is escaped by Markdown's own rules and stripped again by nh3.
-ALLOWED_TAGS = {
-    "p",
-    "h1",
-    "h2",
-    "h3",
-    "h4",
-    "h5",
-    "h6",
-    "ul",
-    "ol",
-    "li",
-    "strong",
-    "em",
-    "code",
-    "pre",
-    "blockquote",
-    "table",
-    "thead",
-    "tbody",
-    "tr",
-    "th",
-    "td",
-    "hr",
-    "br",
-    "a",
-}
 
 
 @register.filter
 def render_markdown(text):
-    html = md.markdown(text or "", extensions=["tables", "sane_lists"], output_format="html")
-    cleaned = nh3.clean(
-        html,
-        tags=ALLOWED_TAGS,
-        attributes={"a": {"href", "title"}},
-        url_schemes={"http", "https", "mailto"},
-        link_rel="noopener noreferrer nofollow",
-    )
-    return mark_safe(cleaned)  # noqa: S308 - sanitised by nh3 above
+    return mark_safe(markdown_to_html(text))  # noqa: S308 - sanitised by nh3 in markdown_to_html
 
 
 STATUS_STYLE = {

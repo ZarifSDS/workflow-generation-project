@@ -4,7 +4,7 @@ from .views.briefs import BriefListView, BriefWizardView
 from .views.dashboard import DashboardView
 from .views.metadata import MetadataView
 from .views.providers import ProvidersView
-from .views.runs import RunListView, RunWorkspaceView, VersionCompareView, run_status
+from .views.runs import RunListView, RunWorkspaceView, VersionCompareView, run_export, run_status
 
 app_name = "studio"
 
@@ -17,6 +17,7 @@ urlpatterns = [
     path("runs/<int:pk>/", RunWorkspaceView.as_view(), name="run"),
     path("runs/<int:pk>/metadata/", MetadataView.as_view(), name="metadata"),
     path("runs/<int:pk>/status/", run_status, name="run_status"),
+    path("runs/<int:pk>/export/<slug:fmt>/", run_export, name="run_export"),
     path(
         "runs/<int:pk>/steps/<slug:step>/compare/<int:a>/<int:b>/",
         VersionCompareView.as_view(),

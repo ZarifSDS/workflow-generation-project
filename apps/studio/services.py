@@ -185,6 +185,17 @@ def request_regenerate(step, model_key, note=""):
 
 
 @transaction.atomic
+def rerun_step(step):
+    """Run a step without a model (e.g. Final cleanup, Publish) again, e.g. after changing the metadata."""
+    if step.definition.profile or step.status != StepRun.Status.READY:
+        raise ValueError("Only a step without a model that is waiting for review can be run again.")
+    step.status, step.error, step.notified_at = StepRun.Status.QUEUED, "", None
+    step.save(update_fields=["status", "error", "notified_at"])
+    enqueue(step)
+    return refresh_run_status(step.run)
+
+
+@transaction.atomic
 def retry_step(step):
     """Queue a failed step again with the same model."""
     if step.status != StepRun.Status.FAILED:

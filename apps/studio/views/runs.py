@@ -2,7 +2,7 @@ import difflib
 import hashlib
 
 from django.contrib import messages
-from django.http import Http404, JsonResponse
+from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 
@@ -53,6 +53,33 @@ def _checks(version, brief):
     }
 
 
+def _export_links(run):
+    """(url, label) download links for the approved article, its localised variant and the hero."""
+    from apps.content import exports
+
+    def url(fmt, variant=""):
+        link = reverse("studio:run_export", args=[run.pk, fmt])
+        return f"{link}?variant={variant}" if variant else link
+
+    try:
+        content = exports.article_content(run)
+    except exports.ArticleError:
+        return []
+    links = [(url(fmt), label) for fmt, label in (("md", "Markdown"), ("html", "HTML"), ("docx", "Word"))]
+    if content.hero is not None:
+        links.append((url("webp"), "Hero WebP (720×405)"))
+    try:
+        exports.article_content(run, "localised")
+        region = run.brief.localise_to
+        links += [
+            (url("md", "localised"), f"Markdown ({region})"),
+            (url("docx", "localised"), f"Word ({region})"),
+        ]
+    except exports.ArticleError:
+        pass
+    return links
+
+
 def _hero(version):
     """Hero branding results for the checks panel, with the unbranded photo."""
     from wagtail.images import get_image_model
@@ -101,8 +128,10 @@ class RunWorkspaceView(StudioPage):
             version=version,
             versions=versions,
             first_version=versions[-1] if versions else None,
-            checks=_checks(version, self.run.brief) if kind != "image" else None,
+            checks=_checks(version, self.run.brief) if kind != "image" and step.key != "publish" else None,
             hero=_hero(version) if kind == "image" else None,
+            article_page=getattr(self.run, "article_page", None) if step and step.key == "publish" else None,
+            exports=_export_links(self.run) if step and step.key == "publish" else None,
             model_groups=catalog.grouped(kind) if kind in ("text", "image") else [],
             current_model_key=f"{step.provider}::{step.model}" if step and step.model else "",
             can_review=bool(
@@ -145,6 +174,9 @@ class RunWorkspaceView(StudioPage):
                 messages.success(request, "Applied the chosen splits as a new version.")
             elif action == "retry":
                 services.retry_step(step)
+                messages.success(request, f"{step.label} is queued again.")
+            elif action == "rerun":
+                services.rerun_step(step)
                 messages.success(request, f"{step.label} is queued again.")
             elif action == "reject":
                 reason = request.POST.get("reason", "").strip()
@@ -213,3 +245,38 @@ def run_status(request, pk):
     ).hexdigest()
     active = any(s["status"] in (StepRun.Status.QUEUED, StepRun.Status.RUNNING) for s in steps)
     return JsonResponse({"run": run.status, "steps": steps, "signature": signature, "active": active})
+
+
+EXPORTS = {
+    "md": ("text/markdown; charset=utf-8", "md"),
+    "html": ("text/html; charset=utf-8", "html"),
+    "docx": ("application/vnd.openxmlformats-officedocument.wordprocessingml.document", "docx"),
+    "webp": ("image/webp", "webp"),
+}
+
+
+def run_export(request, pk, fmt):
+    """Download the approved article (or its localised variant, ?variant=localised)."""
+    from apps.content import exports
+
+    run = get_object_or_404(GenerationRun.objects.select_related("brief"), pk=pk)
+    if fmt not in EXPORTS:
+        raise Http404
+    variant = "localised" if request.GET.get("variant") == "localised" else "final"
+    try:
+        if fmt == "webp":
+            body, name = exports.hero_webp(run), exports.filename(run)
+        else:
+            builder = {
+                "md": exports.markdown_export,
+                "html": exports.html_export,
+                "docx": exports.docx_export,
+            }
+            body, name = builder[fmt](run, variant), exports.filename(run, variant)
+    except exports.ArticleError as error:
+        messages.error(request, str(error))
+        return redirect(f"{reverse('studio:run', args=[run.pk])}?step=publish")
+    content_type, extension = EXPORTS[fmt]
+    response = HttpResponse(body, content_type=content_type)
+    response["Content-Disposition"] = f'attachment; filename="{name}.{extension}"'
+    return response

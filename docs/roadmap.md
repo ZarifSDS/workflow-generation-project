@@ -8,7 +8,7 @@
 | M4 | Generation wired into the UI | Steps as background tasks run from the run workspace; approval gates; regenerate with a chosen model; retries and provider fallback; live progress and notifications | Built (2026-10-13); verified with a live run: research → hero image → done |
 | M5 | Quality tools and review step | Wrap the skill scripts (deslop, clarity-review, clean-user-facing-text, metrics); the **review-and-edit sequence** in [workflow.md](workflow.md#review-and-edit-step-m5) (per-section grade scan → de-slop → clarity review → strip meta narration → word-level edits above grade 13 → re-scan → targeted splits); **edit-model evaluation round** | Built (2026-10-13); verified live on a real draft. Edit round ready to run once a draft is chosen |
 | M6 | Images | ComfyUI and Cloudflare providers; VRAM handoff; vision check; sds-hero-stock branding ([hero step](workflow.md#hero-image-step-m6)) | Built (2026-10-13); verified live with Cloudflare + Gemini vision + branding. ComfyUI tested against a mocked API (not installed yet) |
-| M7 | Publish and integrate | `ArticlePage`; moderation workflow; Markdown/HTML/DOCX export; optional n8n webhook | Planned |
+| M7 | Publish and integrate | `ArticlePage`; moderation workflow; Markdown/HTML/DOCX export; optional n8n webhook ([publish step](workflow.md#publish-step-m7)) | Built (2026-10-13); verified live on run 9 (draft page in Moderators approval, all exports). Webhook tested against a mock |
 | M8 | Hardening | Roles and permissions; secret handling review; database backups; production compose | Planned |
 
 ## Verification for the full pipeline (end of M7)

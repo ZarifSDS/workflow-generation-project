@@ -90,6 +90,16 @@ Hero images use Cloudflare by default. To generate them on your PC instead:
 
 The worker patches the exported workflow before queueing it: the prompt text (the text node feeding the sampler's positive input; rename the node to "Positive prompt" if it guesses wrong), the latent width and height (1440×816 for heroes) and the seed. Before each image it unloads Ollama's models (`keep_alive: 0`) so ComfyUI gets the GPU, and afterwards it asks ComfyUI to free its memory (`POST /free`). If ComfyUI isn't running, the step falls back to the image profile's Cloudflare model.
 
+## 7. Publish webhook to n8n (optional)
+
+The Publish step can send each saved draft to an n8n workflow (for example to post to a CMS, notify a channel or file a task):
+
+1. In n8n, add a **Webhook** node (method POST) and copy its production URL.
+2. Set it in `.env`: `STUDIO_PUBLISH_WEBHOOK_URL=http://host.docker.internal:5678/webhook/<path>` when n8n runs on the host or in another container with its port published. Optionally set `STUDIO_WEBHOOK_SECRET` and verify `X-Studio-Signature` (`sha256=` + HMAC-SHA256 of the raw body) in n8n.
+3. Restart the containers (`docker compose up -d`).
+
+The payload is described in [workflow.md](workflow.md#publish-step-m7). A webhook that fails is reported on the Publish step and doesn't block it.
+
 ## Production-style run
 
 Runs gunicorn, without the dev override:

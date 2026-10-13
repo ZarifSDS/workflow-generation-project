@@ -478,9 +478,42 @@ def localise(step):
 
 
 def publish(step):
+    """Save the approved article as an ArticlePage draft and start Wagtail's moderation workflow."""
+    from apps.content import publishing
+
+    run = step.run
+    try:
+        result = publishing.publish(run, run.created_by)
+    except publishing.PublishError as error:
+        raise StepError(str(error)) from error
+    page = result.page
+    lines = [
+        f"{'Created' if result.created else 'Updated'} the draft page **{page.title}** "
+        f"(slug `{page.slug}`) under Articles."
+    ]
+    if result.workflow_started:
+        lines.append(f"It's now in the **{result.workflow}** workflow: a moderator approves it in Wagtail.")
+    elif result.workflow:
+        lines.append(f"It was already in the **{result.workflow}** workflow; the new revision joins it.")
+    else:
+        lines.append("No moderation workflow applies to it; publish it from the page editor.")
+    lines.append("Approve this step to finish the run. Exports are below.")
+    note = "\n".join(f"- {warning}" for warning in result.warnings)
+    if note:
+        note = "## Check before publishing\n\n" + note
+    if result.webhook:
+        note = f"{note}\n\nWebhook: {result.webhook}".strip()
     return StepOutput(
-        content="Everything before this step is approved. Approve to finish the run.\n\n"
-        "Creating the Wagtail page and exports arrive in milestone M7."
+        content="\n\n".join(lines),
+        note=note,
+        extra_metrics={
+            "publish": {
+                "page_id": page.pk,
+                "workflow": result.workflow,
+                "warnings": result.warnings,
+                "webhook": result.webhook,
+            }
+        },
     )
 
 

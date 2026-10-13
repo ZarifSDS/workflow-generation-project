@@ -1,4 +1,4 @@
-# Handoff: Content Workflow Studio (state on 2026-10-13, M6 built)
+# Handoff: Content Workflow Studio (state on 2026-10-13, M7 built)
 
 Read this first in a new session. Also see `docs/roadmap.md`, `docs/workflow.md`, `docs/ux.md`,
 `docs/providers.md`, `docs/model-eval.md` and `AGENTS.md`.
@@ -7,7 +7,8 @@ Read this first in a new session. Also see `docs/roadmap.md`, `docs/workflow.md`
 
 1. Score the outline evaluation (below), then set the default models.
 2. Optional: install ComfyUI and export the workflow (`docs/setup.md` step 6) to test local hero images live.
-3. Then M7 (publish) and M8 (hardening) per `docs/roadmap.md`.
+3. Optional: point the publish webhook at an n8n workflow (`docs/setup.md` step 7).
+4. Then M8 (hardening) per `docs/roadmap.md`.
 
 ## Where things stand
 
@@ -20,7 +21,7 @@ Read this first in a new session. Also see `docs/roadmap.md`, `docs/workflow.md`
 | M4 Background generation (worker runs steps, fallback, retry, notifications) | Done, verified live (run 9) | 67641ab |
 | M5 Seven-part review-and-edit sequence + vendored skill scripts | Done, verified live (run 10) | 5df13ae |
 | M6 Images (ComfyUI provider, vision check, sds-hero-stock branding) | Built, verified live on run 9 (Cloudflare + Gemini vision + branding); ComfyUI mocked | see git log |
-| M7 Publish (ArticlePage, moderation, exports, n8n hook) | Planned | – |
+| M7 Publish (ArticlePage, moderation, exports, n8n hook) | Built, verified live on run 9 (draft page 5 in Moderators approval; MD/HTML/DOCX/WebP exports); webhook mocked | see git log |
 | M8 Hardening | Planned | – |
 
 M1–M5 are pushed to `main` on GitHub (CI runs on every push). Check `git status` for M6.
@@ -49,6 +50,13 @@ Verified free models: local Ollama (Qwen3.8 27B ~19 min/outline at 4.5 tok/s; gl
 - A `Headline:` regenerate note re-brands the same photo (no new image); used live to fix a too-wide subject box.
 - Gemini 3.7 Flash returned HTTP 500 for several image requests; the Qwen3-VL 8B fallback worked but boxes subjects less tightly (it included furniture until the prompt excluded it).
 - gpt-oss spends its token budget on reasoning: the hero prompt step needed `max_tokens` 3000 (600 returned empty text, and an empty prompt now fails the step).
+
+## M7 notes
+
+- How publishing works: `docs/workflow.md#publish-step-m7`. Code: `apps/content/` (`models.py`, `markup.py`, `publishing.py`, `exports.py`), the `publish` executor, and `run_export` in `apps/studio/views/runs.py`.
+- Run 9's article is page 5 (`/home/articles/...`), a draft waiting in Moderators approval. Its text still has two `[VERIFY]` claims, and the meta description says "30 days after last use federally", which looks wrong (OSHA's records rule talks about 30 years). Check it before approving.
+- Steps without a model (Final cleanup, Publish) have a **Run again** button while they wait for review. Once approved, a step can only be rerun from code (`status = queued` + `services.enqueue`).
+- Localised variants are exports only; no second page is created (Wagtail i18n isn't enabled).
 
 ## Gotchas learned
 
