@@ -1,12 +1,19 @@
-# Handoff: Content Workflow Studio (state on 2026-10-13, M8 built; session paused, PC off)
+# Handoff: Content Workflow Studio (state on 2026-10-13: M8 built, M9 UI/UX overhaul phases 1-3 done)
 
 Read this first in a new session. Then `docs/development.md` (code map, how-tos, process) and `docs/tools-and-processes.md`. Also see `docs/roadmap.md`, `docs/workflow.md`, `docs/ux.md`,
 `docs/providers.md`, `docs/model-eval.md` and `AGENTS.md`.
+
+## Continue here: UI/UX overhaul (M9)
+
+**Read [`docs/ui-ux-plan.md`](ui-ux-plan.md) first.** It holds the approved plan, decisions, per-phase status and the exact next steps. Phases 1-3 (Markdown dialect, richer article pages and exports, admin theme) are pushed in eb5778d; **start with phase 4 (Tiptap editor + frontend build)**, then 5 (Wagtail choosers, image upload, embeds) and 6 (polish, docs).
+
+The user's direction: a fast, functional, visually better version of the current Wagtail CMS with better UX. No rebranding (the "Content Studio" logo/titles were reverted).
 
 ## Restarting after the PC was off
 
 Nothing needs to be re-generated: no step was queued or running at shutdown, and runs resume where they stopped. Data is in the Docker volumes on `D:\DockerData`.
 
+0. `cd D:\workflow-generation-project` first: compose looks for its files in the current folder.
 1. Start Docker Desktop (`D:\Docker\Docker Desktop.exe`) and wait for "Engine running".
 2. Start Ollama from the Start menu (needed for the local `quality` models: outline, draft).
 3. Start the studio in one mode (images are already built; add `--build` only after code changes):
@@ -90,6 +97,11 @@ Verified free models: local Ollama (Qwen3.8 27B ~19 min/outline at 4.5 tok/s; gl
 - Shell gotcha: a backslash before `b` or `n` in Windows paths inside `python - <<EOF` snippets became a control character twice; write such text with the Write tool or a script file.
 
 ## Gotchas learned
+
+- **Never write regexes or Windows paths through `python - <<EOF` in Bash**: backslashes become control characters or get eaten (happened four times on 2026-10-13). Write code with the Write/Edit tools or a script file in the scratchpad, and grep for control characters afterwards.
+- Git Bash rewrites `/tmp/...` and `/backup` in `docker` arguments into Windows paths; prefix with `MSYS_NO_PATHCONV=1`.
+- The dev stack is running at the end of this session (`docker compose up -d`, http://localhost:8000); share mode was stopped. Start share mode again with the command in deployment.md when needed.
+- Previewing the admin in the built-in browser without typing a password: create a session with `django.test.Client().force_login(user)` in `manage.py shell`, then set the `sessionid` cookie on localhost:8000 via JavaScript.
 
 - textstat needs NLTK's `cmudict` and, for English, crashes instead of falling back when it can't download it at runtime (NLTK 3.10.3's downloader can also reject its own temp file). The Dockerfile now bakes `cmudict` into `/opt/venv/nltk_data` with a SHA-256 check, and `nltk`/`pyphen` are pinned. On 2026-10-13 this left a research step stuck in Running in share mode.
 - Anything after an executor returns (saving the version, metrics) is guarded: a metrics failure keeps the output (`metrics_error` in the version metrics), and a save failure marks the step Failed.
