@@ -15,6 +15,15 @@ class BriefForm(forms.ModelForm):
         help_text="One per line or separated by commas. Each is used once where it fits.",
         widget=forms.Textarea(attrs={"rows": 2}),
     )
+    anchors_text = forms.CharField(
+        label="Anchors (guest posts)",
+        required=False,
+        help_text=(
+            "One per line as `anchor text | https://product-page`, in the sheet's order. "
+            "Each goes in a section on the page's topic; never two in adjacent sections."
+        ),
+        widget=forms.Textarea(attrs={"rows": 2}),
+    )
 
     class Meta:
         model = ContentBrief
@@ -32,6 +41,7 @@ class BriefForm(forms.ModelForm):
             "site",
             "site_domain",
             "narrative_mode",
+            "source_reference",
             "localise_to",
             "notes",
         ]
@@ -47,10 +57,27 @@ class BriefForm(forms.ModelForm):
         self.fields["preset"].label = "Start from a preset"
         if self.instance.pk:
             self.fields["skeywords_text"].initial = "\n".join(self.instance.skeywords or [])
+            self.fields["anchors_text"].initial = "\n".join(
+                f"{a.get('text', '')} | {a.get('url', '')}" for a in (self.instance.anchors or [])
+            )
 
     def clean_skeywords_text(self):
         raw = self.cleaned_data.get("skeywords_text", "")
         return [item.strip() for item in re.split(r"[\n,]", raw) if item.strip()]
+
+    def clean_anchors_text(self):
+        anchors = []
+        for line in self.cleaned_data.get("anchors_text", "").splitlines():
+            if not line.strip():
+                continue
+            text, sep, url = line.partition("|")
+            text, url = text.strip(), url.strip()
+            if not sep or not text or not url.startswith(("http://", "https://")):
+                raise forms.ValidationError(
+                    f"Write each anchor as `anchor text | https://…` (got: {line.strip()[:60]})."
+                )
+            anchors.append({"text": text, "url": url})
+        return anchors
 
     def clean(self):
         cleaned = super().clean()
@@ -60,11 +87,17 @@ class BriefForm(forms.ModelForm):
 
     def save(self, commit=True):
         self.instance.skeywords = self.cleaned_data.get("skeywords_text", [])
+        self.instance.anchors = self.cleaned_data.get("anchors_text", [])
         return super().save(commit)
 
 
 def parse_step_config(data, content_type):
-    """Read the pipeline table from POST data: step_<key>_enabled / _gate / _model."""
+    """Read the pipeline table from POST data: step_<key>_enabled / _gate / _self_review / _model.
+
+    In autopilot (`mode=autopilot`) every text step self-reviews; a step waits for approval only if its
+    box was ticked anyway. The SOP holds a step where it can't pass (docs/sop.md).
+    """
+    autopilot = data.get("mode") == "autopilot"
     config = {}
     for step_def in steps_for(content_type):
         prefix = f"step_{step_def.key}_"
@@ -73,9 +106,19 @@ def parse_step_config(data, content_type):
         config[step_def.key] = {
             "enabled": (prefix + "enabled") in data if step_def.optional else True,
             "gate": (prefix + "gate") in data,
+            "self_review": step_def.kind == "text" and (autopilot or (prefix + "self_review") in data),
             "model": model_key if choice and choice.selectable else "",
         }
     return config
+
+
+def autopilot_config(content_type):
+    """Step config for an autopilot run started without the wizard: every text step self-reviews and no
+    step waits for approval; the SOP and the marker gate decide where it stops."""
+    return {
+        step_def.key: {"gate": False, "self_review": step_def.kind == "text"}
+        for step_def in steps_for(content_type)
+    }
 
 
 def preset_from_brief(name, brief_data, step_config):

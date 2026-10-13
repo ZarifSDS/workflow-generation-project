@@ -14,7 +14,15 @@ The studio automates an existing, proven manual workflow that runs as a set of C
 | AUDIENCE | Who it is for (e.g. EHS managers) |
 | REGION | Market, for spelling, regulation and localisation (US, UK, AU, CA, NZ…) |
 | SITE, SITE_DOMAIN, NARRATIVE_MODE | Outbound pieces only: target site and its voice. NARRATIVE_MODE is proposed by the site crawl step |
+| ANCHORS, source reference | Outbound pieces only: `anchor text | product URL` pairs from the guest-post sheet, in order, and where the brief came from (sheet row). Each anchor is placed exactly once, never in adjacent sections, never in the close |
 | Preset | Optional. Saved defaults for a content type (region, FKGL, audience, CTA style, model per step), e.g. "SDS Manager blog · US · FKGL 9" |
+| Mode | **Review each step** (every step waits for approval) or **Autopilot** (every text step self-reviews against the SOP and the run stops only where a step can't pass or a marker needs a person); see [sop.md](sop.md) |
+
+Standing editorial rules shared by every prompt (`apps/studio/prompts/_rules.md`): regulation-light by default (cite the parts of a rule the supporting queries and the ranking pages call for, where they settle a question), standard clear words over "simpler" synonyms even when the grade rises, no metaphors, no meta narration beyond the intro's "this article" scope sentence, house mechanics. Per content type, `prompts/types.yaml` sets the publication, the conclusion rule (blog: verb-first CTA heading, gap → action → one product page; guest post: the host's closing style, no product link) and the linking rule.
+
+## SOP self-review and autopilot
+
+Any text step can run with **SOP self-review** (`StepRun.self_review`): after the model's output, `apps/studio/sop.py` runs deterministic checks for that step, asks the **SOP reviewer** model (Settings › Default models) for a `PASS`/`REVISE` verdict with findings against the step's rubric (`prompts/sop_rubrics.md`), and has the step's own model apply the findings as a targeted revision, up to `STUDIO_SOP_MAX_ROUNDS` times. A step that passes continues on its own when its gate is off; one that doesn't **holds for review** whatever its gate, with the log in its notes and on the run screen. **Autopilot** (wizard mode switch, or the Autopilot button on the briefs list) switches self-review on for every text step and the gates off. The SOP itself, the checks per step and where autopilot stops are in [sop.md](sop.md).
 
 ## Pipeline steps
 

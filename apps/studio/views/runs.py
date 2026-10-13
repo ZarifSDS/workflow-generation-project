@@ -149,7 +149,10 @@ class RunWorkspaceView(StudioPage):
             version=version,
             versions=versions,
             first_version=versions[-1] if versions else None,
-            checks=_checks(version, self.run.brief) if kind != "image" and step.key != "publish" else None,
+            checks=_checks(version, self.run.brief)
+            if step and step.key in assistant.ARTICLE_STEPS and kind != "image"
+            else None,
+            sop=(version.metrics or {}).get("sop") if version else None,
             hero=_hero(version) if kind == "image" else None,
             article_page=getattr(self.run, "article_page", None) if step and step.key == "publish" else None,
             exports=_export_links(self.run)

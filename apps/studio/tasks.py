@@ -29,7 +29,7 @@ def run_chat(message_id):
 
 def execute_step(step_id):
     """Run one queued step. Safe to call twice: only a QUEUED step is picked up."""
-    from . import executors, services
+    from . import executors, services, sop
 
     with transaction.atomic():
         step = StepRun.objects.select_for_update().select_related("run__brief").get(pk=step_id)
@@ -46,6 +46,9 @@ def execute_step(step_id):
 
     try:
         output = executors.EXECUTORS[step.key](step)
+        if step.self_review and step.key in sop.STEPS:
+            # The SOP loop never fails a step: a reviewer problem holds the step with the output kept.
+            output = sop.apply(step, output)
     except (ProviderError, executors.StepError) as error:
         _fail(step, executors.friendly_error(error))
         return

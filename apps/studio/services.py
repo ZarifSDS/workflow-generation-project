@@ -48,9 +48,13 @@ def default_model_for(step_def):
 
 
 @transaction.atomic
-def create_run(brief, step_config, user=None):
-    """step_config: {step_key: {"enabled": bool, "gate": bool, "model": "provider::model"}}."""
-    run = GenerationRun.objects.create(brief=brief, created_by=user)
+def create_run(brief, step_config, user=None, autopilot=False):
+    """step_config: {step_key: {"enabled", "gate", "self_review": bool, "model": "provider::model"}}.
+
+    `autopilot` records how the run was started; the per-step gate and self_review values decide what
+    happens (apps.studio.forms.autopilot_config builds them for a run started from the brief list).
+    """
+    run = GenerationRun.objects.create(brief=brief, created_by=user, autopilot=autopilot)
     first = True
     queued = None
     for order, step_def in enumerate(steps_for(brief.content_type)):
@@ -68,6 +72,7 @@ def create_run(brief, step_config, user=None):
             order=order,
             enabled=enabled,
             gate=config.get("gate", step_def.gate),
+            self_review=bool(config.get("self_review", False)) and step_def.kind == "text",
             provider=provider,
             model=model,
             status=status,
@@ -238,6 +243,8 @@ def approve_step(step, user, edited_content=None, base_version=None):
     latest = step.latest_version
     if edited_content is not None:
         edited_content = _normalise_edit(edited_content)
+        if not edited_content.strip():
+            raise ValueError("The edit is empty.")
     if step.key == "cleanup":
         markers = house.find_markers(edited_content if edited_content is not None else latest.content)
         if markers:
@@ -321,6 +328,10 @@ def request_regenerate(step, model_key, note=""):
     A step whose earlier steps aren't all approved only keeps the model choice and waits (pending): it
     starts when the step before it is approved. Running it earlier fails, because its input is missing.
     """
+    if step.status == StepRun.Status.RUNNING:
+        raise ValueError("This step is running; wait for it to finish, then regenerate it.")
+    if step.status == StepRun.Status.APPROVED:
+        raise ValueError("An approved step isn't regenerated: later steps already use its output.")
     choice = catalog.by_key(model_key)
     if choice is None or not choice.selectable:
         raise ValueError("Choose a model that is available.")
@@ -398,6 +409,8 @@ def add_own_metadata(run, kind, text):
     text = " ".join(text.split())
     if not text:
         raise ValueError("Type an option before adding it.")
+    if len(text) > 500:
+        raise ValueError("Keep the option under 500 characters.")
     return MetadataOption.objects.create(
         run=run, kind=kind, text=text, source=StepVersion.Source.EDIT, selected=True
     )

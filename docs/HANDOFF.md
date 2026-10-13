@@ -1,8 +1,53 @@
-# Handoff: Content Workflow Studio (state on 2026-10-14 night: pipeline aligned with the ehs-seo-blog-optimized skill)
+# Handoff: Content Workflow Studio (state on 2026-10-14 morning, GMT+6: SOP self-review and autopilot built)
 
-Read this first in a new session. Then `docs/development.md` (code map, how-tos, process) and `docs/tools-and-processes.md`. Also see `docs/roadmap.md`, `docs/workflow.md`, `docs/ui-ux-plan.md`, `docs/security.md`, `docs/providers.md`, `docs/model-eval.md` and `AGENTS.md`.
+Read this first in a new session. Then `docs/development.md` (code map, how-tos, process), `docs/sop.md` (the SOP and the autopilot) and `docs/tools-and-processes.md`. Also see `docs/roadmap.md`, `docs/workflow.md`, `docs/ui-ux-plan.md`, `docs/security.md`, `docs/providers.md`, `docs/model-eval.md` and `AGENTS.md`.
 
-## Where we are
+## Session of 2026-10-14 (03:45–07:50 GMT+6): what changed and where it stands
+
+The user's brief for this session: audit the studio against how they actually brief work in Claude Code (their two prompts for `/ehs-seo-blog-optimized` and `/ehs-outbound-blog`, plus `/deslop`, `/clarity-review`, `/sds-hero-stock`), stress-test everything without publishing to sdsmanager.com, and build the one-shot "SOP agent": a self-reviewing mode that keeps the per-step review mechanism but lets the model review its own output against the SOP at each step and loop until the content meets it. Stop conditions were the clock (07:50 GMT+6), context, credits, or "the best I can produce"; then update this handoff, commit and push (the backup under `D:\backups` untouched).
+
+### Built: the SOP self-review and autopilot (LIVE-RESULTS)
+
+- **The SOP** is written down in `docs/sop.md` (inputs, deliverables per step, deterministic checks, reviewer rubric, the loop, where autopilot stops, how to run and tune it). It distils the skills and the user's prompts; where it and a skill disagree, the skill wins.
+- **Code:** `apps/studio/sop.py` (checks per step, `run_loop`, `apply`), prompts `sop_review.md` (reviewer: `VERDICT: PASS|REVISE` + numbered findings, never rewrites), `sop_revise.md` (the step's own model applies the findings and changes nothing else), `sop_rubrics.md` (one `## step` section each). `tasks.execute_step` calls `sop.apply` after the executor when `step.self_review` is on; a reviewer failure never fails the step (output kept, step holds). Revisions pass `review.accept_rewrite` on article steps (headings, words, protected spans, negations) and a lighter guard on plans.
+- **Data:** migration `0011`: `StepRun.self_review`, `GenerationRun.autopilot`, `ContentBrief.anchors` (guest-post `anchor | URL` pairs) and `ContentBrief.source_reference` (sheet row). New model task **SOP reviewer** under Settings › Default models (`edit` profile by default). Setting `STUDIO_SOP_MAX_ROUNDS` (default 2).
+- **UI:** wizard mode switch **Review each step / Autopilot (one-shot)** with a per-step **SOP self-review** column (JS clears the approval boxes in autopilot; the server reads the boxes, so any step can still be gated); **Autopilot** button on the briefs list; the run screen shows an Autopilot tag, "SOP passed/held (n rounds)" in the timeline and an **SOP self-review** panel with every round's verdict, check findings, reviewer findings and whether the revision was used; the runs list shows a Review button on steps waiting.
+- **Prompts aligned with the user's briefing prompts:** `_rules.md` now carries regulation-light-by-default (cite the parts of a rule the supporting queries and the ranking pages call for, never a tour), standard clear words over simpler ones even when the grade rises, no metaphors, and the intro's "this article" / "walk you through" scope sentence. Research gained **Regulation Depth**, **Anchor Opportunities** and **Questions for the Requester** (with assumed answers, so autopilot can proceed); Outline gained a **Keyword and Anchor Map**, depth-per-section from Regulation Depth and Cannibalization, and the anchor-adjacency rule; the Draft intro is now example-or-pain-point → why it matters → snippet → scope sentence. `types.yaml` now sets per content type the publication, the conclusion rule (blog: verb-first CTA heading, gap → action → one **product page**, never an article or lead magnet; guest post: host's closing style, no product link) and the linking rule (guest posts: each brief anchor exactly once, never adjacent, first in the first 30%, none in the close). Guest posts carry a region like blogs.
+- **Tests:** `tests/test_sop.py` (19: checks, loop, hold, bad revision, reviewer failure, wizard, briefs list, anchors, type-specific prompts). Full suite 322 passed before the stress file was added; see "Stress test" below for the final count.
+
+### Audit findings applied and still open
+
+Applied this session (from the UX/process audit in this session's scratchpad, not in the repo): the Publish step's dead-end "Send back with feedback" (a required textarea with no submit button) is hidden where no model or chat applies; article checks no longer show on research and outline; the CTA field is hidden for guest posts; the wizard's search-step note points at Settings › Search data providers; editing an existing brief makes **Save brief** the primary action (starting a second run was one click away); the runs list has a Review button; the user guide's meta limit matches the model (160).
+
+Still open, in priority order (details and file:line were in the audit; re-derive from the code):
+1. Guest-post intake from the Google Sheet row itself (a "paste the row" or Drive-read intake that fills site, title, keyword, supporting keywords, anchors, word count, notes). The fields now exist on the brief; the import doesn't.
+2. The barebones (headings-only) outline as its own artefact/export (it is a section of the outline version today).
+3. Surfacing "Questions for the Requester" as a form on the research step whose answers feed the next steps (today they are plain Markdown with assumed answers).
+4. One grade/checks panel per step instead of three readouts; quality-scan counts with "what to do" copy; Regenerate panel hidden on skipped or waiting steps; send-back model list with durations.
+5. Metadata screen: refuse over-limit options and dashes; the sdsmanager.com preview URL is hard-coded.
+6. `link_check.py` and `editorial_flow_check.py` from the skill as deterministic SOP checks; sectional drafting; re-branding library images.
+
+### Stress test
+
+- **Automated:** `tests/test_stress.py` (66 tests, written by a sub-agent against the pipeline and state machine with fake providers: full runs for all four content types with gates on and off, markers through cleanup and publish, hostile model outputs, state-machine edges, protected spans, metadata, permissions, the outbound crawl over respx). It found eight real bugs, all fixed in this session; the tests that documented them now assert the fixes:
+  1. Publishing dropped the article's opening paragraph whenever an excerpt was selected (`publishing.save_draft` + `markup.build_article`): the intro now stays in the body unless nothing else fills the page Intro, and a heading-less article never publishes with an empty body.
+  2. An empty or whitespace model answer became a reviewable version; it now fails the step with a retry message (`executors.model_text`, which also normalises CRLF and unwraps a Markdown code fence around the answer).
+  3. `request_regenerate` had no status guard (a running step could be generated twice; an approved step could be re-queued): refused now, and the Model panel is hidden on running, approved and skipped steps.
+  4. `approve_step` accepted an empty edit; refused now.
+  5. `review.protected_ok` let an unrelated "not X but Y" license dropping a different negation; only an unfoldable negation that actually disappeared counts now.
+  6. `add_own_metadata` crashed (HTTP 500) over 500 characters; refused with a message.
+  7. Model output with CRLF was stored as is; normalised.
+  8. A draft wrapped in a code fence kept the opening fence in the article; unwrapped.
+  Full suite after the fixes: **390 passed** (`python -m pytest -q --ds=config.settings.test -p no:cacheprovider` in a one-off dev container, ~100 s); ruff clean.
+- **Live (real models, nothing published outside the local Wagtail):** autopilot **run 17** ("[Autopilot test] How to read a safety data sheet", seo_blog, US, gpt-oss:120b on Ollama Cloud for every text step and as the SOP reviewer, DuckDuckGo search results). Search results 37 s; research 47 s including a full SOP loop (review, revise, review, revise, review) and then **held** as designed. What the first live loop taught, and what changed because of it: the model's plans carried em-dashes, curly quotes and horizontal rules that it couldn't reliably fix itself (now `house.mechanical_fix` runs before every check round and is logged as "auto-fixed"); the questions check counted only list items while the model used a table (counts tables now); "No direct overlap" didn't match the cannibalization check (looser now); the reviewer flagged valid URLs because it couldn't see the search results (plans' reviewers now get the search results and the internal index); a rejected revision ended the loop (the next round now reviews the unchanged text and tells the model why its revision was refused); and the reviewer invented rules beyond the rubric (it now has a non-blocking **Suggestions** section, must quote the rubric rule it applies, and a REVISE without findings counts as PASS). **Run 18** re-ran the same brief on the fixed code: LIVE-RESULTS-2.
+
+### Things a new session must know (added this session)
+
+- **Share mode is running on the new image** (web ×2, worker ×2 rebuilt and restarted on 2026-10-14 ~04:10 GMT+6; ngrok and Caddy untouched). The database has migration 0011 applied. The automated-permission classifier here refuses `docker compose … up` with the share file because it includes the ngrok tunnel; rebuild with `build web` and restart with `up -d --no-deps --no-build --scale web=2 --scale worker=2 web worker` instead, and apply migrations with a one-off dev container.
+- `apps/studio/prompts/types.yaml` keys `publication`, `conclusion` and `links` are mandatory for a content type (prompting fills `{{publication}}`, `{{type_conclusion}}`, `{{type_links}}`).
+- The SOP's deterministic checks are strict about shape (`H2: Key Takeaways` second, FAQ last with 3-7 `H3:`, verb-first close): a model that formats plans differently will loop and hold. Loosen in `sop.py` with a test, never by editing the rubric alone.
+
+## Where we are (state before this session, kept for context)
 
 **Everything is committed and pushed** (see `git log`; the last commits are fa78bbe "Company CMS page types and default models per task" and the "Skill-aligned pipeline" commit after it). Tests: 303 passed; frontend 40 passed; ruff clean. Share mode is running, rebuilt with the latest code (`--build`, 2 web + 2 worker). No step is queued or running.
 

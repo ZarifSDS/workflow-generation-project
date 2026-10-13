@@ -42,6 +42,25 @@ def model_label(provider, model):
     return f"{model} · {provider}"
 
 
+@register.simple_tag
+def sop_badge(step):
+    """How the SOP self-review went for a step with it switched on, for the step timeline."""
+    version = step.latest_version
+    sop = (version.metrics or {}).get("sop") if version else None
+    if not sop:
+        return (
+            "SOP self-review"
+            if step.status in ("pending", "queued", "running", "skipped")
+            else "SOP: no review"
+        )
+    rounds = len(sop.get("rounds") or [])
+    if sop.get("passed"):
+        return f"SOP passed ({rounds} round{'s' if rounds != 1 else ''})"
+    if sop.get("error"):
+        return "SOP: reviewer failed"
+    return f"SOP held ({rounds} round{'s' if rounds != 1 else ''})"
+
+
 @register.filter
 def duration(seconds):
     return catalog.describe_duration(seconds)

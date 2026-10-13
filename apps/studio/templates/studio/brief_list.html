@@ -27,7 +27,7 @@
                         <td>{% with last=brief.runs.first %}{% if last %}<a href="{% url 'studio:run' last.pk %}">{{ brief.runs.count }}</a>{% else %}0{% endif %}{% endwith %}</td>
                         <td class="s-mono">{{ brief.updated_at|date:"j M Y" }}</td>
                         <td>
-                            {% if can_write %}<form method="post">{% csrf_token %}<input type="hidden" name="brief" value="{{ brief.pk }}"><button class="button button-small button-secondary" type="submit">Start run</button></form>{% endif %}
+                            {% if can_write %}<form method="post" class="s-cluster">{% csrf_token %}<input type="hidden" name="brief" value="{{ brief.pk }}"><button class="button button-small button-secondary" type="submit" name="mode" value="steps">Start run</button><button class="button button-small button-secondary" type="submit" name="mode" value="autopilot" title="Every step self-reviews against the SOP; the run stops only where a step can't pass or a marker needs you">Autopilot</button></form>{% endif %}
                         </td>
                     </tr>
                 {% endfor %}

@@ -313,6 +313,9 @@ STUDIO_CRAWL_PACE_SECONDS = 5
 # With a secret, requests carry X-Studio-Signature: sha256=<HMAC of the body>.
 STUDIO_PUBLISH_WEBHOOK_URL = os.environ.get("STUDIO_PUBLISH_WEBHOOK_URL", "")
 STUDIO_WEBHOOK_SECRET = os.environ.get("STUDIO_WEBHOOK_SECRET", "")
+# SOP self-review (autopilot, docs/sop.md): how many times a step's model may revise its output after the
+# reviewer's findings before the step holds for a person.
+STUDIO_SOP_MAX_ROUNDS = int(os.environ.get("STUDIO_SOP_MAX_ROUNDS", "2"))
 
 AI_RETRIES = 3
 AI_RETRY_BACKOFF = 5  # seconds; grows 5, 15, 45

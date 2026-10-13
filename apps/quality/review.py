@@ -198,7 +198,9 @@ def protected_ok(before, after):
         shown = ", ".join(f"“{span}”" for span in missing[:5])
         return False, f"it changed or dropped protected facts: {shown}"
     lost = len(NEGATION.findall(before)) - len(NEGATION.findall(after))
-    if lost > len(UNFOLDABLE_NEGATION.findall(before)):
+    # Only an unfoldable "not X but Y" that actually disappeared may account for a lost negation.
+    unfolded = len(UNFOLDABLE_NEGATION.findall(before)) - len(UNFOLDABLE_NEGATION.findall(after))
+    if lost > max(unfolded, 0):
         return False, "it dropped a negation (no, not, never…), which can reverse a claim"
     return True, ""
 

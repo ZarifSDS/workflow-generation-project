@@ -318,7 +318,8 @@ def build_article(text, take_intro=True):
 
     intro = ""
     first_heading = next((i for i, e in enumerate(elements) if e.tag in ("h2", "h3")), len(elements))
-    if take_intro and first_heading == 1 and elements[0].tag == "p" and elements[0].find(".//img") is None:
+    lone_paragraph = first_heading == 1 and len(elements) > 1  # never empty the body to fill the intro
+    if take_intro and lone_paragraph and elements[0].tag == "p" and elements[0].find(".//img") is None:
         intro = elements.pop(0).text_content().strip()
 
     blocks, buffer = [], []

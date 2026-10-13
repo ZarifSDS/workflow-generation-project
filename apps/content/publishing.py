@@ -91,11 +91,13 @@ def save_draft(run, user=None):
     page.seo_title = meta["seo_title"][:255] if meta["seo_title"] != meta["title"] else ""
     page.search_description = meta["meta_description"]
     page.slug = _unique_slug(index, meta["slug"], None if created else page)
-    article = markup.build_article(body)
-    page.body = article.blocks
     # The chosen excerpt fills the page's Intro (the CMS excerpt block); an intro an editor wrote in
-    # Wagtail is kept.
-    page.intro = page.intro or meta.get("excerpt") or article.intro
+    # Wagtail is kept. Only when neither exists does the article's opening paragraph move into the Intro;
+    # otherwise it stays in the body (it carries the snippet answer and the scope sentence).
+    intro = page.intro or meta.get("excerpt") or ""
+    article = markup.build_article(body, take_intro=not intro)
+    page.body = article.blocks
+    page.intro = intro or article.intro
     page.hero_image = content.hero
     page.region = run.brief.region
     page.primary_keyword = run.brief.pkeyword

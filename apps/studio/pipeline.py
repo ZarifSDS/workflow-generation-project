@@ -105,6 +105,15 @@ MODEL_TASKS = [
         help="Rewrites one section towards its reading grade (the Tune buttons).",
     ),
     ModelTask(
+        "sop_review",
+        "SOP reviewer",
+        "edit",
+        help=(
+            "Judges a step's output against the SOP rubric when SOP self-review is on (autopilot). "
+            "The step's own model applies the findings."
+        ),
+    ),
+    ModelTask(
         "vision",
         "Hero image check",
         "vision",

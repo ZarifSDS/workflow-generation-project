@@ -4,7 +4,7 @@ from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 
 from .. import permissions, services
-from ..forms import BriefForm, parse_step_config, preset_from_brief, step_rows
+from ..forms import BriefForm, autopilot_config, parse_step_config, preset_from_brief, step_rows
 from ..models import AudienceProfile, BriefPreset, ContentBrief, ContentType, Region
 from .common import StudioPage
 
@@ -98,8 +98,13 @@ class BriefWizardView(StudioPage):
         if action == "save":
             messages.success(request, f"Saved brief “{brief.topic}”.")
             return redirect("studio:briefs")
-        run = services.create_run(brief, step_config, request.user)
-        messages.success(request, f"Started a run for “{brief.topic}”.")
+        autopilot = request.POST.get("mode") == "autopilot"
+        run = services.create_run(brief, step_config, request.user, autopilot=autopilot)
+        messages.success(
+            request,
+            f"Started {'an autopilot run' if autopilot else 'a run'} for “{brief.topic}”."
+            + (" It stops only where a step can't pass the SOP or a marker needs you." if autopilot else ""),
+        )
         return redirect("studio:run", pk=run.pk)
 
 
@@ -136,6 +141,10 @@ class BriefListView(StudioPage):
     def post(self, request, *args, **kwargs):
         """Start a new run from an existing brief, with default models."""
         brief = get_object_or_404(ContentBrief, pk=request.POST.get("brief"))
-        run = services.create_run(brief, {}, request.user)
-        messages.success(request, f"Started a run for “{brief.topic}”.")
+        autopilot = request.POST.get("mode") == "autopilot"
+        config = autopilot_config(brief.content_type) if autopilot else {}
+        run = services.create_run(brief, config, request.user, autopilot=autopilot)
+        messages.success(
+            request, f"Started {'an autopilot run' if autopilot else 'a run'} for “{brief.topic}”."
+        )
         return redirect("studio:run", pk=run.pk)

@@ -1,29 +1,70 @@
-# Per content-type instructions inserted into the step prompts as {{type_instructions}}.
+# Per content-type text inserted into the step prompts: {{type_instructions}}, {{publication}},
+# {{type_conclusion}} (the conclusion rule and plan) and {{type_links}} (the linking rule).
 
 seo_blog:
   label: "SEO blog article for sdsmanager.com (including pillar pages)"
+  publication: "an sdsmanager.com article"
   instructions: >
     This article is published on the SDS Manager blog. If the topic is broad enough to be a pillar
     page, structure it as a hub that covers each subtopic briefly and names the deeper articles it
-    should link to. End with a short conclusion naming the gap the reader still has, one practical
-    next action, and at most one sentence naming SDS Manager as a way to handle it (no hard sell).
+    should link to.
+  conclusion: >
+    The conclusion under a verb-first CTA heading naming the reader's task and the outcome ("Digitize
+    Your FLHA Forms So Every One Gets Reviewed"), never "Conclusion". At most three short paragraphs:
+    the delivery gap (what stops this knowledge reaching the crew, site or audit), one action the reader
+    can take this week, and the one product page from the list that closes the gap, linked in its
+    sentence and described only by what its "covers" field supports (never an article or a lead magnet
+    as the CTA target; if no product honestly fits, say so and write the close without one). If the
+    brief's call to action is a button, add the button label in quotes on its own line after that
+    paragraph.
+  links: >
+    Use at least three sdsmanager.com links in total (the CTA link counts), each in its own section and
+    never in two adjacent sections, with natural noun-phrase anchors from the outline's keyword and
+    anchor map. If the article can't host three naturally, flag the shortfall in the metadata section.
 
 outbound:
   label: "Guest post for a third-party website"
+  publication: "a guest post for a third-party website"
   instructions: >
-    This is a guest post on someone else's site: no sales pitch and no product promotion. Follow the
-    site profile (narrative mode, voice, heading style, typical length, link habits). Build each H2 on
-    a phrase people actually search for.
+    This is a guest post on someone else's site: informational and educational, no sales pitch and no
+    product promotion. Follow the site profile (narrative mode, voice, heading style, typical length,
+    link habits) for the surface; depth comes from what ranks for the keyword. The piece targets the
+    brief's region for regulators, spelling and examples. Build each H2 on a phrase people actually
+    search for. The intro introduces the topic directly and then the pain point, or the pain point and
+    then the topic, before stating the core content.
+  conclusion: >
+    The close in the host site's closing style (a closing heading only if the site profile shows one):
+    the core message in two or three sentences and one forward action the reader can take. No product
+    link, no anchor and no promotion in the close.
+  links: >
+    Place each anchor from the brief exactly once, with its anchor text as given, in a section on the
+    same topic as the page it points to, as the plain solution to a pain point the reader has just met.
+    No two anchors sit in adjacent sections (H3s count), the first sits in the first 30% of the article,
+    none sits in the close, and no sentence is only a link. Add no other sdsmanager.com links. Link
+    primary sources (regulators, standards) where they support a claim.
 
 lead_magnet:
   label: "Downloadable lead magnet (checklist or guide)"
+  publication: "a downloadable SDS Manager resource"
   instructions: >
     This is a practical resource people download and use. For a checklist, use numbered items grouped
     under a few H2 headings, each with a one- or two-sentence explanation of what to check and why.
     Keep the introduction to two sentences.
+  conclusion: >
+    A short close under a verb-first heading: what to do with the completed resource this week, and
+    the one product page from the list that keeps it current, linked in its sentence.
+  links: >
+    Use up to three sdsmanager.com links, each in its own section, never in adjacent sections.
 
 whitepaper:
   label: "Whitepaper"
+  publication: "an SDS Manager whitepaper"
   instructions: >
     A long-form, evidence-led report for decision makers: executive summary first, then sections that
     each make one argument with its evidence, then recommendations. Formal but plain.
+  conclusion: >
+    Recommendations under a verb-first heading: the decision the reader faces, the evidence that settles
+    it, and the one product page from the list that implements it, linked in its sentence.
+  links: >
+    Use at least three sdsmanager.com links in total, each in its own section, never in adjacent
+    sections, with natural noun-phrase anchors.

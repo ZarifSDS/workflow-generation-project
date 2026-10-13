@@ -45,10 +45,14 @@ def brief_table(brief):
         ("Region", brief.get_region_display()),
     ]
     if brief.content_type == "outbound":
+        anchors = "; ".join(f"“{a.get('text', '')}” → {a.get('url', '')}" for a in (brief.anchors or []))
         rows += [
             ("Target site", brief.site or brief.site_domain),
             ("Narrative mode", brief.get_narrative_mode_display() or "from the site profile"),
+            ("Anchors (in order, each a different product page)", anchors or "none given"),
         ]
+        if brief.source_reference:
+            rows.append(("Brief source", brief.source_reference))
     else:
         rows.append(("Call to action", brief.get_cta_style_display()))
     lines = ["| Field | Value |", "|---|---|"] + [f"| {label} | {value} |" for label, value in rows]
@@ -81,10 +85,14 @@ def context_for(step, extra=None):
     run, brief = step.run, step.run.brief
     site_profile = approved_output(run, "site_crawl")
     note = (step.regenerate_note or "").strip()
+    kind = _types()[brief.content_type]
     context = {
         "rules": _template("_rules").strip(),
         "brief_table": brief_table(brief),
-        "type_instructions": " ".join(_types()[brief.content_type]["instructions"].split()),
+        "type_instructions": " ".join(kind["instructions"].split()),
+        "publication": kind.get("publication", "an sdsmanager.com article"),
+        "type_conclusion": " ".join(kind.get("conclusion", "").split()),
+        "type_links": " ".join(kind.get("links", "").split()),
         "topic": brief.topic,
         "pkeyword": brief.pkeyword,
         "fkgl": brief.fkgl,

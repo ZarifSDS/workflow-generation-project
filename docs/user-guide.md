@@ -59,10 +59,16 @@ Open **New brief**. Start from a preset if one fits (for example "SDS Manager bl
 | Audience, reader's expertise | Who reads it and how much they already know |
 | Call to action | Subtle link, button, or none |
 | Target site, URL, narrative mode | Guest posts only. The site crawl proposes the narrative mode |
+| Anchors, brief source | Guest posts only. One anchor per line as `anchor text | https://product-page`, in the sheet's order; and where the brief came from (e.g. "Guest Post Plan, row 14") |
 | Localise to | Only if you want the optional Localise step: the region of the variant |
-| Notes | Anything the models should know: angle, sources to use, things to avoid |
+| Notes | Anything the models should know: angle, sources to use, things to avoid, the host's requirements for a guest post |
 
-Then choose the steps (Hero image and Localise are optional), the model for each step, and whether each step waits for your approval (**Wait for my approval**; leave it on unless you're sure). **Start run** queues the first step; **Save** keeps the brief for later. **Save current as preset** stores the settings for next time.
+Then choose how the run proceeds:
+
+- **Review each step** (default): every step waits for your approval. Tick **SOP self-review** on any step you still want checked and revised by the reviewer model before you see it.
+- **Autopilot (one-shot)**: every text step is checked against the house SOP by the reviewer model and revised by its own model until it passes (up to two revisions). The run stops only where a step can't pass (it shows the open findings), where Final cleanup finds `[VERIFY]`, `[SRC:]` or `[VISUAL:]` markers, or at a step whose approval box you left ticked (the hero image by default). Publish still creates a draft page for Wagtail moderation; nothing goes live on its own. The rules it checks are in [sop.md](sop.md).
+
+Then the steps (Hero image and Localise are optional), the model for each step, and the approval boxes. **Start run** queues the first step; **Save** keeps the brief for later; the briefs list has **Start run** and **Autopilot** buttons for saved briefs. **Save current as preset** stores the settings for next time.
 
 **Don't put confidential information in a brief.** Some models run on free cloud tiers that may use prompts for training. Public-facing article material is fine; customer data, unpublished commercial plans and internal figures aren't.
 
@@ -111,6 +117,10 @@ Steps run in the background. A local model can take 20 minutes on a draft; the p
 
 Each step keeps its first version and the last three. Failed steps say why in plain language (free limit reached, provider not reachable, key missing) and what was already tried: every call is retried, and a backup model is used once before a step fails.
 
+### A step held by the SOP self-review
+
+When a self-reviewed step stops, the run screen shows an **SOP self-review** panel: one row per round with the verdict, what the deterministic checks found, what the reviewer found, and whether the revision was used. The timeline shows "SOP held (n rounds)". Read the open findings, then approve (if you disagree with them), edit, send the findings back with your own note, or regenerate. A step that passed shows "SOP passed" and the same log, so you can see what was changed on your behalf.
+
 ## 4. What to check at each step
 
 **Site crawl (guest posts).** The proposed narrative mode, voice, heading style, typical length and reading level of the target site, and the list of pages read or skipped. Correct anything that doesn't match the site before approving.
@@ -119,7 +129,7 @@ Each step keeps its first version and the last three. Failed steps say why in pl
 
 **Outline.** Structure, headings and coverage. This is the cheapest point to change direction; edit freely.
 
-**Draft.** The full article plus three options each for the title, meta description and slug. Choose them on the **Title and meta** screen (link on the run): tick the ones you want or use **Add your own**. Character counts show against the limits (title 60, meta 155, slug 75). The checks panel shows keyword placement, `[VERIFY]` markers, red-flag phrases and the reading grade per section.
+**Draft.** The full article plus three options each for the title, meta description and slug. Choose them on the **Title and meta** screen (link on the run): tick the ones you want or use **Add your own**. Character counts show against the limits (title 60, meta 160, slug 75). The checks panel shows keyword placement, `[VERIFY]` markers, red-flag phrases and the reading grade per section.
 
 **Review and edit.** The draft goes through the seven-part edit sequence from the blog skills: a grade scan per section, a de-slop pass, a clarity review, removal of meta narration ("In this article we'll…"), word-level edits in sections above grade 13, a re-scan, and finally **split proposals**. Each sub-step's summary is shown, with a grade table (start, after word-level edits, now, target). Split proposals are never applied automatically: tick the ones you want and apply them; each lowers its section's grade by at least one.
 

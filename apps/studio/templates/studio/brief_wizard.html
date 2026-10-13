@@ -29,10 +29,12 @@
             {% include "wagtailadmin/shared/field.html" with field=form.wordcount %}
             {% include "wagtailadmin/shared/field.html" with field=form.fkgl %}
             {% include "wagtailadmin/shared/field.html" with field=form.region %}
-            {% include "wagtailadmin/shared/field.html" with field=form.cta_style %}
+            <div data-types="seo_blog lead_magnet whitepaper">{% include "wagtailadmin/shared/field.html" with field=form.cta_style %}</div>
             <div data-types="outbound">{% include "wagtailadmin/shared/field.html" with field=form.site %}</div>
             <div data-types="outbound">{% include "wagtailadmin/shared/field.html" with field=form.site_domain %}</div>
             <div data-types="outbound">{% include "wagtailadmin/shared/field.html" with field=form.narrative_mode %}</div>
+            <div data-types="outbound">{% include "wagtailadmin/shared/field.html" with field=form.source_reference %}</div>
+            <div data-types="outbound" class="s-full">{% include "wagtailadmin/shared/field.html" with field=form.anchors_text %}</div>
             <div data-types="seo_blog whitepaper">{% include "wagtailadmin/shared/field.html" with field=form.localise_to %}</div>
             <div class="s-full">{% include "wagtailadmin/shared/field.html" with field=form.notes %}</div>
         </div>
@@ -41,9 +43,13 @@
     <fieldset class="s-step">
         <legend><span class="s-step-num" aria-hidden="true">3</span>Pipeline</legend>
         {% if profiles_interim %}<p class="s-callout s-callout--info">Default models are interim until the model evaluation is scored. You can change any step.</p>{% endif %}
+        <div class="s-types s-stack--bottom" role="radiogroup" aria-label="How the run proceeds">
+            <label class="s-type"><input type="radio" name="mode" value="steps" checked><b>Review each step</b><span class="s-muted">Every step waits for your approval. The SOP self-review can still check any step you tick.</span></label>
+            <label class="s-type"><input type="radio" name="mode" value="autopilot"><b>Autopilot (one-shot)</b><span class="s-muted">Each step is checked against the SOP by the reviewer model and revised until it passes. The run stops only where a step can't pass or a [VERIFY] claim needs you.</span></label>
+        </div>
         <div class="s-table-wrap">
             <table class="s-table">
-                <thead><tr><th scope="col">Step</th><th scope="col">Model</th><th scope="col">Wait for my approval</th></tr></thead>
+                <thead><tr><th scope="col">Step</th><th scope="col">Model</th><th scope="col">SOP self-review</th><th scope="col">Wait for my approval</th></tr></thead>
                 <tbody>
                 {% for row in rows %}
                     <tr data-types="{{ row.types }}">
@@ -51,7 +57,7 @@
                             {% if row.def.optional %}
                                 <label><input type="checkbox" name="step_{{ row.def.key }}_enabled" {% if row.def.default_on %}checked{% endif %}> {{ row.def.label }}</label>
                             {% else %}{{ row.def.label }}{% endif %}
-                            {% if row.def.key == "search_results" %}<div class="s-muted s-small s-normal">Reads the top search results in the brief's region and how those pages are built. Needs a free search key under Settings › AI providers.</div>{% endif %}{% if row.def.key == "site_crawl" %}<div class="s-muted s-small s-normal">Guest posts only. Reads public pages of the target site.</div>{% endif %}
+                            {% if row.def.key == "search_results" %}<div class="s-muted s-small s-normal">Reads the top search results in the brief's region and how those pages are built. Works without a key (DuckDuckGo); add a Serper, Brave or Google key under Settings › Search data providers for Google results.</div>{% endif %}{% if row.def.key == "site_crawl" %}<div class="s-muted s-small s-normal">Guest posts only. Reads public pages of the target site.</div>{% endif %}
                         </th>
                         <td>
                             {% if row.groups %}
@@ -66,7 +72,8 @@
                                 </select>
                             {% else %}<span class="s-muted">No model needed</span>{% endif %}
                         </td>
-                        <td>{% if row.def.kind != "none" or row.def.key == "publish" %}<input type="checkbox" name="step_{{ row.def.key }}_gate" aria-label="Wait for approval after {{ row.def.label }}" {% if row.def.gate %}checked{% endif %}>{% else %}<span class="s-muted">Automatic</span>{% endif %}</td>
+                        <td>{% if row.def.kind == "text" %}<input type="checkbox" name="step_{{ row.def.key }}_self_review" aria-label="SOP self-review for {{ row.def.label }}" data-self-review>{% else %}<span class="s-muted">–</span>{% endif %}</td>
+                        <td>{% if row.def.kind != "none" or row.def.key == "publish" %}<input type="checkbox" name="step_{{ row.def.key }}_gate" aria-label="Wait for approval after {{ row.def.label }}" {% if row.def.gate %}checked{% endif %} data-gate>{% else %}<span class="s-muted">Automatic{% if row.def.key == "cleanup" %}; holds if [VERIFY], [SRC:] or [VISUAL:] markers remain{% endif %}</span>{% endif %}</td>
                     </tr>
                 {% endfor %}
                 </tbody>
@@ -84,8 +91,13 @@
     </details>
 
     <div class="s-sticky-actions">
-        <button class="button" type="submit" name="action" value="start">{% if brief %}Save and start a new run{% else %}Start run{% endif %}</button>
-        <button class="button button-secondary" type="submit" name="action" value="save">Save brief only</button>
+        {% if brief %}
+            <button class="button" type="submit" name="action" value="save">Save brief</button>
+            <button class="button button-secondary" type="submit" name="action" value="start">Save and start a new run</button>
+        {% else %}
+            <button class="button" type="submit" name="action" value="start">Start run</button>
+            <button class="button button-secondary" type="submit" name="action" value="save">Save brief only</button>
+        {% endif %}
         <span class="s-spacer"></span>
         <a href="{% url 'studio:briefs' %}">Cancel</a>
     </div>

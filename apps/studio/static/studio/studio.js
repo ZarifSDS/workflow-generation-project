@@ -63,6 +63,18 @@
   }
   if (regionSelect && regionSelect.tagName === "SELECT") regionSelect.addEventListener("change", applyAudience);
 
+  // Autopilot: every text step self-reviews and nothing waits for approval; "Review each step" restores
+  // the default gates. Boxes stay editable either way (the server reads the boxes, not the mode).
+  const modeInputs = form.querySelectorAll('input[name="mode"]');
+  const defaultGates = new Map([...form.querySelectorAll("[data-gate]")].map((box) => [box, box.checked]));
+  function applyMode() {
+    const checked = form.querySelector('input[name="mode"]:checked');
+    const autopilot = checked && checked.value === "autopilot";
+    form.querySelectorAll("[data-self-review]").forEach((box) => { box.checked = autopilot; });
+    defaultGates.forEach((wasChecked, box) => { box.checked = autopilot ? false : wasChecked; });
+  }
+  modeInputs.forEach((input) => input.addEventListener("change", applyMode));
+
   typeInputs.forEach((input) => input.addEventListener("change", applyType));
   if (presetSelect) presetSelect.addEventListener("change", applyPreset);
   applyType();

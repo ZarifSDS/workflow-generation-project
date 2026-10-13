@@ -98,6 +98,21 @@ class ContentBrief(BriefFieldsMixin):
     skeywords = models.JSONField("Secondary keywords", default=list, blank=True)
     site = models.CharField("Target site", max_length=255, blank=True, help_text="Guest posts only.")
     site_domain = models.URLField("Target site URL", blank=True, help_text="Guest posts only.")
+    anchors = models.JSONField(
+        "Anchors",
+        default=list,
+        blank=True,
+        help_text=(
+            "Guest posts: [{text, url}] pairs from the brief sheet, in order; each URL a different "
+            "product page."
+        ),
+    )
+    source_reference = models.CharField(
+        "Brief source",
+        max_length=120,
+        blank=True,
+        help_text="Where the brief came from, e.g. Guest Post Plan sheet, row 14.",
+    )
     notes = models.TextField(blank=True)
     localise_to = models.CharField(
         "Localise to",
@@ -152,6 +167,12 @@ class GenerationRun(models.Model):
 
     brief = models.ForeignKey(ContentBrief, on_delete=models.CASCADE, related_name="runs")
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.QUEUED)
+    autopilot = models.BooleanField(
+        default=False,
+        help_text=(
+            "Started in autopilot: steps self-review against the SOP and only hold where they can't pass."
+        ),
+    )
     reject_reason = models.TextField(blank=True)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
@@ -204,6 +225,11 @@ class StepRun(models.Model):
     order = models.PositiveSmallIntegerField()
     enabled = models.BooleanField(default=True)
     gate = models.BooleanField("Wait for my approval", default=True)
+    self_review = models.BooleanField(
+        "SOP self-review",
+        default=False,
+        help_text=("The SOP reviewer checks the output and the model revises it until it passes (sop.py)."),
+    )
     provider = models.CharField(max_length=30, blank=True)
     model = models.CharField(max_length=200, blank=True)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)

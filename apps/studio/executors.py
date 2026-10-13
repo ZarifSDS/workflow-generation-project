@@ -92,11 +92,21 @@ def _call_text(step, messages, max_tokens=None, task=None):
         return result
 
 
+def model_text(result):
+    """The model's answer as the step stores it: LF line endings, no wrapping code fence, no empty answer."""
+    text = (result.text or "").replace("\r\n", "\n").replace("\r", "\n").strip()
+    fenced = re.match(r"^```[a-zA-Z]*\n(.*)\n```$", text, re.DOTALL)
+    if fenced:
+        text = fenced.group(1).strip()
+    _require(text, "The model returned an empty answer. Retry, or choose another model.")
+    return text
+
+
 def _text_output(step, result, content=None, note=""):
     if result.stats.get("fallback_from"):
         note = f"Used the fallback model because {result.stats['fallback_from']} failed.\n\n{note}".strip()
     return StepOutput(
-        content=content if content is not None else result.text.strip(),
+        content=content if content is not None else model_text(result),
         provider=result.provider,
         model=result.model,
         note=note,
@@ -155,7 +165,7 @@ def site_crawl(step):
             *rows,
         ]
     )
-    return _text_output(step, result, content=f"{result.text.strip()}\n\n{pages_table}\n")
+    return _text_output(step, result, content=f"{model_text(result)}\n\n{pages_table}\n")
 
 
 def search_results(step):
@@ -221,7 +231,7 @@ def draft(step):
     context = prompting.context_for(step)
     _require(context["outline"], "Approve the outline before drafting.")
     result = _call_text(step, prompting.render("draft", context))
-    article, options = textclean.split_metadata(result.text)
+    article, options = textclean.split_metadata(model_text(result))
     run = step.run
     # New suggestions replace earlier unselected AI ones; your own options and selections stay.
     run.metadata_options.filter(source=StepVersion.Source.AI, selected=False).delete()
@@ -561,7 +571,7 @@ def localise(step):
     context = prompting.context_for(step)
     _require(context["draft"], "There is no approved article to localise yet.")
     result = _call_text(step, prompting.render("localise", context))
-    article, _, notes = result.text.partition("## Localisation notes")
+    article, _, notes = model_text(result).partition("## Localisation notes")
     return _text_output(
         step,
         result,

@@ -10,6 +10,7 @@
 <div class="studio" data-editor-root{% if step and step.status != "ready" %} data-editor-clear="{{ run.pk }}:{{ step.key }}"{% endif %}>
     <div class="s-row-actions">
         <span class="s-tag s-tag--{{ run.status|status_style }}">{{ run.get_status_display }}</span>
+        {% if run.autopilot %}<span class="s-tag s-tag--info" title="Steps self-review against the SOP and hold only where they can't pass">Autopilot</span>{% endif %}
         <span class="s-muted">{{ brief.get_content_type_display }} · {{ brief.region }} · FKGL {{ brief.fkgl }}{% if brief.wordcount %} · {{ brief.wordcount }} words{% endif %}</span>
         <span class="s-spacer"></span>
         {% if has_metadata %}<a class="button button-secondary button-small" href="{% url 'studio:metadata' run.pk %}">Title and meta</a>{% endif %}
@@ -38,7 +39,7 @@
                     <li>
                         <a class="s-tl" href="?step={{ s.key }}" {% if step and s.pk == step.pk %}aria-current="step"{% endif %}>
                             <span class="s-dot s-dot--{{ s.status|status_style }}" aria-hidden="true"></span>
-                            <span>{{ s.label }}<small>{{ s.get_status_display }}{% if s.timer_since %} <span class="s-mono" data-elapsed-since="{{ s.timer_since|date:'c' }}">{{ s.elapsed_seconds|clock }}</span>{% elif s.duration_seconds is not None %} · took {{ s.duration_seconds|took }}{% endif %}{% if s.model %} · {% model_label s.provider s.model %}{% endif %}</small></span>
+                            <span>{{ s.label }}<small>{{ s.get_status_display }}{% if s.timer_since %} <span class="s-mono" data-elapsed-since="{{ s.timer_since|date:'c' }}">{{ s.elapsed_seconds|clock }}</span>{% elif s.duration_seconds is not None %} · took {{ s.duration_seconds|took }}{% endif %}{% if s.model %} · {% model_label s.provider s.model %}{% endif %}{% if s.self_review and s.status != "skipped" %} · {% sop_badge s %}{% endif %}</small></span>
                         </a>
                     </li>
                 {% endfor %}
@@ -69,6 +70,27 @@
                                 <div class="s-cluster">
                                     {% for url, label in exports %}<a class="button button-small button-secondary" href="{{ url }}" download>{{ label }}</a>{% endfor %}
                                 </div>
+                            </section>
+                        {% endif %}
+                        {% if sop %}
+                            <section class="s-box" aria-labelledby="sop-head">
+                                <h3 class="s-section" id="sop-head">SOP self-review <span class="s-tag s-tag--{% if sop.passed %}ok{% else %}warn{% endif %}">{% if sop.passed %}Passed{% else %}Held for you{% endif %}</span></h3>
+                                {% if sop.error %}<p class="s-callout" role="alert">The self-review could not finish: {{ sop.error }}</p>{% endif %}
+                                <p class="s-muted s-small s-m0">{% if sop.reviewer %}Reviewer: {{ sop.reviewer }} · {% endif %}{{ sop.rounds|length }} review round(s). Checks are deterministic (scripts); findings are the reviewer's reading. <a href="{% url 'studio:dashboard' %}#sop">What the SOP checks</a>.</p>
+                                <ol class="s-substeps">
+                                    {% for r in sop.rounds %}
+                                        <li class="s-substep{% if r.revision == "applied" %} s-substep--changed{% endif %}">
+                                            <strong>Round {{ r.number }}: {{ r.verdict|default:"no verdict" }}</strong>
+                                            <span>
+                                                {% if r.checks %}<span class="s-block">Checks:</span><ul class="s-list">{% for c in r.checks %}<li>{{ c }}</li>{% endfor %}</ul>{% else %}<span class="s-block">Checks: nothing to fix.</span>{% endif %}
+                                                {% if r.fixes %}<span class="s-block s-muted">Auto-fixed: {% for name, n in r.fixes.items %}{{ n }} {{ name }}{% if not forloop.last %}, {% endif %}{% endfor %}.</span>{% endif %}
+                                                {% if r.findings %}<span class="s-block">Reviewer:</span><ol class="s-list">{% for f in r.findings %}<li>{{ f }}</li>{% endfor %}</ol>{% endif %}
+                                                {% if r.suggestions %}<span class="s-block">Suggestions (don't block):</span><ol class="s-list">{% for f in r.suggestions %}<li>{{ f }}</li>{% endfor %}</ol>{% endif %}
+                                                {% if r.revision %}<span class="s-block s-muted">Revision {{ r.revision }}.</span>{% endif %}
+                                            </span>
+                                        </li>
+                                    {% endfor %}
+                                </ol>
                             </section>
                         {% endif %}
                         {% if review %}
@@ -167,7 +189,8 @@
                 <div class="s-actionbar">
                     <form method="post">{% csrf_token %}<input type="hidden" name="step" value="{{ step.key }}">{% if version %}<input type="hidden" name="base_version" value="{{ version.number }}">{% endif %}<button class="button" type="submit" name="action" value="approve">Approve {{ step.label|lower }}</button></form>
                     {% if can_edit %}<button class="button button-secondary" type="button" data-editor-open hidden>Edit</button>{% endif %}
-                    <details class="s-disclosure s-full" open>
+                    {% if model_groups or can_chat %}
+                    <details class="s-disclosure s-full">
                         <summary>Send back with feedback</summary>
                         <form class="s-stack s-stack--top" method="post">{% csrf_token %}
                             <input type="hidden" name="step" value="{{ step.key }}">
@@ -191,6 +214,7 @@
                             <p class="s-muted s-small s-m0">Regenerate writes the step again from its input, with your feedback and the chosen model. Targeted edits keep this version and change only what you describe (Suggestions chat model). Either way you get a new version to compare.</p>
                         </form>
                     </details>
+                    {% endif %}
                     <details class="s-disclosure s-full">
                         <summary>Reject the whole run</summary>
                         <form class="s-stack s-stack--top" method="post">{% csrf_token %}
@@ -353,7 +377,7 @@
                     </form>
                 </section>
             {% endif %}
-            {% if model_groups and run.status != "rejected" and user_can_act %}
+            {% if model_groups and run.status != "rejected" and user_can_act and step.status in "ready,failed,pending,rejected,queued" %}
                 <section class="s-box" aria-labelledby="model-head">
                     <h3 class="s-section" id="model-head">Model</h3>
                     <p class="s-muted s-m0">Now: {% model_label step.provider step.model %}</p>
