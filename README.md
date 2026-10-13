@@ -1,10 +1,10 @@
 # Content Workflow Studio
 
-A self-hosted tool that runs a multi-step content generation pipeline (brief → research → outline → draft → edit → cleanup → hero image → localise) with a human approval gate between steps. It is built on **Wagtail 8 (Django 6.1)** and uses the Wagtail admin as its interface, so drafts, revisions, moderation workflows, images and publishing come built in.
+A self-hosted tool that runs a multi-step content generation pipeline (brief → research → outline → draft → review and edit → cleanup → hero image → localise → publish) with a human approval gate between steps. It is built on **Wagtail 8 (Django 6.1)** and uses the Wagtail admin as its interface, so drafts, revisions, moderation workflows, images and publishing come built in.
 
-Text and images can come from **local models** (Ollama, ComfyUI) or **free API tiers** (Gemini, Ollama Cloud, Mistral, NVIDIA NIM and others). Each step picks its provider and model from configuration, so models can be swapped without code changes.
+Text and images come from **local models** (Ollama, ComfyUI) or **free API tiers** (Ollama Cloud, Gemini, Groq, Cloudflare Workers AI). Each step picks its provider and model from configuration, so models can be swapped without code changes.
 
-> Status: **M1, bootstrap.** The containerised stack, admin shell, Content Studio menu, background worker and docs are in place. The generation pipeline is built in milestones M2–M8 (see [docs/roadmap.md](docs/roadmap.md)).
+> Status: **M1–M7 built** (pipeline, review sequence, branded hero images, publishing into Wagtail moderation, exports). M8 (hardening) is next, and model defaults are interim until the evaluation is scored. See [docs/roadmap.md](docs/roadmap.md).
 
 ## Quick start (Windows + Docker Desktop)
 
@@ -46,6 +46,14 @@ Full instructions, including host setup for Ollama and ComfyUI, are in [docs/set
 
 ## Documentation
 
+Start with **[Tools and processes](docs/tools-and-processes.md)**, then the guide for your role:
+
+- [User guide](docs/user-guide.md): writers, editors, moderators
+- [Operations guide](docs/operations.md): running and maintaining the studio
+- [Development guide](docs/development.md): developers and AI agents
+
+Reference:
+
 - [Architecture](docs/architecture.md)
 - [Setup](docs/setup.md)
 - [Content workflow](docs/workflow.md)
@@ -54,6 +62,7 @@ Full instructions, including host setup for Ollama and ComfyUI, are in [docs/set
 - [Model evaluation](docs/model-eval.md)
 - [Roadmap](docs/roadmap.md)
 - [Architecture decision records](docs/adr/)
+- [Session handoff](docs/HANDOFF.md)
 
 ## Development
 

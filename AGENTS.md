@@ -4,7 +4,7 @@ Guidance for AI coding agents (Claude Code, Codex, Hermes, Copilot) working in t
 
 ## What this is
 
-Content Workflow Studio: a Wagtail 8 / Django 6.1 app that runs a content generation pipeline with human approval gates. Read `docs/architecture.md` and `docs/workflow.md` before larger changes, and `docs/roadmap.md` for which milestone is in progress.
+Content Workflow Studio: a Wagtail 8 / Django 6.1 app that runs a content generation pipeline with human approval gates. Start with `docs/HANDOFF.md` (current state) and `docs/development.md` (code map, how-tos, change process). Read `docs/architecture.md` and `docs/workflow.md` before larger changes, and `docs/roadmap.md` for which milestone is in progress.
 
 ## Layout
 

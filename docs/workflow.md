@@ -20,7 +20,7 @@ The studio automates an existing, proven manual workflow that runs as a set of C
 
 | # | Step | Output | Gate | Default profile |
 |---|---|---|---|---|
-| 0 | Accuracy gate (optional) | Findings: apply-now vs confirm-first | Approve | quality |
+| 0 | Accuracy gate (planned, not built) | Findings: apply-now vs confirm-first | Approve | quality |
 | 0b | Site crawl (guest posts only) | Site profile: narrative mode, voice, heading style, typical length, reading level, link habits; list of pages read or skipped | Approve (edit allowed) | none (fetching) + fast (summarising) |
 | 1 | Research | Sources, claims, verification table | Approve | fast |
 | 2 | Outline | Detailed outline + headings-only outline + structure decisions | Approve (edit allowed) | quality |

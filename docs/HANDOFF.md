@@ -1,6 +1,6 @@
 # Handoff: Content Workflow Studio (state on 2026-10-13, M7 built)
 
-Read this first in a new session. Also see `docs/roadmap.md`, `docs/workflow.md`, `docs/ux.md`,
+Read this first in a new session. Then `docs/development.md` (code map, how-tos, process) and `docs/tools-and-processes.md`. Also see `docs/roadmap.md`, `docs/workflow.md`, `docs/ux.md`,
 `docs/providers.md`, `docs/model-eval.md` and `AGENTS.md`.
 
 ## Start here

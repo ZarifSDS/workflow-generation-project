@@ -59,7 +59,7 @@ Approved content becomes an `ArticlePage` draft and enters Wagtail's own moderat
 | **Run workspace** | Where all the work happens | Left: vertical **step timeline** with status tags (queued, running with elapsed time, ready to review, approved, failed). Centre: the selected step's output in a reader/editor view. Right side panel: **checks** (grade per section, keywords, accuracy flags), **model** used with the dropdown to regenerate, step history and versions. |
 | **Step review panel** | Decide on one step's output | Approve / Edit & approve / Regenerate / Reject in Wagtail's action-menu style; side-by-side compare of versions; changelog for edit steps |
 | **Metadata checklist** | Choose title/meta/slug | Checkbox list with character counts and keyword indicators; "Add your own" input; preview of the search result |
-| **Prompt templates** | Maintain prompts | Snippet listing with revisions and diff; which steps use each template |
+| **Prompt templates** | Maintain prompts | Not built: prompts are versioned files in `apps/studio/prompts/` (see [development.md](development.md#change-a-prompt)) |
 | **Models and providers** | See what's available | Verified models per provider, free/paid, last check result, default per profile; "Re-check providers" action (runs `ai_smoke`) |
 | **Model comparison** | Evaluation results | The tables from `model-eval.md`, plus links to the run outputs |
 
