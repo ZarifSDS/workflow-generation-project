@@ -1,10 +1,12 @@
 import hashlib
+import re
 
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
+from django.utils.text import slugify
 
 from apps.ai import catalog
 from apps.quality import house, review
@@ -388,13 +390,46 @@ EXPORTS = {
 }
 
 
+def outline_export(run, fmt):
+    """The outline step's latest text as a file: the detailed outline, or the headings-only outline
+    (the skill's bare-bones file: `H1:`/`H2:`/`H3:` lines turned into Markdown headings)."""
+    step = run.steps.filter(key="outline").first()
+    version = step.latest_version if step else None
+    if version is None:
+        raise ValueError("There is no outline yet.")
+    slug = slugify(run.brief.pkeyword or run.brief.topic)[:60] or f"run-{run.pk}"
+    if fmt == "outline_detailed":
+        return version.content, f"outline-detailed-{slug}"
+    section = re.search(r"(?ms)^##\s+Headings-Only Outline\s*$\n(.*?)(?=^##\s|\Z)", version.content)
+    lines = []
+    for line in (section.group(1) if section else "").splitlines():
+        match = re.match(r"^\s*H([1-4]):\s*(.+?)\s*$", line)
+        if match:
+            lines.append("#" * int(match.group(1)) + " " + match.group(2))
+    if not lines:
+        raise ValueError("The outline has no Headings-Only Outline section with H1:/H2:/H3: lines yet.")
+    return "\n\n".join(lines) + "\n", f"outline-{slug}"
+
+
 def run_export(request, pk, fmt):
-    """Download the approved article (or its localised variant, ?variant=localised)."""
+    """Download the approved article (or its localised variant, ?variant=localised), or the outline files
+    (`outline`, `outline_detailed`)."""
     from apps.content import exports
 
+    run = get_object_or_404(GenerationRun.objects.select_related("brief"), pk=pk)
+    if fmt in ("outline", "outline_detailed"):
+        if not request.user.has_perm(permissions.ACCESS):
+            raise PermissionDenied
+        try:
+            body, name = outline_export(run, fmt)
+        except ValueError as error:
+            messages.error(request, str(error))
+            return redirect(f"{reverse('studio:run', args=[run.pk])}?step=outline")
+        response = HttpResponse(body, content_type="text/markdown; charset=utf-8")
+        response["Content-Disposition"] = f'attachment; filename="{name}.md"'
+        return response
     if not request.user.has_perm(permissions.EDITING):
         raise PermissionDenied
-    run = get_object_or_404(GenerationRun.objects.select_related("brief"), pk=pk)
     if fmt not in EXPORTS:
         raise Http404
     variant = "localised" if request.GET.get("variant") == "localised" else "final"

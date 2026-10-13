@@ -38,12 +38,13 @@
 - The Claim Verification Table lists every planned claim with source and status.
 - Structure Decisions log every order, split, merge and depth call with the alternative considered.
 - The Headings-Only Outline is plain `H1:`/`H2:`/`H3:` lines, no prose: `H2: Key Takeaways` second, the verb-first CTA heading before the FAQ, and `H2: Frequently Asked Questions` last with each question as an `H3:`.
+- Fixed components keep their fixed forms and are exempt from the search-query rule: `Key Takeaways` (always exactly that, second), the CTA heading (verb-first, not a query) and `Frequently Asked Questions` (always exactly that, last). `Intro` in the Detailed Outline is a label for the introduction, not a heading. Never ask for these to be reworded.
 
 ## draft
 
 - Intro, in order: a generic example or the pain point the reader recognises; the topic and why knowing it matters to this reader; one or two snippet sentences answering the primary query with the primary keyword in the first 100 words; a bridge after any number; last, a scope sentence with the literal words "this article" naming the core contents. Four to seven sentences, no "Imagine", no "In today's workplace".
 - Key Takeaways: three to seven standalone facts in article order, the first answering the primary query; no bullet leans on another (no "that", "this", "the same" pointing outside itself) and none uses coverage framing.
-- The first H2 carries the core answer. Every question heading opens with its direct, self-contained answer. Every H3 passes the necessity test.
+- The first H2 carries the core answer. Every question heading opens with its direct, self-contained answer. Every H3 passes the necessity test. `## Key Takeaways` (first H2), the verb-first CTA heading and `## Frequently Asked Questions` (last) are fixed components, never reworded into queries.
 - The article answers the supporting search queries completely and in the ranking pages' depth; regulation is cited only where it settles a question (the research's Regulation Depth), never as a tour.
 - Facts and figures carry [SRC: url] with URLs from the inputs only; uncertain claims carry [VERIFY]; nothing is invented; enumerated lists match the source's count; no deflection sentences ("check the current figure for your state").
 - Second person by default; plain, specific, standard words (no "simpler" synonyms that lose meaning, no metaphors, no meta narration beyond the scope sentence); no promotional voice; no author credentials.

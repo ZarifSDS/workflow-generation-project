@@ -66,7 +66,7 @@ Open **New brief**. Start from a preset if one fits (for example "SDS Manager bl
 Then choose how the run proceeds:
 
 - **Review each step** (default): every step waits for your approval. Tick **SOP self-review** on any step you still want checked and revised by the reviewer model before you see it.
-- **Autopilot (one-shot)**: every text step is checked against the house SOP by the reviewer model and revised by its own model until it passes (up to two revisions). The run stops only where a step can't pass (it shows the open findings), where Final cleanup finds `[VERIFY]`, `[SRC:]` or `[VISUAL:]` markers, or at a step whose approval box you left ticked (the hero image by default). Publish still creates a draft page for Wagtail moderation; nothing goes live on its own. The rules it checks are in [sop.md](sop.md).
+- **Autopilot (one-shot)**: every text step is checked against the house SOP by the reviewer model and revised by its own model until it passes (up to three revisions). The run stops only where a step can't pass (it shows the open findings), where Final cleanup finds `[VERIFY]`, `[SRC:]` or `[VISUAL:]` markers, or at a step whose approval box you left ticked (the hero image by default). Publish still creates a draft page for Wagtail moderation; nothing goes live on its own. The rules it checks are in [sop.md](sop.md).
 
 Then the steps (Hero image and Localise are optional), the model for each step, and the approval boxes. **Start run** queues the first step; **Save** keeps the brief for later; the briefs list has **Start run** and **Autopilot** buttons for saved briefs. **Save current as preset** stores the settings for next time.
 

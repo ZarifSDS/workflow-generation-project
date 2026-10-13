@@ -2,6 +2,7 @@
 autopilot runs and the UI around them. No real provider calls."""
 
 import pytest
+from django.conf import settings
 from django.urls import reverse
 
 from apps.ai.types import GenerationResult, ProviderError
@@ -340,14 +341,16 @@ def test_autopilot_run_self_reviews_and_continues(brief, monkeypatch):
 
 
 def test_step_holds_when_the_sop_is_not_met(brief, monkeypatch):
-    monkeypatch.setattr(executors, "generate", SopLLM(verdicts=("REVISE", "REVISE", "REVISE")))
+    monkeypatch.setattr(
+        executors, "generate", SopLLM(verdicts=("REVISE",) * (settings.STUDIO_SOP_MAX_ROUNDS + 1))
+    )
     run = _autopilot_run(brief)
     research = run.steps.get(key="research")
     execute_step(research.pk)
     research.refresh_from_db()
     assert research.status == StepRun.Status.READY
     log = research.latest_version.metrics["sop"]
-    assert not log["passed"] and len(log["rounds"]) == 3  # two revisions, three reviews
+    assert not log["passed"] and len(log["rounds"]) == settings.STUDIO_SOP_MAX_ROUNDS + 1
     assert "Held for your review" in research.latest_version.note
     run.refresh_from_db()
     assert run.status == "needs_review"
@@ -526,3 +529,29 @@ def test_prompts_adapt_to_the_content_type(brief):
     assert "a guest post for a third-party website" in draft[0]["content"]
     assert "No product link, no anchor and no promotion in the close" in draft[1]["content"]
     assert "at least three sdsmanager.com links" not in draft[1]["content"]
+
+
+def test_outline_files_can_be_downloaded(admin_client, brief):
+    run = services.create_run(brief, {})
+    outline = run.steps.get(key="outline")
+    services.add_version(outline, GOOD_OUTLINE)
+    bare = admin_client.get(reverse("studio:run_export", args=[run.pk, "outline"]))
+    assert bare.status_code == 200 and bare["Content-Disposition"].endswith(
+        'outline-sds-retention-requirements.md"'
+    )
+    text = bare.content.decode()
+    assert text.startswith("# SDS Retention Requirements") and "\n## Key Takeaways\n" in text
+    assert "### Can Safety Data Sheets Be Stored Electronically?" in text and "H2:" not in text
+    detailed = admin_client.get(reverse("studio:run_export", args=[run.pk, "outline_detailed"]))
+    assert detailed.status_code == 200 and "## Structure Decisions" in detailed.content.decode()
+    html = admin_client.get(reverse("studio:run", args=[run.pk]) + "?step=outline").content.decode()
+    assert "Download the headings-only outline" in html
+
+
+def test_section_names_and_heading_lines_are_matched_loosely():
+    loose = GOOD_OUTLINE.replace("## Headings-Only Outline", "## Headings only outline:").replace(
+        "\nH2: Key Takeaways", "\n- H2: Key Takeaways"
+    )
+    assert blocking(sop.check("outline", loose, CTX)) == []
+    research = GOOD_RESEARCH.replace("## Questions for the Requester", "## Questions For The Requester")
+    assert blocking(sop.check("research", research, CTX)) == []

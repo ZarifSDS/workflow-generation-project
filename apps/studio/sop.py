@@ -171,9 +171,15 @@ def _sections(text):
     return [(quality_review.heading_name(h) if h else "", b) for h, b in quality_review.split_sections(text)]
 
 
+def _norm(name):
+    """Section names compared loosely: case, punctuation and spacing don't count ("Headings-only outline:"
+    is "Headings-Only Outline")."""
+    return re.sub(r"[^a-z0-9]+", "", (name or "").lower())
+
+
 def _section_body(text, name):
     for heading, body in _sections(text):
-        if heading.lower().rstrip(":") == name.lower():
+        if _norm(heading) == _norm(name):
             return body
     return None
 
@@ -194,8 +200,8 @@ def _mechanics(text):
 
 
 def _missing_sections(text, required):
-    present = {name.lower().rstrip(":") for name, _ in _sections(text)}
-    return [name for name in required if name.lower() not in present]
+    present = {_norm(name) for name, _ in _sections(text)}
+    return [name for name in required if _norm(name) not in present]
 
 
 def _table_rows(body):
@@ -239,7 +245,13 @@ def check_research(text, ctx):
 
 def _headings_only(text):
     body = _section_body(text, "Headings-Only Outline") or ""
-    return [line.strip() for line in body.splitlines() if re.match(r"^\s*H[1-4]:\s*\S", line)]
+    lines = []
+    for line in body.splitlines():
+        # Tolerate a list bullet or bold around the level ("- H2: ...", "**H2:** ...").
+        match = re.match(r"^\s*(?:[-*]\s+)?\**(H[1-4]):\**\s*(\S.*?)\s*$", line)
+        if match:
+            lines.append(f"{match.group(1)}: {match.group(2).strip('*').strip()}")
+    return lines
 
 
 def check_outline(text, ctx):

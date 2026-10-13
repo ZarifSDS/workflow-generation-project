@@ -64,6 +64,12 @@
                                 </div>
                             </section>
                         {% endif %}
+                        {% if step.key == "outline" %}
+                            <div class="s-cluster">
+                                <a class="button button-small button-secondary" href="{% url 'studio:run_export' run.pk 'outline_detailed' %}" download>Download the detailed outline</a>
+                                <a class="button button-small button-secondary" href="{% url 'studio:run_export' run.pk 'outline' %}" download>Download the headings-only outline</a>
+                            </div>
+                        {% endif %}
                         {% if exports %}
                             <section class="s-box" aria-labelledby="exports-head">
                                 <h3 class="s-section" id="exports-head">Export</h3>
