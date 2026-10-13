@@ -52,6 +52,7 @@ def execute_step(step_id):
         model=output.model,
         note=output.note,
         image=output.image,
+        extra_metrics=output.extra_metrics,
     )
     step.refresh_from_db()
     step.finished_at, step.regenerate_note = timezone.now(), ""

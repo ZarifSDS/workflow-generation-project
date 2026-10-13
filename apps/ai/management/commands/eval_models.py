@@ -44,6 +44,11 @@ class Command(BaseCommand):
             default=str(EVAL_DIR / "outlines"),
             help="Draft round: approved outlines as <brief-id>.md",
         )
+        parser.add_argument(
+            "--drafts-dir",
+            default=str(EVAL_DIR / "drafts"),
+            help="Edit round: the draft each candidate edits, as <brief-id>.md",
+        )
         parser.add_argument("--seed", type=int)
         parser.add_argument("--dry-run", action="store_true", help="Use fake providers (no API calls)")
 
@@ -61,9 +66,10 @@ class Command(BaseCommand):
             raise CommandError("No briefs or candidates selected.")
 
         outlines = {}
-        if opts["round"] == "draft":
+        if opts["round"] in ("draft", "edit"):
+            folder = Path(opts["outlines_dir"] if opts["round"] == "draft" else opts["drafts_dir"])
             for brief in briefs:
-                path = Path(opts["outlines_dir"]) / f"{brief['id']}.md"
+                path = folder / f"{brief['id']}.md"
                 if path.exists():
                     outlines[brief["id"]] = path.read_text(encoding="utf-8")
 

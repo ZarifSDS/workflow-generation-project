@@ -6,6 +6,8 @@ from django.utils import timezone
 
 from apps.ai import catalog
 from apps.ai.evaluation import metrics as text_metrics
+from apps.quality import review as quality_review
+from apps.quality import scans as quality_scans
 
 from .models import VERSIONS_TO_KEEP, GenerationRun, MetadataOption, StepRun, StepVersion
 from .pipeline import steps_for
@@ -68,12 +70,27 @@ def _prune_versions(step):
     step.versions.exclude(number__in=keep).delete()
 
 
+QUALITY_SCAN_STEPS = {"draft", "review_edit", "cleanup", "localise"}
+
+
 @transaction.atomic
 def add_version(
-    step, content, *, provider="", model="", source=StepVersion.Source.AI, user=None, note="", image=None
+    step,
+    content,
+    *,
+    provider="",
+    model="",
+    source=StepVersion.Source.AI,
+    user=None,
+    note="",
+    image=None,
+    extra_metrics=None,
 ):
     last = step.versions.order_by("-number").first()
     computed = text_metrics.compute(content, step.run.brief.as_prompt_dict()) if content.strip() else {}
+    if content.strip() and step.key in QUALITY_SCAN_STEPS and getattr(settings, "STUDIO_QUALITY_SCANS", True):
+        computed["quality"] = quality_scans.summary(content)
+    computed.update(extra_metrics or {})
     version = StepVersion.objects.create(
         step=step,
         number=(last.number + 1) if last else 1,
@@ -202,4 +219,29 @@ def add_own_metadata(run, kind, text):
         raise ValueError("Type an option before adding it.")
     return MetadataOption.objects.create(
         run=run, kind=kind, text=text, source=StepVersion.Source.EDIT, selected=True
+    )
+
+
+@transaction.atomic
+def accept_splits(step, user, accepted_ids):
+    """Apply chosen split proposals as a new version (your edit); unaccepted ones stay proposals."""
+    latest = step.latest_version
+    review = (latest.metrics or {}).get("review") if latest else None
+    if not review or not review.get("proposals"):
+        raise ValueError("There are no split proposals on this version.")
+    accepted = [p for p in review["proposals"] if p["id"] in accepted_ids]
+    if not accepted:
+        raise ValueError("Tick at least one split to apply.")
+    text = quality_review.apply_splits(latest.content, review["proposals"], set(accepted_ids))
+    remaining = [p for p in review["proposals"] if p["id"] not in accepted_ids]
+    kept = {**review, "proposals": remaining, "accepted": review.get("accepted", []) + accepted}
+    return add_version(
+        step,
+        text,
+        source=StepVersion.Source.EDIT,
+        user=user,
+        provider=latest.provider,
+        model=latest.model,
+        note=latest.note,
+        extra_metrics={"review": kept},
     )

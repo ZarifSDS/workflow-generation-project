@@ -119,7 +119,7 @@ def test_ungated_cleanup_continues_automatically(brief, fake_llm, admin_user):
         execute_step(run.steps.get(key=key).pk)
         approve(run.steps.get(key=key), admin_user)
     review = run.steps.get(key="review_edit")
-    assert review.latest_version.note.startswith("## Changelog")
+    assert "## Review sequence" in review.latest_version.note
     cleanup = run.steps.get(key="cleanup")
     assert cleanup.status == StepRun.Status.QUEUED
     execute_step(cleanup.pk)

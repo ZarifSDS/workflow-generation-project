@@ -14,6 +14,7 @@ All commands run inside the `web` container (`docker compose exec web …`).
 | Outline round | `python manage.py eval_models --round outline --run-dir eval/runs/r1-outline` |
 | Draft round | Save the best outline per brief as `eval/outlines/<brief-id>.md`, then `python manage.py eval_models --round draft --models "<m1>,<m2>,…" --run-dir eval/runs/r2-draft` |
 | Image round | `python manage.py eval_models --round image --run-dir eval/runs/r3-image` |
+| Edit round (M5) | Save one draft per brief as `eval/drafts/<brief-id>.md`, then `python manage.py eval_models --round edit --run-dir eval/runs/r4-edit`. Every candidate runs the full seven-part review sequence on the same draft. |
 | Report | Fill in the run's `scorecard.md`, then `python manage.py eval_report eval/runs/<run>` |
 
 - A run directory can be resumed: rerunning the same command skips outputs that already succeeded.

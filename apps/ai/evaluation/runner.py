@@ -22,7 +22,7 @@ import yaml
 from ..types import ProviderError
 from . import metrics
 
-ROUNDS = ("outline", "draft", "image")
+ROUNDS = ("outline", "draft", "image", "edit")
 RUBRIC = ["Accuracy", "Structure", "Voice", "Search fit", "Edit effort"]
 
 
@@ -189,6 +189,8 @@ class Runner:
                     total_time=image.total_time,
                     attempts=image.attempts,
                 )
+            elif self.round == "edit":
+                self._edit_job(brief, candidate, record, brief_id, label)
             else:
                 template = self.prompts_dir / f"{self.round}.md"
                 messages = render_messages(template, brief, self.types, self.outlines.get(brief_id))
@@ -217,6 +219,42 @@ class Runner:
             self.results.setdefault(brief_id, {})[label] = record
             self._save_results()
         self.log(f"[{record['status']:6}] {brief_id} {label} ({record.get('total_time') or 0:.0f}s)")
+
+    def _edit_job(self, brief, candidate, record, brief_id, label):
+        """Run the full review-and-edit sequence with this candidate on the brief's fixed draft."""
+        from apps.quality import review
+        from apps.studio import prompting
+
+        options = {"temperature": 0.4, "max_tokens": 16000, **candidate.get("options", {})}
+        started, outputs = time.monotonic(), []
+
+        def call(prompt_name, context):
+            result = self.generate(
+                candidate["provider"], candidate["model"], prompting.render(prompt_name, context), options
+            )
+            outputs.append(result)
+            return result.text
+
+        outcome = review.run_sequence(self.outlines[brief_id], brief, call)
+        path = self.run_dir / "outputs" / brief_id / f"{label}.md"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        report = "\n".join(f"- {s['number']}. {s['name']}: {s['summary']}" for s in outcome.substeps)
+        path.write_text(f"{outcome.text}\n\n---\n\n## Review sequence report\n\n{report}\n", encoding="utf-8")
+        record.update(
+            status="ok" if outcome.text.strip() else "empty",
+            file=str(path.relative_to(self.run_dir)),
+            total_time=time.monotonic() - started,
+            calls=len(outputs),
+            output_tokens=sum(r.output_tokens or 0 for r in outputs),
+            metrics={
+                **metrics.compute(outcome.text, brief),
+                "review": {
+                    "substeps_changed": sum(1 for s in outcome.substeps if s["changed"]),
+                    "grades": outcome.grades,
+                    "proposals": len(outcome.proposals),
+                },
+            },
+        )
 
     def run(self, workers_per_provider=1):
         self.run_dir.mkdir(parents=True, exist_ok=True)
@@ -247,8 +285,9 @@ class Runner:
         # Local Ollama must stay sequential (one model in memory at a time).
         groups = defaultdict(list)
         for brief_id, labels in key.items():
-            if self.round == "draft" and brief_id not in self.outlines:
-                self.log(f"[skip  ] {brief_id}: no approved outline in eval/outlines/{brief_id}.md")
+            if self.round in ("draft", "edit") and brief_id not in self.outlines:
+                folder = "outlines" if self.round == "draft" else "drafts"
+                self.log(f"[skip  ] {brief_id}: no input in eval/{folder}/{brief_id}.md")
                 continue
             for label, candidate in sorted(labels.items()):
                 if self.results.get(brief_id, {}).get(label, {}).get("status") == "ok":

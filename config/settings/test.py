@@ -10,5 +10,6 @@ CACHES = {"default": {"BACKEND": "django.core.cache.backends.dummy.DummyCache"}}
 # Tests run executors explicitly with fake providers.
 STUDIO_EXECUTE_STEPS = False
 STUDIO_CRAWL_PACE_SECONDS = 0
+STUDIO_QUALITY_SCANS = False  # subprocess scans are covered by their own tests
 
 PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]

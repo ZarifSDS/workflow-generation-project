@@ -99,6 +99,8 @@ class RunWorkspaceView(StudioPage):
                 and self.run.status != GenerationRun.Status.REJECTED
             ),
             has_metadata=self.run.metadata_options.exists(),
+            review=(version.metrics or {}).get("review") if version else None,
+            quality=(version.metrics or {}).get("quality") if version else None,
             typical=(
                 catalog.find(step.provider, step.model).typical_seconds
                 if step and catalog.find(step.provider, step.model)
@@ -126,6 +128,9 @@ class RunWorkspaceView(StudioPage):
             elif action == "regenerate":
                 services.request_regenerate(step, request.POST.get("model", ""), request.POST.get("note", ""))
                 messages.success(request, f"{step.label} is queued with the chosen model.")
+            elif action == "accept_splits":
+                services.accept_splits(step, request.user, request.POST.getlist("split"))
+                messages.success(request, "Applied the chosen splits as a new version.")
             elif action == "retry":
                 services.retry_step(step)
                 messages.success(request, f"{step.label} is queued again.")

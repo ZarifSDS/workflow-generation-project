@@ -9,9 +9,10 @@ from django.conf import settings
 from django.core.files.images import ImageFile
 
 from apps.ai import catalog
-from apps.ai.evaluation import metrics
 from apps.ai.service import generate, generate_image
 from apps.ai.types import ProviderError
+from apps.quality import review
+from apps.quality import scripts as quality_scripts
 
 from . import prompting, textclean, webfetch
 from .models import MetadataOption, StepVersion
@@ -39,6 +40,7 @@ class StepOutput:
     note: str = ""
     image: object = None
     stats: dict = field(default_factory=dict)
+    extra_metrics: dict = field(default_factory=dict)
 
 
 def _profile(step):
@@ -180,22 +182,36 @@ def draft(step):
 
 
 def review_edit(step):
-    context = prompting.context_for(step)
     source = prompting.approved_output(step.run, "draft")
     _require(source, "Approve the draft before review and edit.")
-    grades = [
-        f"- {heading}: {grade}"
-        for heading, body in metrics.sections(source)
-        if (grade := metrics.fkgl(body)) is not None
-    ]
-    context.update(draft=source, section_grades="\n".join(grades) or "- (no sections measured)")
-    result = _call_text(step, prompting.render("review_edit", context))
-    article, _, changelog = result.text.partition("## Changelog")
-    return _text_output(
-        step,
-        result,
-        content=article.strip(),
-        note=f"## Changelog\n{changelog.strip()}" if changelog.strip() else "",
+    brief = step.run.brief
+    used = []
+
+    def call(prompt_name, context):
+        messages = prompting.render(prompt_name, {**prompting.context_for(step), **context})
+        result = _call_text(step, messages, max_tokens=4000 if prompt_name == "review_splits" else 16000)
+        used.append(result)
+        return result.text
+
+    outcome = review.run_sequence(
+        source,
+        {"fkgl": float(brief.fkgl), "region": brief.get_region_display(), "pkeyword": brief.pkeyword},
+        call,
+    )
+    last = used[-1] if used else None
+    fallbacks = [r.stats["fallback_from"] for r in used if r.stats.get("fallback_from")]
+    lines = [f"{s['number']}. **{s['name']}**: {s['summary']}" for s in outcome.substeps]
+    note = "## Review sequence\n\n" + "\n".join(lines)
+    if fallbacks:
+        note = f"Used the fallback model for some sub-steps because {fallbacks[0]} failed.\n\n{note}"
+    return StepOutput(
+        content=outcome.text,
+        provider=last.provider if last else "",
+        model=last.model if last else "",
+        note=note,
+        extra_metrics={
+            "review": {"substeps": outcome.substeps, "grades": outcome.grades, "proposals": outcome.proposals}
+        },
     )
 
 
@@ -203,11 +219,17 @@ def cleanup(step):
     run = step.run
     source = prompting.approved_output(run, "review_edit") or prompting.approved_output(run, "draft")
     _require(source, "There is no approved article to clean up yet.")
-    cleaned, report = textclean.clean(source)
-    note = (
-        f"Removed {report['invisible_removed']} hidden characters and normalised "
-        f"{report['spaces_normalised']} unusual spaces."
-    )
+    try:
+        cleaned, stats = quality_scripts.clean_text(source)
+        note = "Cleaned with the clean-user-facing-text script."
+        if stats:
+            note += f" Stats: {stats}"
+    except (quality_scripts.ScriptError, OSError):
+        cleaned, report = textclean.clean(source)
+        note = (
+            f"Removed {report['invisible_removed']} hidden characters and normalised "
+            f"{report['spaces_normalised']} unusual spaces (built-in cleaner)."
+        )
     return StepOutput(content=cleaned, note=note)
 
 

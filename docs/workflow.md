@@ -95,6 +95,8 @@ Runs after the brief for `outbound` content and mirrors the SITE_PROFILE in the 
 - Steps without an approval gate (Final cleanup) continue automatically.
 - When a step becomes ready, a message appears on your next admin page view, and the sidebar badge counts it. The run workspace refreshes itself while a step is queued or running, with elapsed time against the model's typical duration.
 - **Research has no live web search yet.** The model works from what it knows and marks uncertain claims `[VERIFY]`; a search provider can be added later.
-- The interim Review and edit step is a single pass of the rules in the review sequence; M5 replaces it with the full seven-part sequence.
+- Review and edit runs the seven-part sequence (`apps/quality/review.py`). Grades use the skill's own `metrics.py` formula. Every rewrite is checked before it's accepted (headings kept, no large loss of text); a rejected rewrite leaves the text unchanged and says why. Sentence splits are **proposals only**: each must lower its section by at least one grade, and you apply the ones you tick.
+- Final cleanup runs the clean-user-facing-text `clean_text.py` script (built-in cleaner as fallback).
+- Drafts, edits, cleanups and localisations get **quality scans** from the vendored skill scripts (slop index, AI-tell findings, unclear references, repeated frames, mechanical-sweep blockers, hidden characters), shown in the run workspace.
 - Publish is a final confirmation; creating the Wagtail page and exports arrive in M7.
 

@@ -36,6 +36,44 @@
                     {% if version and step.status != "running" %}
                         <p class="s-muted" style="margin:0">Version {{ version.number }} · {{ version.get_source_display }}{% if version.model %} · {% model_label version.provider version.model %}{% endif %} · {{ version.created_at|date:"j M H:i" }}</p>
                         {% if version.image %}<img src="{{ version.image.file.url }}" alt="Generated hero image for {{ brief.topic }}" style="max-width:100%;border-radius:.4rem">{% endif %}
+                        {% if review %}
+                            <section class="s-box" aria-labelledby="review-head">
+                                <h3 class="s-section" id="review-head">Review sequence</h3>
+                                <ol class="s-substeps">
+                                    {% for sub in review.substeps %}
+                                        <li class="s-substep{% if sub.changed %} s-substep--changed{% endif %}"><strong>{{ sub.number }} {{ sub.name }}</strong><span>{{ sub.summary }}</span></li>
+                                    {% endfor %}
+                                </ol>
+                                {% if review.grades %}
+                                    <div class="s-table-wrap">
+                                        <table class="s-table">
+                                            <thead><tr><th scope="col">Section</th><th scope="col">Start</th><th scope="col">After word-level edits</th><th scope="col">Now</th><th scope="col">Target</th></tr></thead>
+                                            <tbody>
+                                                {% for g in review.grades %}
+                                                    <tr><td>{{ g.heading }}</td><td class="s-mono">{{ g.start|default:"–" }}</td><td class="s-mono">{{ g.after_words|default:"–" }}</td><td class="s-mono">{% if g.final is not None %}<span class="s-tag s-tag--{{ g.final|fkgl_level:brief.fkgl }}">{{ g.final }}</span>{% else %}–{% endif %}</td><td class="s-mono">{{ brief.fkgl }}</td></tr>
+                                                {% endfor %}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                {% endif %}
+                                {% if review.proposals %}
+                                    <form method="post" style="display:grid;gap:.6rem">{% csrf_token %}
+                                        <input type="hidden" name="step" value="{{ step.key }}">
+                                        <p style="margin:0"><strong>Proposed splits</strong> <span class="s-muted">Each lowers its section by at least one grade. Tick the ones to apply.</span></p>
+                                        {% for p in review.proposals %}
+                                            <label class="s-split">
+                                                <input type="checkbox" name="split" value="{{ p.id }}" {% if not can_review %}disabled{% endif %}>
+                                                <span>
+                                                    <span class="s-muted" style="font-size:.78rem">{{ p.section }} · grade {{ p.before }} → {{ p.after }}</span>
+                                                    <span class="s-diff" style="display:block;margin-top:.25rem"><span class="del" style="display:block">− {{ p.original }}</span><span class="add" style="display:block">+ {{ p.split }}</span></span>
+                                                </span>
+                                            </label>
+                                        {% endfor %}
+                                        {% if can_review %}<div><button class="button button-secondary" type="submit" name="action" value="accept_splits">Apply ticked splits</button></div>{% endif %}
+                                    </form>
+                                {% endif %}
+                            </section>
+                        {% endif %}
                         <div class="s-output">{{ version.content|render_markdown }}</div>
                     {% endif %}
                     {% if step.status == "running" %}
@@ -112,6 +150,19 @@
                             </div>
                         {% endfor %}
                     {% endif %}
+                </section>
+            {% endif %}
+
+            {% if quality %}
+                <section class="s-box" aria-labelledby="quality-head">
+                    <h3 class="s-section" id="quality-head">Quality scans</h3>
+                    {% if quality.slop_index is not None %}<div class="s-kv"><span title="deslop lexical scan; triage only, not a verdict">Slop index</span><span class="s-tag s-tag--{% if quality.slop_index >= 50 %}bad{% elif quality.slop_index >= 20 %}warn{% else %}ok{% endif %}">{{ quality.slop_index }}</span></div>{% endif %}
+                    <div class="s-kv"><span>AI-tell findings</span><span class="s-mono">{{ quality.deslop_findings|length }}</span></div>
+                    <div class="s-kv"><span>Unclear references</span><span class="s-mono">{{ quality.unclear_references|default:0 }}</span></div>
+                    <div class="s-kv"><span>Repeated sentence frames</span><span class="s-mono">{{ quality.frames_over_threshold|default:0 }}</span></div>
+                    {% if quality.sweep_blocking is not None %}<div class="s-kv"><span>Mechanical sweep blockers</span><span class="s-tag s-tag--{% if quality.sweep_blocking %}warn{% else %}ok{% endif %}">{{ quality.sweep_blocking }}</span></div>{% endif %}
+                    {% if quality.hidden_characters %}<div class="s-kv"><span>Hidden characters</span><span class="s-tag s-tag--warn">{{ quality.hidden_characters }}</span></div>{% endif %}
+                    {% if quality.sentence_len_band %}<p class="s-muted" style="margin:0;font-size:.78rem">Sentence rhythm: {{ quality.sentence_len_band }}</p>{% endif %}
                 </section>
             {% endif %}
 

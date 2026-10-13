@@ -205,11 +205,12 @@ AI_PROFILES = {
         "model": "gpt-oss:120b",
         "fallback": {"provider": "groq", "model": "openai/gpt-oss-120b"},
     },
+    # The review sequence makes 5-8 calls, so a fast model is the interim default here;
+    # the M5 edit round decides the real one.
     "edit": {
-        "provider": "ollama",
-        "model": "huihui_ai/Qwen3.8-abliterated:latest",
-        "options": {"num_ctx": 32768},
-        "fallback": {"provider": "ollama_cloud", "model": "gpt-oss:120b"},
+        "provider": "ollama_cloud",
+        "model": "gpt-oss:120b",
+        "fallback": {"provider": "groq", "model": "openai/gpt-oss-120b"},
     },
     "image": {
         "provider": "cloudflare",
