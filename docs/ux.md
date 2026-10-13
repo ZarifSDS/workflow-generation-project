@@ -2,7 +2,7 @@
 
 **Status:** M3a in review. Wireframes: [docs/wireframes/content-studio.html](wireframes/content-studio.html) (open in a browser).
 
-**Decided in review (2026-10-13):** brief presets per content type, yes (managed in their own screen, "Save current as preset" in the wizard); site crawl for guest posts as its own pipeline step, yes.
+**Decided in review (2026-10-13):** brief presets per content type, yes (managed in their own screen, "Save current as preset" in the wizard); site crawl for guest posts as its own pipeline step, yes. Versions kept per step: the first draft plus the last three. Notifications: admin only (a count badge on Content Studio in the sidebar, a message on the next admin page view, and the dashboard review queue); no email or Slack.
 
 The generation system lives **inside the Wagtail admin** as the "Content Studio" area. It uses Wagtail's own admin components (header, side panels, listings, forms, buttons, icons, dialogs, status tags), so it feels like part of Wagtail rather than a bolted-on tool.
 
@@ -87,5 +87,5 @@ Approved content becomes an `ArticlePage` draft and enters Wagtail's own moderat
 
 1. ~~Presets per content type~~ Decided: yes.
 2. ~~Site crawl as its own step~~ Decided: yes.
-3. How many regenerated versions per step should be kept visible: all, or the last three?
-4. Should notifications also go out by email or to Slack/n8n, or stay in the admin only?
+3. ~~Versions to keep~~ Decided: first draft plus the last three.
+4. ~~Notification channels~~ Decided: admin only.

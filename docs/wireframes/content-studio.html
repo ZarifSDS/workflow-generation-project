@@ -211,7 +211,7 @@ select, input[type=text], textarea { font: .85rem var(--font-ui); color: var(--i
   <section class="screen" id="dashboard" role="tabpanel" aria-labelledby="tab-dashboard">
     <div class="screen-head"><h2>Studio dashboard</h2><p>The entry point. It answers "what needs me right now?" before anything else.</p></div>
     <div class="frame-scroll"><div class="admin">
-      <aside class="side"><div class="brand">Wagtail</div><a>Dashboard</a><a>Pages</a><a>Images</a><a class="on">Content Studio</a><a class="sub on">Overview</a><a class="sub">Briefs</a><a class="sub">Runs</a><a class="sub">Prompt templates</a><a class="sub">Models and providers</a><a>Snippets</a><a>Reports</a><a>Settings</a></aside>
+      <aside class="side"><div class="brand">Wagtail</div><a>Dashboard</a><a>Pages</a><a>Images</a><a class="on">Content Studio <span class="tag info" style="float:right">2</span></a><a class="sub on">Overview</a><a class="sub">Briefs</a><a class="sub">Runs</a><a class="sub">Prompt templates</a><a class="sub">Models and providers</a><a>Snippets</a><a>Reports</a><a>Settings</a></aside>
       <div class="main">
         <div class="bar"><h3>Content Studio</h3><span class="spacer"></span><button class="btn primary" type="button">New brief</button><span class="n">1</span></div>
         <div class="body">
@@ -243,7 +243,7 @@ select, input[type=text], textarea { font: .85rem var(--font-ui); color: var(--i
     <aside class="notes" aria-label="Notes for the dashboard"><h3>Why it looks like this</h3><ol>
       <li><span class="n">1</span><div><b>One primary action.</b> <span class="why">"New brief" is the only teal button in the header, so the next step is never in doubt.</span></div></li>
       <li><span class="n">2</span><div><b>Review queue first.</b> <span class="why">Your approval is the bottleneck, so items waiting on you sit at the top with the model that produced them.</span></div></li>
-      <li><span class="n">3</span><div><b>Honest progress for slow local models.</b> <span class="why">Elapsed time plus "usually ~14 min" (from past runs) instead of a fake percentage. You can leave the page; a notification brings you back.</span></div></li>
+      <li><span class="n">3</span><div><b>Honest progress for slow local models.</b> <span class="why">Elapsed time plus "usually ~14 min" (from past runs) instead of a fake percentage. You can leave the page; admin notifications bring you back: a count badge on Content Studio in the sidebar, a message on your next admin page view, and this review queue. No email or Slack.</span></div></li>
       <li><span class="n">4</span><div><b>Problems visible before they bite.</b> <span class="why">If ComfyUI isn't running or a free quota is used up, you see it here, not as a failed step later.</span></div></li>
     </ol></aside>
   </section>
@@ -343,9 +343,12 @@ select, input[type=text], textarea { font: .85rem var(--font-ui); color: var(--i
               </select>
               <textarea id="regen-note" rows="2" placeholder="Optional note, e.g. add a section on state plans"></textarea>
             </div>
-            <div class="box"><div class="sect-title">Versions</div>
-              <div class="kv"><span>v2 · Qwen3.8 27B</span><span class="tag info">Current</span></div>
-              <div class="kv"><span>v1 · gpt-oss:120b</span><button class="btn small" type="button">Compare</button></div>
+            <div class="box"><div class="sect-title">Versions <span class="n">6</span></div>
+              <div class="kv"><span>v5 · Qwen3.8 27B</span><span class="tag info">Current</span></div>
+              <div class="kv"><span>v4 · nemotron-3-ultra</span><button class="btn small" type="button">Compare</button></div>
+              <div class="kv"><span>v3 · gpt-oss:120b</span><button class="btn small" type="button">Compare</button></div>
+              <div class="kv"><span>v1 · first draft</span><button class="btn small" type="button">Compare</button></div>
+              <span class="muted" style="font-size:.74rem">Keeps the first draft and the last three versions. v2 was removed when v5 arrived.</span>
             </div>
           </aside>
         </div>
@@ -357,6 +360,7 @@ select, input[type=text], textarea { font: .85rem var(--font-ui); color: var(--i
       <li><span class="n">3</span><div><b>Decisions in one bar.</b> <span class="why">Approve is primary; reject is set apart on the right and asks for a reason, so it can't be hit by accident.</span></div></li>
       <li><span class="n">4</span><div><b>Evidence beside the text.</b> <span class="why">Keyword placement, claims to verify and grade per section, so you don't hunt through a separate report.</span></div></li>
       <li><span class="n">5</span><div><b>Model dropdown with honest options.</b> <span class="why">Grouped by provider, with typical time per step. Paid-only or exhausted models stay listed but disabled with the reason.</span></div></li>
+      <li><span class="n">6</span><div><b>Versions (decided).</b> <span class="why">Each step keeps its first draft plus the three most recent versions, so you can always compare against where it started without a long list.</span></div></li>
     </ol></aside>
   </section>
 
@@ -530,10 +534,8 @@ select, input[type=text], textarea { font: .85rem var(--font-ui); color: var(--i
 
   <section class="questions" aria-labelledby="q-head">
     <h2 id="q-head">Questions for your review</h2>
-    <p class="muted" style="margin:0">Answered: presets (yes, screen 2) and site crawl as its own step (yes, screen 7).</p>
+    <p class="muted" style="margin:0">Decided: presets (yes, screen 2); site crawl as its own step (yes, screen 7); versions kept per step: the first draft plus the last three (screen 3); notifications: admin only.</p>
     <ol>
-      <li>How many regenerated versions per step should stay visible: all, or the last three?</li>
-      <li>Notifications: admin only, or also email or Slack (via n8n)?</li>
       <li>Anything missing from the run workspace that you use today in your skill workflow?</li>
     </ol>
   </section>
