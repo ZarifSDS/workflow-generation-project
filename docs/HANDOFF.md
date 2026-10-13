@@ -47,9 +47,20 @@ Every rewrite (edit step, chat apply, Tune) passes `review.accept_rewrite`: head
 - Vendored skill files are byte-identical copies, except `internal-article-links.md`, which keeps only published rows (`apps/quality/vendor/README.md`); added on 2026-10-14: `ehs_seo_blog/data/{banned-words.tsv,internal-article-links.md,product-link-registry.json}` (lead-magnet-links.md is deliberately not vendored: it lists unreleased items from an internal tracker and the repo is public).
 - `STUDIO_SECRETS_KEY` is in `.env`; back up `.env` separately.
 
+### Restore point (taken 2026-10-14, before the SOP agent work)
+
+If the next round goes wrong, go back to this state:
+- **Code:** git tag `restore-2026-10-14` (= ee24d43, on GitHub). `git reset --hard restore-2026-10-14`, or check it out to compare.
+- **Data and settings:** `D:\backups\studio-2026-10-14-ee24d43\` holds the database dump, the media archive, a git bundle of the whole history (works without GitHub) and a copy of `.env`, with step-by-step instructions in its `RESTORE.md`. The same dump and archive are in `./backups` (`latest.txt` = 20261013-213500 UTC).
+
+### Next chat: the SOP agent for one-shot generation (agreed with the user)
+
+The user's next task: turn the combined workflow knowledge into an agent with an SOP that adapts to whichever model is used, as the path to one-shot generation (brief in, publish-ready article out, with the same checks). Starting points:
+- The knowledge is spread over `apps/studio/prompts/*.md` (`_rules.md`, research, outline, draft, review_*), `apps/quality/review.py` (edit sequence, fact protection, grade rules), `apps/quality/house.py` (house mechanics, markers), the audience profiles and the search step. The user's skills behind them: `~/.claude/skills/ehs-seo-blog-optimized/`, `deslop/`, `clarity-review/`, `sds-hero-stock/`.
+- Keep the step-by-step pipeline working; one-shot is an additional mode. Plan it with the user first (plan mode), then build.
+
 ### Ideas the user raised, not built yet
 
-- Turn the combined workflow knowledge into an agent with an SOP that adapts to whichever model is used (a single model-agnostic SOP document behind every step), as the path to one-shot generation.
 - Sectional drafting (approve one H2 at a time), link_check / editorial_flow_check scripts from the skill, re-branding images chosen from the library.
 - Run 12 ("management of change safety") is rejected; it can be reopened from its banner.
 
@@ -89,6 +100,7 @@ Waiting for review (4 steps, unchanged since 2026-10-13; throwaway test runs 13â
 
 ## Start here
 
+0. Next chat: plan and build the SOP agent for one-shot generation (see "Next chat" above). A restore point exists (tag `restore-2026-10-14`).
 1. Score the outline evaluation (below), then set the default models.
 2. Optional: install ComfyUI and export the workflow (`docs/setup.md` step 6) to test local hero images live.
 3. Review run 9's article (page 5) before a moderator approves it: two claims are still marked [VERIFY], and its meta description says "30 days after last use federally" (OSHA's records rule talks about 30 years).
