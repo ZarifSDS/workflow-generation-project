@@ -1,13 +1,19 @@
-# Handoff: Content Workflow Studio (state on 2026-10-13)
+# Handoff: Content Workflow Studio (state on 2026-10-13, all work pushed to GitHub)
 
 Read this first in a new session. Also see `docs/roadmap.md`, `docs/workflow.md`, `docs/ux.md`,
 `docs/providers.md`, `docs/model-eval.md` and `AGENTS.md`.
+
+## Start here
+
+1. Score the outline evaluation (below), then set the default models.
+2. Continue M6 (images) from "M6 in progress".
+3. Then M7 (publish) and M8 (hardening) per `docs/roadmap.md`.
 
 ## Where things stand
 
 | Milestone | State | Commit |
 |---|---|---|
-| M1 Bootstrap (Wagtail 8 / Django 6.1, Docker: web, worker, db, migrate; CI) | Done, **pushed** | 4731851 … c6786ca |
+| M1 Bootstrap (Wagtail 8 / Django 6.1, Docker: web, worker, db, migrate; CI) | Done | 4731851 … c6786ca |
 | M2 AI provider layer + blind model evaluation | Built; **outline round complete (36/36), waiting for your blind scores** | c9e65a6 |
 | M3a UX (wireframes: https://claude.ai/artifact/GjFjc7himFSZiHNYkKV9tw, copy in `docs/wireframes/`) | Done | 51ab651, 2c47c69 |
 | M3b Content Studio screens in the Wagtail admin | Done | c84881e |
@@ -17,7 +23,7 @@ Read this first in a new session. Also see `docs/roadmap.md`, `docs/workflow.md`
 | M7 Publish (ArticlePage, moderation, exports, n8n hook) | Planned | – |
 | M8 Hardening | Planned | – |
 
-**Commits c9e65a6 → 5df13ae are LOCAL ONLY.** You asked not to push until you'd seen the evaluation outputs. Push with `git push origin main` when ready (CI runs on push).
+**Everything up to this handoff is pushed to `main` on GitHub** (CI runs on every push). The only uncommitted work is `apps/quality/vendor/sds_hero_stock/` (see M6).
 
 ## Evaluation (M2)
 
