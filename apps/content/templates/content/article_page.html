@@ -4,21 +4,32 @@
 {% block body_class %}template-articlepage{% endblock %}
 
 {% block content %}
-    <article class="article">
+    <article class="article" lang="{{ page.language }}">
         <p class="site__eyebrow">{{ page.get_category_display }}</p>
         <h1>{{ page.title }}</h1>
         {% if page.intro %}<p class="site__lede">{{ page.intro }}</p>{% endif %}
-        {% if page.author %}
-            <p class="article__byline">By {{ page.author.name }}{% if page.author.role %}, {{ page.author.role }}{% endif %}</p>
-        {% endif %}
+        <p class="article__byline">
+            {% if page.author %}By {{ page.author.name }}{% if page.author.role %}, {{ page.author.role }}{% endif %} · {% endif %}<time datetime="{{ page.created_date|date:'c' }}">{{ page.created_date|date:"j F Y" }}</time>
+        </p>
         {% if page.hero_image %}
             {% image page.hero_image width-1440 class="article__hero" alt="" %}
         {% endif %}
         {% for block in page.body %}
             {% include_block block %}
         {% endfor %}
+        {% with images=page.gallery_images.all %}{% if images %}
+            <section class="article__gallery" aria-label="Gallery">
+                {% for item in images %}
+                    <figure class="article__figure">
+                        {% image item.image width-800 alt=item.caption %}
+                        {% if item.caption %}<figcaption>{{ item.caption }}</figcaption>{% endif %}
+                    </figure>
+                {% endfor %}
+            </section>
+        {% endif %}{% endwith %}
         {% with tags=page.tags.all %}{% if tags %}
             <ul class="article__tags" aria-label="Tags">{% for tag in tags %}<li>{{ tag.name }}</li>{% endfor %}</ul>
         {% endif %}{% endwith %}
+        {% include "content/includes/translations.html" %}
     </article>
 {% endblock %}

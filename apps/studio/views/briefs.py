@@ -1,4 +1,3 @@
-from django.conf import settings
 from django.contrib import messages
 from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect
@@ -55,7 +54,7 @@ class BriefWizardView(StudioPage):
         context.update(
             form=form,
             brief=self.brief,
-            rows=step_rows(content_type, settings.AI_PROFILES),
+            rows=step_rows(content_type),
             presets=_preset_payload(),
             type_help={
                 "seo_blog": "For sdsmanager.com",

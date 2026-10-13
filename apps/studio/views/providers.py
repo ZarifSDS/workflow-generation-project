@@ -1,21 +1,14 @@
-from django.conf import settings
 from django.contrib import messages
 from django.shortcuts import redirect
 
-from apps.ai import catalog
+from apps.ai import catalog, defaults
 from apps.ai.checks import check_text_providers
 from apps.ai.models import ProviderCheck
 from apps.ai.providers import get_providers
 
 from .. import permissions
+from ..pipeline import MODEL_TASKS, profile_for
 from .common import StudioPage
-
-PROFILE_USE = {
-    "quality": "Outline, draft, localise",
-    "fast": "Site crawl summary, research",
-    "edit": "Review and edit",
-    "image": "Hero image",
-}
 
 
 class ProvidersView(StudioPage):
@@ -45,15 +38,17 @@ class ProvidersView(StudioPage):
                 }
             )
         profiles = []
-        for name, config in settings.AI_PROFILES.items():
-            main = catalog.find(config["provider"], config["model"])
+        chosen = defaults.overrides()
+        for task in MODEL_TASKS:
+            config = profile_for(task.key)
+            main = catalog.find(config.get("provider"), config.get("model"))
             fallback = config.get("fallback") or {}
             backup = catalog.find(fallback.get("provider"), fallback.get("model")) if fallback else None
             profiles.append(
                 {
-                    "name": name.capitalize(),
-                    "use": PROFILE_USE.get(name, ""),
-                    "main": main.label if main else config["model"],
+                    "name": task.label,
+                    "use": "Set under Settings › Default models" if task.key in chosen else "Built-in",
+                    "main": main.label if main else (config.get("model") or "–"),
                     "fallback": backup.label if backup else (fallback.get("model") or "–"),
                 }
             )

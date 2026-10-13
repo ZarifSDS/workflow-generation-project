@@ -139,6 +139,14 @@ def register_provider_keys_menu():
     )
 
 
+@hooks.register("register_settings_menu_item")
+def register_task_defaults_menu():
+    """Settings › Default models: the default model and fallback per task. Superusers only."""
+    return SuperuserMenuItem(
+        "Default models", reverse("studio:task_defaults"), icon_name="cogs", name="ai-defaults", order=901
+    )
+
+
 @hooks.register("register_log_actions")
 def register_ai_log_actions(actions):
     """History entries for provider settings. They never contain a key, only its last characters."""
@@ -154,6 +162,12 @@ def register_ai_log_actions(actions):
     actions.register_action("ai.provider_deleted", "Delete AI provider", "Deleted the provider")
     actions.register_action("ai.model_added", "Add AI model", "Added the model")
     actions.register_action("ai.model_removed", "Remove AI model", "Removed the model")
+
+    def default_set(data):
+        return f"{data.get('task')}: {data.get('model')}, fallback {data.get('fallback')}"
+
+    actions.register_action("ai.default_set", "Set default model", default_set)
+    actions.register_action("ai.default_reset", "Reset default model", "Back to the built-in model")
 
 
 @hooks.register("insert_global_admin_css")

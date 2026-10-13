@@ -50,3 +50,36 @@ PIPELINES = {
 
 def steps_for(content_type):
     return [STEPS[key] for key in PIPELINES[content_type]]
+
+
+@dataclass(frozen=True)
+class ModelTask:
+    """A task with a default model, set under Settings › Default models (apps.ai.defaults)."""
+
+    key: str
+    label: str
+    profile: str  # built-in profile in settings.AI_PROFILES
+    kind: str = "text"
+    help: str = ""
+
+
+# Every step with a model, plus the two model calls inside the hero image step.
+MODEL_TASKS = [
+    *[ModelTask(s.key, s.label, s.profile, s.kind) for s in STEPS.values() if s.profile],
+    ModelTask("hero_prompt", "Hero image prompt", "fast", help="Writes the photo prompt for the hero image."),
+    ModelTask(
+        "vision",
+        "Hero image check",
+        "vision",
+        help="Looks at the generated photo. Needs a model that can read images, such as Gemini.",
+    ),
+]
+MODEL_TASK_KEYS = {task.key: task for task in MODEL_TASKS}
+
+
+def profile_for(task_key):
+    """The model settings for a step or sub-task: the admin's default, else the built-in profile."""
+    from apps.ai import defaults
+
+    task = MODEL_TASK_KEYS.get(task_key)
+    return defaults.resolve(task_key, task.profile if task else None) if task else {}

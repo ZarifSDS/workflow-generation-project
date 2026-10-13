@@ -4,9 +4,14 @@ Read this first in a new session. Then `docs/development.md` (code map, how-tos,
 
 ## Where we are
 
-**Everything is committed and pushed; CI is green at 12d43c6** (lint and tests, frontend, Docker build, secret scan). The dev stack is running (`docker compose up -d`, http://localhost:8000/admin/). No step is queued or running.
+**Uncommitted work on top of 12d43c6 (2026-10-14, tests 253 passed, ruff clean); waiting for the user's OK to commit.** Share mode is running, rebuilt with it (`--build`, 2 web + 2 worker). No step is queued or running.
 
-The user's direction: a fast, functional, visually better version of the current Wagtail CMS with better UX. No rebranding (the "Content Studio" logo/titles were reverted). The user asks before each commit and push.
+- **Company CMS page types** (`apps/content/models.py`, migration `content.0003_company_cms_page_types`): Root and Home offer exactly Article and News Page, Content category, Home page, Webinar, replicated field for field from cms.sdsmanager.com (Wagtail 6.3), checked live through Claude in Chrome: labels, help texts, locale/language lists in their order, Custom image width/height, FAQ section title, priority score = page ID + priority (shown in the help text), admin titles like "Article Title (en)" / "Webinar: Title (en)", webinar type/start/duration/capacity/topic, private Zoom link, YouTube, slides PDF ≤10 MB, host, learn points, agenda. Admin menu: Article, News, Content categories, Webinars, Author profiles. Deliberate differences are commented at the fields (intro textarea, go_live_at as the scheduled date, webinar time in TIME_ZONE not UTC, our Heading/Embed blocks kept).
+- **Settings › Default models** (superusers; `apps/ai/defaults.py`, `TaskDefault`, `apps/studio/views/task_defaults.py`): default model and fallback per task (each step with a model, plus hero prompt and hero vision check) over `AI_PROFILES`; used by new runs, the wizard and the executors (`pipeline.profile_for`).
+- Settings › AI providers already existed (a097fa2); the user didn't see it because share mode ran a stale image. Always `--build` share mode after code changes.
+- Not replicated (unknown models): "Content Library Posts", "Website rebuilds" (their webhook dispatch), webinar registrations/confirmation emails.
+
+The user's direction: a fast, functional, visually better version of the current Wagtail CMS with better UX. No rebranding (the "Content Studio" logo/titles were reverted). The Article and News Page (and the other three types) must replicate the company CMS 1:1, improved where we judge it better; inspect cms.sdsmanager.com/admin/ through Claude in Chrome (read only, never save there) instead of asking for screenshots. The user asks before each commit and push.
 
 **There is no planned next milestone.** Ask the user what to do; the open items are under **Start here** below. The most important one is still theirs: blind scores for the outline evaluation.
 

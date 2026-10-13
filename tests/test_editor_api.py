@@ -114,7 +114,7 @@ def test_references_return_previews_and_titles():
         .json()
     )
     assert data["images"][str(image.pk)]["description"] == "A"
-    assert data["pages"][str(page.pk)]["title"] == page.title
+    assert data["pages"][str(page.pk)]["title"] == page.get_admin_display_title()
     assert data["documents"][str(doc.pk)]["title"] == "MOC form"
     assert "999" not in data["images"]
 

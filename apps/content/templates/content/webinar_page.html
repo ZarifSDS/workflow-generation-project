@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% load wagtailcore_tags wagtailimages_tags wagtailembeds_tags %}
+
+{% block body_class %}template-webinarpage{% endblock %}
+
+{% block content %}
+    {# The Zoom join link is private: it never appears on the public page. #}
+    <article class="article" lang="{{ page.language|default:'en' }}">
+        <p class="site__eyebrow">Webinar{% if page.webinar_category %} · {{ page.webinar_category }}{% endif %}{% if page.is_upcoming %} · Upcoming{% elif page.webinar_type == "recorded" %} · On demand{% endif %}</p>
+        <h1>{{ page.title }}</h1>
+        {% if page.intro %}<p class="site__lede">{{ page.intro }}</p>{% endif %}
+        <p class="article__byline">
+            {% if page.start_at %}<time datetime="{{ page.start_at|date:'c' }}">{{ page.start_at|date:"l j F Y, H:i T" }}</time>{% endif %}
+            {% if page.duration_minutes %} · {{ page.duration_minutes }} minutes{% endif %}
+            {% if page.host %} · Hosted by {{ page.host.name }}{% if page.host.role %}, {{ page.host.role }}{% endif %}{% endif %}
+        </p>
+        {% if not page.is_upcoming and page.youtube_url %}
+            {% embed page.youtube_url %}
+        {% elif page.hero_image %}
+            {% image page.hero_image width-1440 class="article__hero" alt="" %}
+        {% endif %}
+        {% if page.slides_file %}<p><a class="site__button" href="{{ page.slides_file.url }}">Get slides</a></p>{% endif %}
+        {% for block in page.body %}
+            {% include_block block %}
+        {% endfor %}
+        {% if page.learn_points %}
+            <section aria-labelledby="learn-head">
+                <h2 id="learn-head">What you'll learn</h2>
+                <ul>{% for point in page.learn_points %}<li>{{ point.value }}</li>{% endfor %}</ul>
+            </section>
+        {% endif %}
+        {% if page.agenda %}
+            <section aria-labelledby="agenda-head">
+                <h2 id="agenda-head">{% if page.webinar_type == "recorded" %}Chapters{% else %}Agenda{% endif %}</h2>
+                <ol class="article__agenda">
+                    {% for item in page.agenda %}
+                        <li>{% if item.value.time %}<span class="article__agenda-time">{{ item.value.time }}</span> {% endif %}<strong>{{ item.value.title }}</strong>{% if item.value.description %}<br><span class="site__empty">{{ item.value.description }}</span>{% endif %}</li>
+                    {% endfor %}
+                </ol>
+            </section>
+        {% endif %}
+        {% include "content/includes/translations.html" %}
+    </article>
+{% endblock %}

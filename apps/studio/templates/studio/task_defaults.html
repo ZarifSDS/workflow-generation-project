@@ -1,0 +1,54 @@
+{% extends "wagtailadmin/generic/base.html" %}
+{% load studio_tags %}
+
+{% block main_content %}
+<form method="post" class="studio" novalidate>{% csrf_token %}
+    <p class="s-muted s-m0">Choose the model each task uses by default, and the model to try if it fails. New runs and the brief wizard start from these; each run can still pick its own model per step. "Built-in" keeps the studio's own choice. Only superusers see this page, and every change is recorded under Reports › Site history.</p>
+    <p class="s-muted s-m0">Need another model or provider? Add it under <a href="{% url 'studio:provider_keys' %}">Settings › AI providers</a>; it then appears in these lists.</p>
+
+    <div class="s-table-wrap">
+        <table class="s-table">
+            <thead><tr><th scope="col">Task</th><th scope="col">Default model</th><th scope="col">Fallback</th></tr></thead>
+            <tbody>
+            {% for r in rows %}
+                <tr>
+                    <th scope="row">
+                        {{ r.task.label }}
+                        {% if r.task.help %}<div class="s-muted s-keys__sub">{{ r.task.help }}</div>{% endif %}
+                        {% if r.row.updated_by %}<div class="s-muted s-keys__sub">Changed by {{ r.row.updated_by.get_username }}, {{ r.row.updated_at|date:"j M Y H:i" }}</div>{% endif %}
+                        {% for key, message in errors.items %}{% if key == r.task.key %}<p class="s-keys__error" role="alert">{{ message }}</p>{% endif %}{% endfor %}
+                    </th>
+                    <td>
+                        <select name="{{ r.task.key }}_model" aria-label="Default model for {{ r.task.label }}">
+                            <option value="">Built-in: {{ r.built_in }}</option>
+                            {% for group, items in r.groups %}
+                                <optgroup label="{{ group }}">
+                                    {% for item in items %}
+                                        <option value="{{ item.key }}" {% if not item.selectable %}disabled{% endif %} {% if item.key == r.model %}selected{% endif %}>{{ item.label }}{% if item.typical_seconds %} · {{ item.typical_seconds|duration }}{% endif %}{% if item.reason %} · {{ item.reason }}{% endif %}</option>
+                                    {% endfor %}
+                                </optgroup>
+                            {% endfor %}
+                        </select>
+                    </td>
+                    <td>
+                        <select name="{{ r.task.key }}_fallback" aria-label="Fallback model for {{ r.task.label }}">
+                            <option value="">Built-in: {{ r.built_in_fallback }}</option>
+                            {% for group, items in r.groups %}
+                                <optgroup label="{{ group }}">
+                                    {% for item in items %}
+                                        <option value="{{ item.key }}" {% if not item.selectable %}disabled{% endif %} {% if item.key == r.fallback %}selected{% endif %}>{{ item.label }}{% if item.reason %} · {{ item.reason }}{% endif %}</option>
+                                    {% endfor %}
+                                </optgroup>
+                            {% endfor %}
+                        </select>
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <div class="s-row-actions">
+        <button class="button" type="submit">Save defaults</button>
+    </div>
+</form>
+{% endblock %}

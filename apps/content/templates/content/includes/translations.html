@@ -1,0 +1,8 @@
+{% load wagtailcore_tags %}
+{% if page.english_page and page.english_page.live or translations %}
+    <nav class="article__languages" aria-label="Other languages">
+        <span>Also in:</span>
+        {% if page.english_page and page.english_page.live %}<a href="{% pageurl page.english_page %}" hreflang="en" lang="en">English</a>{% endif %}
+        {% for other in translations %}<a href="{% pageurl other %}" hreflang="{{ other.language }}" lang="{{ other.language }}">{{ other.get_language_display }}{% if other.region %} ({{ other.region }}){% endif %}</a>{% endfor %}
+    </nav>
+{% endif %}

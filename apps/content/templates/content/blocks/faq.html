@@ -1,5 +1,6 @@
 {% load wagtailcore_tags %}
-<section class="article__faq" aria-label="Frequently asked questions">
+<section class="article__faq" aria-label="{{ value.title|default:'Frequently asked questions' }}">
+    {% if value.title %}<h2>{{ value.title }}</h2>{% endif %}
     {% for item in value.items %}
         <h3>{{ item.question }}</h3>
         {{ item.answer|richtext }}

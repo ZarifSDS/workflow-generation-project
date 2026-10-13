@@ -19,6 +19,7 @@ from apps.quality import scripts as quality_scripts
 
 from . import prompting, textclean, webfetch
 from .models import MetadataOption, StepVersion
+from .pipeline import profile_for
 
 MAX_TOKENS = {
     "site_crawl": 4000,
@@ -47,7 +48,8 @@ class StepOutput:
 
 
 def _profile(step):
-    return settings.AI_PROFILES.get(step.definition.profile or "", {})
+    """The step's default model settings (Settings › Default models, else settings.AI_PROFILES)."""
+    return profile_for(step.key)
 
 
 def _target(step):
@@ -66,10 +68,11 @@ def _target(step):
     return provider, model, options
 
 
-def _call_text(step, messages, max_tokens=None, use_profile=None):
-    """Generate with the step's model; on failure use the profile's fallback model once."""
-    if use_profile:
-        profile = settings.AI_PROFILES.get(use_profile, {})
+def _call_text(step, messages, max_tokens=None, task=None):
+    """Generate with the step's model, or a sub-task's default model (`task`, e.g. "vision");
+    on failure use the fallback model once."""
+    if task:
+        profile = profile_for(task)
         provider, model, options = profile["provider"], profile["model"], dict(profile.get("options", {}))
     else:
         profile = _profile(step)
@@ -284,7 +287,7 @@ def _look_at_photo(step, data, context):
         {"type": "image_url", "image_url": {"url": _vision_image(data)}},
     ]
     try:
-        result = _call_text(step, messages, max_tokens=2000, use_profile="vision")
+        result = _call_text(step, messages, max_tokens=2000, task="vision")
     except ProviderError as error:
         return None, f"The vision check failed ({error.kind}): {str(error)[:200]}"
     vision = _parse_vision(result.text)
@@ -406,7 +409,7 @@ def hero_image(step):
     else:
         if headline_override:
             context["regenerate_block"] = ""
-        prompt_result = _call_text(step, prompting.render("hero_prompt", context), use_profile="fast")
+        prompt_result = _call_text(step, prompting.render("hero_prompt", context), task="hero_prompt")
         image_prompt = " ".join(prompt_result.text.split())[:1500]
         _require(image_prompt, "The model returned an empty image prompt. Retry, or choose another model.")
 

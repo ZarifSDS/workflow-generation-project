@@ -7,13 +7,14 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.ai import catalog
+from apps.ai import defaults as ai_defaults
 from apps.ai.evaluation import metrics as text_metrics
 from apps.content.markup import strip_dialect
 from apps.quality import review as quality_review
 from apps.quality import scans as quality_scans
 
 from .models import VERSIONS_TO_KEEP, GenerationRun, MetadataOption, StepRun, StepVersion
-from .pipeline import steps_for
+from .pipeline import profile_for, steps_for
 
 logger = logging.getLogger(__name__)
 
@@ -28,12 +29,9 @@ def enqueue(step):
     transaction.on_commit(lambda: run_step.enqueue(step_id))
 
 
-def default_model_for(step_def, profiles):
-    """'provider::model' key for a step's default, from the AI profiles setting."""
-    profile = profiles.get(step_def.profile or "") or {}
-    if profile.get("provider") and profile.get("model"):
-        return f"{profile['provider']}::{profile['model']}"
-    return ""
+def default_model_for(step_def):
+    """'provider::model' key for a step's default (Settings › Default models, else the AI profiles)."""
+    return ai_defaults.model_key(profile_for(step_def.key))
 
 
 @transaction.atomic
@@ -45,7 +43,7 @@ def create_run(brief, step_config, user=None):
     for order, step_def in enumerate(steps_for(brief.content_type)):
         config = step_config.get(step_def.key, {})
         enabled = config.get("enabled", step_def.default_on) if step_def.optional else True
-        model_key = config.get("model") or default_model_for(step_def, settings.AI_PROFILES)
+        model_key = config.get("model") or default_model_for(step_def)
         provider, _, model = model_key.partition("::")
         status = StepRun.Status.SKIPPED
         if enabled:

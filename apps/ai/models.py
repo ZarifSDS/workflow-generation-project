@@ -70,3 +70,22 @@ class AddedModel(models.Model):
 
     def __str__(self):
         return f"{self.label} ({self.provider})"
+
+
+class TaskDefault(models.Model):
+    """The default model (and fallback) an admin chose for one task under Settings › Default models.
+
+    It takes the place of the task's profile in settings.AI_PROFILES (apps.ai.defaults). An empty key keeps
+    the built-in choice. Values are "provider::model", as in the wizard's dropdowns.
+    """
+
+    task = models.SlugField(max_length=30, unique=True)
+    model_key = models.CharField(max_length=240, blank=True)
+    fallback_key = models.CharField(max_length=240, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+
+    def __str__(self):
+        return f"{self.task}: {self.model_key or 'built-in'}"

@@ -5,7 +5,7 @@ from django import forms
 from apps.ai import catalog
 
 from .models import BriefPreset, ContentBrief, ContentType
-from .pipeline import STEPS, steps_for
+from .pipeline import STEPS, profile_for, steps_for
 
 
 class BriefForm(forms.ModelForm):
@@ -96,15 +96,13 @@ def preset_from_brief(name, brief_data, step_config):
     return preset
 
 
-def step_rows(content_type, profiles, preset=None, existing=None):
+def step_rows(content_type, preset=None, existing=None):
     """Rows for the wizard's pipeline table across all content types (JS shows the right ones)."""
     rows = []
     for key, step_def in STEPS.items():
         types = [t for t in ContentType.values if key in [s.key for s in steps_for(t)]]
-        default = ""
-        profile = profiles.get(step_def.profile or "") or {}
-        if profile.get("provider"):
-            default = f"{profile['provider']}::{profile['model']}"
+        profile = profile_for(key) if step_def.profile else {}
+        default = f"{profile['provider']}::{profile['model']}" if profile.get("provider") else ""
         if preset and preset.step_models.get(key):
             default = preset.step_models[key]
         rows.append(

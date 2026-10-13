@@ -4,12 +4,19 @@
 {% block body_class %}template-articleindexpage{% endblock %}
 
 {% block content %}
-    <h1>{{ page.title }}</h1>
-    <ul>
-        {% for article in articles %}
-            <li><a href="{% pageurl article %}">{{ article.title }}</a>{% if article.search_description %}<br>{{ article.search_description }}{% endif %}</li>
-        {% empty %}
-            <li>No published articles yet.</li>
-        {% endfor %}
-    </ul>
+    <main>
+        <h1>{{ page.title }}</h1>
+        {% if page.intro %}<p class="site__lede">{{ page.intro }}</p>{% endif %}
+        <ul class="article-list">
+            {% for article in articles %}
+                <li>
+                    <a href="{% pageurl article %}">{{ article.title }}</a>
+                    {% if article.starts_at %}<span class="site__eyebrow"> · Webinar, {{ article.starts_at|date:"j F Y, H:i" }}</span>{% endif %}
+                    {% if article.intro %}<p>{{ article.intro }}</p>{% elif article.search_description %}<p>{{ article.search_description }}</p>{% endif %}
+                </li>
+            {% empty %}
+                <li class="site__empty">Nothing is published here yet.</li>
+            {% endfor %}
+        </ul>
+    </main>
 {% endblock %}

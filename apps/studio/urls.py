@@ -15,6 +15,7 @@ from .views.provider_keys import (
 )
 from .views.providers import ProvidersView
 from .views.runs import RunListView, RunWorkspaceView, VersionCompareView, run_export, run_status
+from .views.task_defaults import TaskDefaultsView
 
 app_name = "studio"
 
@@ -40,6 +41,7 @@ urlpatterns = [
     path("editor/embed/", editor_api.embed_preview, name="editor_embed"),
     # Settings › AI providers (superusers): keys, added providers and models (ADR 0008)
     path("ai-providers/", ProviderKeysView.as_view(), name="provider_keys"),
+    path("ai-defaults/", TaskDefaultsView.as_view(), name="task_defaults"),
     path("ai-providers/add/", AddedProviderView.as_view(), name="provider_add"),
     path("ai-providers/models/add/", AddedModelView.as_view(), name="provider_model_add"),
     path("ai-providers/models/<int:pk>/remove/", DeleteModelView.as_view(), name="provider_model_remove"),
