@@ -33,7 +33,10 @@ def clear_stored_cache():
 
 def _stored_values():
     """Keys stored through the admin (ADR 0008), decrypted. Never raises: redaction must always work."""
-    if getattr(_busy, "active", False):  # a log line written while we read the database
+    from django.apps import apps
+
+    # A log line written while we read the database, or during startup (apps log in ready()).
+    if getattr(_busy, "active", False) or not apps.ready:
         return _stored["values"]
     if time.monotonic() - _stored["at"] < STORED_TTL:
         return _stored["values"]

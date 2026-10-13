@@ -257,3 +257,34 @@ details.is-editing > summary { display: none; }
 .se-slash__empty { margin: 0; padding: 0.4rem 0.6rem; font-size: 0.85rem; color: var(--w-color-text-meta, #5c5c5c); }
 .se-notice { color: var(--se-text, inherit); font-weight: 600; }
 .se-notice:empty, .se-status:empty { display: none; }
+
+/* Phase 6: link target tooltip, keyboard shortcut list */
+.se-linktip {
+  position: fixed;
+  z-index: 40;
+  max-width: min(28rem, calc(100vw - 1rem));
+  padding: 0.3rem 0.6rem;
+  border-radius: 0.35rem;
+  background: var(--w-color-surface-tooltip, #262626);
+  color: var(--w-color-text-button, #fff);
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+}
+.se-keys { display: grid; gap: 0.4rem; }
+.se-keys + .se-keys { margin-top: 0.4rem; }
+.se-keys__title { margin: 0; font-size: 0.9rem; }
+.se-keys__list { display: grid; grid-template-columns: max-content 1fr; gap: 0.35rem 1rem; margin: 0; font-size: 0.85rem; }
+.se-keys__list dt { white-space: nowrap; }
+.se-keys__list dd { margin: 0; color: var(--w-color-text-meta, #5c5c5c); }
+.se-keys kbd {
+  display: inline-block;
+  min-width: 1.4em;
+  padding: 0 0.35rem;
+  border: 1px solid var(--w-color-border-furniture, #d4d4d4);
+  border-bottom-width: 2px;
+  border-radius: 0.3rem;
+  font: 600 0.75rem/1.6 ui-monospace, "Cascadia Mono", Consolas, monospace;
+  text-align: center;
+}
+@media (max-width: 30em) { .se-keys__list { grid-template-columns: 1fr; } .se-keys__list dd { margin-bottom: 0.3rem; } }

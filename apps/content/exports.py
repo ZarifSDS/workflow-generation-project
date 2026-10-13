@@ -71,7 +71,7 @@ def article_content(run, variant="final"):
     return ArticleContent(
         text=version.content,
         hero=hero_version.image if hero_version else None,
-        region=region,
+        region=str(region),  # a plain str: a TextChoices member can't be written to YAML front matter
         variant=variant,
     )
 

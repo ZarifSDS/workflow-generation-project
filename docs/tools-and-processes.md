@@ -14,8 +14,8 @@ Everything we use to produce content with the Content Workflow Studio, and how t
 
 | Tool | What it's for |
 |---|---|
-| **Content Workflow Studio** | Runs the content pipeline (brief → research → outline → draft → review and edit → cleanup → hero → localise → publish) with an approval gate after each step. Lives in the Wagtail admin under **Content Studio** |
-| **Wagtail 8 (Django 6.1)** | The admin, page tree, image library, revisions and the **Moderators approval** workflow that publishes articles |
+| **Content Workflow Studio** | Runs the content pipeline (brief → research → outline → draft → review and edit → cleanup → hero → localise → publish) with an approval gate after each step, a visual editor for every step's text and a version compare. Lives in the Wagtail admin under **Content Studio** |
+| **Wagtail 8 (Django 6.1)** | The admin, page tree, image and document library (and its choosers, used by the editor), revisions and the **Moderators approval** workflow that publishes articles |
 | **Postgres 17** | All content, run history and the background task queue |
 | **Docker Desktop** | Runs the web, worker, database and migrate containers on the Windows host |
 | **Caddy** and **ngrok** | Share mode: Caddy serves images and balances web containers; ngrok publishes it over HTTPS ([deployment.md](deployment.md)) |
@@ -33,7 +33,9 @@ The studio automates the workflow these skills define. Their deterministic scrip
 | `clean-user-facing-text` | Hidden-Unicode removal before publishing | `clean_text.py`, `inspect_text.py` |
 | `sds-hero-stock` | SDS Manager hero images in the house style | `reframe.py`, `check_photo.py`, `hero_compose.py`, `overlay.py` |
 
-### AI models and providers (all free)
+### AI models and providers
+
+Free tiers and local models by default. A superuser can add paid providers such as OpenRouter, their models and keys under **Settings › AI providers** ([security.md](security.md#provider-keys)).
 
 | Provider | Role | Default use |
 |---|---|---|
@@ -73,6 +75,8 @@ Defaults are **interim** until the blind model evaluation is scored ([model-eval
 | Publish | Editor | Page draft created in moderation; check warnings; download exports if needed | Publish step approved |
 | Moderation | Moderator | Final review in Wagtail; approving publishes the page | Page live |
 
+Each step's text can be edited visually (links to pages and documents, library images with alt text, videos, FAQ blocks) and saved as a new version; **Compare** shows what changed ([user-guide.md](user-guide.md#editing-text)).
+
 Rules that apply throughout: you approve every step; no confidential material in briefs; resolve every `[VERIFY]` before publishing; safety-photo contradictions are fixed, not accepted.
 
 ### 2. Choosing models
@@ -104,10 +108,11 @@ Every working session (person or AI agent) ends by updating [HANDOFF.md](HANDOFF
 
 | Role | Wagtail group | Responsibilities |
 |---|---|---|
-| Writer | Writers | Briefs, research checks, outlines, drafts, metadata choices |
+| Writer | Writers | Briefs, research checks, outlines, drafts, metadata choices; adds and chooses images and documents in the editor |
 | Editor | Editors | Everything writers do, plus review and edit, hero approval, publish step, exports |
 | Moderator | Moderators | Final approval in Wagtail's workflow; the only role that puts pages live |
-| Operator | Operators | Stack, keys, providers, presets, backups, updates, stuck steps |
+| Operator | Operators | Stack, providers, presets, backups, updates, stuck steps |
+| Admin | Superuser | Everything, including AI provider keys (Settings › AI providers) |
 | Developer / AI agent | (superuser in dev) | Code, tests, docs, CI, handoff |
 
 The studio enforces these groups on every screen and action ([security.md](security.md#accounts-and-roles)). One person can be in several groups.

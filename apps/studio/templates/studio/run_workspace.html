@@ -34,19 +34,19 @@
             </ol>
         </nav>
 
-        <div style="display:grid;grid-template-rows:1fr auto;min-width:0">
+        <div class="s-main">
             <article class="s-doc" aria-labelledby="step-head">
                 {% if step %}
-                    <h2 id="step-head" style="margin:0">{{ step.label }}</h2>
+                    <h2 class="s-m0" id="step-head">{{ step.label }}</h2>
                     {% if version and step.status != "running" %}
-                        <p class="s-muted" style="margin:0">Version {{ version.number }} · {{ version.get_source_display }}{% if version.model %} · {% model_label version.provider version.model %}{% endif %} · {{ version.created_at|date:"j M H:i" }}</p>
-                        {% if version.image %}<img src="{{ version.image.file.url }}" alt="Generated hero image for {{ brief.topic }}" style="max-width:100%;border-radius:.4rem">{% endif %}
+                        <p class="s-muted s-m0">Version {{ version.number }} · {{ version.get_source_display }}{% if version.model %} · {% model_label version.provider version.model %}{% endif %} · {{ version.created_at|date:"j M H:i" }}</p>
+                        {% if version.image %}<img class="s-image" src="{{ version.image.file.url }}" alt="Generated hero image for {{ brief.topic }}">{% endif %}
                         {% if article_page %}
                             <section class="s-box" aria-labelledby="page-head">
                                 <h3 class="s-section" id="page-head">Article page</h3>
                                 <div class="s-kv"><span>{{ article_page.title }}</span><span class="s-tag s-tag--{% if article_page.live %}ok">Live{% else %}info">Draft{% endif %}</span></div>
                                 {% with state=article_page.current_workflow_state %}{% if state %}<div class="s-kv"><span>Moderation</span><span class="s-mono">{{ state.workflow.name }}: {{ state.get_status_display }}</span></div>{% endif %}{% endwith %}
-                                <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+                                <div class="s-cluster">
                                     <a class="button button-small button-secondary" href="{% url 'wagtailadmin_pages:edit' article_page.pk %}">Open in the page editor</a>
                                     <a class="button button-small button-secondary" href="{% url 'wagtailadmin_pages:view_draft' article_page.pk %}" target="_blank" rel="noopener">View draft</a>
                                 </div>
@@ -55,7 +55,7 @@
                         {% if exports %}
                             <section class="s-box" aria-labelledby="exports-head">
                                 <h3 class="s-section" id="exports-head">Export</h3>
-                                <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+                                <div class="s-cluster">
                                     {% for url, label in exports %}<a class="button button-small button-secondary" href="{{ url }}" download>{{ label }}</a>{% endfor %}
                                 </div>
                             </section>
@@ -81,15 +81,15 @@
                                     </div>
                                 {% endif %}
                                 {% if review.proposals %}
-                                    <form method="post" style="display:grid;gap:.6rem">{% csrf_token %}
+                                    <form class="s-stack" method="post">{% csrf_token %}
                                         <input type="hidden" name="step" value="{{ step.key }}">
-                                        <p style="margin:0"><strong>Proposed splits</strong> <span class="s-muted">Each lowers its section by at least one grade. Tick the ones to apply.</span></p>
+                                        <p class="s-m0"><strong>Proposed splits</strong> <span class="s-muted">Each lowers its section by at least one grade. Tick the ones to apply.</span></p>
                                         {% for p in review.proposals %}
                                             <label class="s-split">
                                                 <input type="checkbox" name="split" value="{{ p.id }}" {% if not can_review %}disabled{% endif %}>
                                                 <span>
-                                                    <span class="s-muted" style="font-size:.78rem">{{ p.section }} · grade {{ p.before }} → {{ p.after }}</span>
-                                                    <span class="s-diff" style="display:block;margin-top:.25rem"><span class="del" style="display:block">− {{ p.original }}</span><span class="add" style="display:block">+ {{ p.split }}</span></span>
+                                                    <span class="s-muted s-small">{{ p.section }} · grade {{ p.before }} → {{ p.after }}</span>
+                                                    <span class="s-diff s-block s-mt-xs"><span class="del s-block">− {{ p.original }}</span><span class="add s-block">+ {{ p.split }}</span></span>
                                                 </span>
                                             </label>
                                         {% endfor %}
@@ -124,9 +124,9 @@
                         </div>
                         {% if user_can_recover %}
                             <details class="s-disclosure"><summary>The worker stopped and this step is stuck?</summary>
-                                <form method="post" style="display:grid;gap:.5rem;margin-top:.5rem">{% csrf_token %}
+                                <form class="s-stack s-stack--top" method="post">{% csrf_token %}
                                     <input type="hidden" name="step" value="{{ step.key }}">
-                                    <p class="s-muted" style="margin:0">Marks the step as failed so it can be retried. Only do this if the worker was restarted or the step has run far longer than usual; a step that is still running finishes on its own.</p>
+                                    <p class="s-muted s-m0">Marks the step as failed so it can be retried. Only do this if the worker was restarted or the step has run far longer than usual; a step that is still running finishes on its own.</p>
                                     <div><button class="button button-small button-secondary" type="submit" name="action" value="recover">Mark as failed</button></div>
                                 </form>
                             </details>
@@ -140,7 +140,7 @@
                         <p class="s-muted">This step is switched off for this run.</p>
                     {% elif step.status == "failed" %}
                         <div class="s-callout" role="alert"><strong>This step failed.</strong> {{ step.error|default:"No details were recorded." }}
-                            {% if user_can_retry %}<form method="post" style="margin-top:.6rem">{% csrf_token %}<input type="hidden" name="step" value="{{ step.key }}"><button class="button button-small" type="submit" name="action" value="retry">Retry with the same model</button>{% if user_can_act %} <span class="s-muted">or choose another model on the right.</span>{% endif %}</form>{% endif %}
+                            {% if user_can_retry %}<form class="s-stack--top" method="post">{% csrf_token %}<input type="hidden" name="step" value="{{ step.key }}"><button class="button button-small" type="submit" name="action" value="retry">Retry with the same model</button>{% if user_can_act %} <span class="s-muted">or choose another model on the right.</span>{% endif %}</form>{% endif %}
                         </div>
                     {% endif %}
                     {% if version and version.note %}
@@ -155,9 +155,9 @@
                 <div class="s-actionbar">
                     <form method="post">{% csrf_token %}<input type="hidden" name="step" value="{{ step.key }}">{% if version %}<input type="hidden" name="base_version" value="{{ version.number }}">{% endif %}<button class="button" type="submit" name="action" value="approve">Approve {{ step.label|lower }}</button></form>
                     {% if can_edit %}<button class="button button-secondary" type="button" data-editor-open hidden>Edit</button>{% endif %}
-                    <details class="s-disclosure" style="flex:1 1 100%">
+                    <details class="s-disclosure s-full">
                         <summary>Reject this run</summary>
-                        <form method="post" style="display:grid;gap:.5rem;margin-top:.5rem">{% csrf_token %}
+                        <form class="s-stack s-stack--top" method="post">{% csrf_token %}
                             <input type="hidden" name="step" value="{{ step.key }}">
                             <label for="reject-reason">Why are you rejecting it?</label>
                             <textarea id="reject-reason" name="reason" rows="2" required></textarea>
@@ -181,7 +181,7 @@
                     {% if hero.check %}<div class="s-kv"><span title="check_photo.py: fade strip and calm left side">Photo check</span><span class="s-tag s-tag--{% if hero.check.ok %}ok">Pass{% else %}warn">Close miss{% endif %}</span></div>{% endif %}
                     {% if hero.subject_left %}<div class="s-kv"><span>Subject starts at</span><span class="s-mono">{% widthratio hero.subject_left 1 100 %}% (target 62%)</span></div>{% endif %}
                     <div class="s-kv"><span>Problems to check</span><span class="s-tag s-tag--{% if hero.flags %}warn">{{ hero.flags|length }}{% else %}ok">None{% endif %}</span></div>
-                    {% if hero.photo %}<p class="s-muted" style="margin:0;font-size:.78rem"><a href="{{ hero.photo.file.url }}">Unbranded photo</a></p>{% endif %}
+                    {% if hero.photo %}<p class="s-muted s-m0 s-small"><a href="{{ hero.photo.file.url }}">Unbranded photo</a></p>{% endif %}
                 </section>
             {% endif %}
             {% if checks %}
@@ -197,7 +197,7 @@
                     {% if checks.spelling %}<div class="s-kv"><span>Wrong spelling variant</span><span class="s-tag s-tag--warn">{{ checks.spelling|length }}</span></div>{% endif %}
                     {% if checks.fkgl is not None %}<div class="s-kv"><span>Grade overall</span><span class="s-mono">{{ checks.fkgl }} (target {{ checks.target }})</span></div>{% endif %}
                     {% if checks.sections %}
-                        <div class="s-muted" style="font-size:.78rem">Grade by section</div>
+                        <div class="s-muted s-small">Grade by section</div>
                         {% for section in checks.sections %}
                             <div class="s-grade" title="{{ section.heading }}: FKGL {{ section.fkgl }}">
                                 <span class="s-grade__label">{{ section.heading }}</span>
@@ -218,14 +218,14 @@
                     <div class="s-kv"><span>Repeated sentence frames</span><span class="s-mono">{{ quality.frames_over_threshold|default:0 }}</span></div>
                     {% if quality.sweep_blocking is not None %}<div class="s-kv"><span>Mechanical sweep blockers</span><span class="s-tag s-tag--{% if quality.sweep_blocking %}warn{% else %}ok{% endif %}">{{ quality.sweep_blocking }}</span></div>{% endif %}
                     {% if quality.hidden_characters %}<div class="s-kv"><span>Hidden characters</span><span class="s-tag s-tag--warn">{{ quality.hidden_characters }}</span></div>{% endif %}
-                    {% if quality.sentence_len_band %}<p class="s-muted" style="margin:0;font-size:.78rem">Sentence rhythm: {{ quality.sentence_len_band }}</p>{% endif %}
+                    {% if quality.sentence_len_band %}<p class="s-muted s-m0 s-small">Sentence rhythm: {{ quality.sentence_len_band }}</p>{% endif %}
                 </section>
             {% endif %}
 
             {% if can_review and not step.definition.profile %}
                 <section class="s-box" aria-labelledby="rerun-head">
                     <h3 class="s-section" id="rerun-head">Run again</h3>
-                    <p class="s-muted" style="margin:0;font-size:.85rem">{% if step.key == "publish" %}Changed the title, meta description or an earlier step? Run Publish again to update the same page.{% else %}Runs this step again on the current approved input.{% endif %}</p>
+                    <p class="s-muted s-m0 s-small">{% if step.key == "publish" %}Changed the title, meta description or an earlier step? Run Publish again to update the same page.{% else %}Runs this step again on the current approved input.{% endif %}</p>
                     <form method="post">{% csrf_token %}
                         <input type="hidden" name="step" value="{{ step.key }}">
                         <button class="button button-secondary button-small" type="submit" name="action" value="rerun">Run {{ step.label|lower }} again</button>
@@ -235,8 +235,8 @@
             {% if model_groups and run.status != "rejected" and user_can_act %}
                 <section class="s-box" aria-labelledby="model-head">
                     <h3 class="s-section" id="model-head">Model</h3>
-                    <p class="s-muted" style="margin:0">Now: {% model_label step.provider step.model %}</p>
-                    <form method="post" style="display:grid;gap:.5rem">{% csrf_token %}
+                    <p class="s-muted s-m0">Now: {% model_label step.provider step.model %}</p>
+                    <form class="s-stack" method="post">{% csrf_token %}
                         <input type="hidden" name="step" value="{{ step.key }}">
                         <label for="regen-model">Regenerate with</label>
                         <select id="regen-model" name="model">
@@ -248,7 +248,7 @@
                         </select>
                         <label for="regen-note">Note for the model (optional)</label>
                         <textarea id="regen-note" name="note" rows="2" {% if hero %}aria-describedby="regen-note-help" placeholder="e.g. people wearing nitrile gloves"{% else %}placeholder="e.g. add a section on state plans"{% endif %}></textarea>
-                        {% if hero %}<p class="s-muted" id="regen-note-help" style="margin:0;font-size:.78rem">Start the note with <code>Headline:</code> to change only the headline, e.g. <code>Headline: **SDS Retention:** | How Long to Keep Them</code>. The same photo is reused.</p>{% endif %}
+                        {% if hero %}<p class="s-muted s-m0 s-small" id="regen-note-help">Start the note with <code>Headline:</code> to change only the headline, e.g. <code>Headline: **SDS Retention:** | How Long to Keep Them</code>. The same photo is reused.</p>{% endif %}
                         <div><button class="button button-secondary" type="submit" name="action" value="regenerate">Regenerate</button></div>
                     </form>
                 </section>
@@ -263,7 +263,7 @@
                             {% if v.number == version.number %}<span class="s-tag s-tag--info">Current</span>{% else %}<a class="button button-small button-secondary" href="{% url 'studio:compare' run.pk step.key v.number version.number %}">Compare</a>{% endif %}
                         </div>
                     {% endfor %}
-                    <p class="s-muted" style="margin:0;font-size:.75rem">Keeps the first draft and the last three versions.</p>
+                    <p class="s-muted s-m0 s-small">Keeps the first draft and the last three versions.</p>
                 </section>
             {% endif %}
         </aside>

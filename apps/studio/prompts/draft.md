@@ -21,13 +21,17 @@ Approved outline:
 
 {{outline}}
 {{regenerate_block}}
-If the outline has an FAQ section, write it in this form (one `###` question per item, then its answer):
+If the outline has an FAQ section, give it the heading `## Frequently Asked Questions` and write three to seven questions in this form (one `###` question per item, a blank line, then its answer):
+
+## Frequently Asked Questions
 
 :::faq
 ### The question a reader would ask?
 
-The answer, in one or two short paragraphs.
+The answer's first sentence answers directly and repeats the question's wording; two or three sentences.
 :::
+
+Answer yes/no questions by making the question's subject the subject of your sentence, not with a bare "Yes," or "No,". FAQ answers stand on their own and contain no links.
 
 Write the article first. Then, after it, add this section exactly:
 

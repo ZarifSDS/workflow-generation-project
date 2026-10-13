@@ -82,3 +82,17 @@ describe("upload checks", () => {
     expect(checkImageFile(file("big.png", 11 * 1024 * 1024), api)).toContain("up to 10 MB");
   });
 });
+
+describe("link descriptions (phase 6 tooltip)", () => {
+  test("names pages, documents and headings", async () => {
+    const { describeLink } = await import("../src/linkinfo.js");
+    const refs = { pages: { 3: { title: "SDS page" } }, documents: {} };
+    const editor = load("## What counts {#what-counts}\n\nText");
+    expect(describeLink("wagtail://page?id=3", refs, editor.state.doc)).toBe("Page: SDS page");
+    expect(describeLink("wagtail://document?id=7", refs, editor.state.doc)).toBe("Document 7");
+    expect(describeLink("#what-counts", refs, editor.state.doc)).toBe("Heading: What counts");
+    expect(describeLink("#gone", refs, editor.state.doc)).toBe("#gone (no heading with this id)");
+    expect(describeLink("mailto:a@b.co", refs, editor.state.doc)).toBe("Email: a@b.co");
+    expect(describeLink("https://osha.gov", refs, editor.state.doc)).toBe("https://osha.gov");
+  });
+});

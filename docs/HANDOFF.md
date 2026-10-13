@@ -1,4 +1,4 @@
-# Handoff: Content Workflow Studio (state on 2026-10-13: M8 built, M9 UI/UX overhaul phases 1-5 done, provider keys in the admin)
+# Handoff: Content Workflow Studio (state on 2026-10-13: M8 built, M9 UI/UX overhaul complete, provider keys in the admin)
 
 Read this first in a new session. Then `docs/development.md` (code map, how-tos, process) and `docs/tools-and-processes.md`. Also see `docs/roadmap.md`, `docs/workflow.md`, `docs/ux.md`,
 `docs/providers.md`, `docs/model-eval.md` and `AGENTS.md`.
@@ -20,7 +20,9 @@ The user's direction: a fast, functional, visually better version of the current
 ## Latest session (2026-10-14)
 
 - **Provider keys in the admin** (user request; ADR 0008): Settings › AI providers, superusers only. Keys are encrypted with `STUDIO_SECRETS_KEY` (in `.env`, generated on 2026-10-14; back up `.env` separately), write-only, shown as `••••` + last four, and override `.env`. Add OpenAI-compatible providers (OpenRouter) and their models (paid ones are selectable once added), remove keys/providers/models after a confirmation page, every change in Reports › Site history. Rotation: `manage.py rotate_provider_keys`. Docs: `docs/security.md` › Provider keys.
-- **Phase 5 built**: Wagtail choosers for page/document links and library images, upload by button, drag or paste (alt text required), YouTube/Vimeo embeds, `/` menu. Details: `docs/ui-ux-plan.md` › Phase 5. **Next: phase 6.**
+- **Phase 5 built**: Wagtail choosers for page/document links and library images, upload by button, drag or paste (alt text required), YouTube/Vimeo embeds, `/` menu. Details: `docs/ui-ux-plan.md` › Phase 5.
+- Committed and pushed: a097fa2 (keys), bdf7c79 (phase 5).
+- **Phase 6 built (M9 complete)**: word-level and rendered Compare, link tooltips and a shortcut list in the editor, studio templates without inline styles, public article styles for figures/embeds/FAQ/tags, the draft prompt's FAQ follows the skill, docs. An end-to-end check through Publish passed. **Next: whatever the user picks from Start here** (model evaluation scores are still pending).
 
 ## Restarting after the PC was off
 

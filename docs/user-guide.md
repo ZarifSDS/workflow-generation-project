@@ -86,7 +86,7 @@ Steps run in the background. A local model can take 20 minutes on a draft; the p
 | **Reject run** | Stops the run and records your reason |
 | **Retry** | On a failed step: runs it again with the same model |
 | **Run again** | On Final cleanup and Publish (they have no model): runs the step again |
-| **Compare** | Shows two versions of a step side by side |
+| **Compare** | Shows what changed between two versions, word by word or as it will look (see below) |
 
 ### Editing text
 
@@ -101,6 +101,13 @@ Steps run in the background. A local model can take 20 minutes on a draft; the p
 - The text is only rewritten if you change something in the visual editor, so opening it and saving without changes doesn't touch the formatting.
 - **Your edit is kept in this browser** while you type. If the page closes before you save, you're offered **Restore my edit** next time you open the step. If someone else saved a newer version in the meantime, saving is refused with a message, so you don't overwrite their work; restore your edit and compare before saving it again.
 - **Cancel** discards your changes (after asking).
+
+- **Hover a link** (or move the cursor into it) to see where it goes: the page or document title, the heading, or the address.
+- **Keyboard shortcuts**: the keyboard button in the toolbar, or Ctrl+/ in the text, lists them.
+
+### Comparing versions
+
+**Compare** (in the Versions panel) shows two versions of a step. **Text** marks changed words inside a line (added underlined on green, removed struck through on red), folds long unchanged stretches, and counts added and removed words; a line that was rewritten completely shows as removed, then added. **As it will look** shows the newer version rendered, with added, removed and changed paragraphs marked; open **Before** under a changed one to see the old wording.
 
 Each step keeps its first version and the last three. Failed steps say why in plain language (free limit reached, provider not reachable, key missing) and what was already tried: every call is retried, and a backup model is used once before a step fails.
 

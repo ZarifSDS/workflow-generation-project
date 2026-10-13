@@ -8,7 +8,7 @@
             (docs/security.md › Provider keys). It encrypts the keys and is kept out of the database, so backups never contain a usable key.
         </div>
     {% endif %}
-    <p class="s-muted" style="margin:0">Keys entered here are encrypted and never shown again; you see only their last four characters. A key stored here is used instead of the one in <code>.env</code>. Only superusers see this page, and every change is recorded under Reports › Site history.</p>
+    <p class="s-muted s-m0">Keys entered here are encrypted and never shown again; you see only their last four characters. A key stored here is used instead of the one in <code>.env</code>. Only superusers see this page, and every change is recorded under Reports › Site history.</p>
 
     <section aria-labelledby="providers-head" class="s-keys">
         <div class="s-row-actions">
@@ -53,7 +53,7 @@
             <span class="s-spacer"></span>
             <a class="button button-small button-secondary" href="{% url 'studio:provider_model_add' %}">Add a model</a>
         </div>
-        <p class="s-muted" style="margin:0">Models added here appear in the model lists next to the built-in ones. Paid models are billed to the provider's key; the built-in list keeps paid models switched off.</p>
+        <p class="s-muted s-m0">Models added here appear in the model lists next to the built-in ones. Paid models are billed to the provider's key; the built-in list keeps paid models switched off.</p>
         {% if added_models %}
             <div class="s-table-wrap">
                 <table class="s-table">

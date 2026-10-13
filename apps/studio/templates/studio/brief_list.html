@@ -21,7 +21,7 @@
                 <tbody>
                 {% for brief in briefs %}
                     <tr>
-                        <td><a href="{% url 'studio:brief_edit' brief.pk %}"><strong>{{ brief.topic }}</strong></a><div class="s-muted" style="font-size:.8rem">{{ brief.pkeyword }}</div></td>
+                        <td><a href="{% url 'studio:brief_edit' brief.pk %}"><strong>{{ brief.topic }}</strong></a><div class="s-muted s-small">{{ brief.pkeyword }}</div></td>
                         <td>{{ brief.get_content_type_display }}</td>
                         <td>{{ brief.region }}</td>
                         <td>{% with last=brief.runs.first %}{% if last %}<a href="{% url 'studio:run' last.pk %}">{{ brief.runs.count }}</a>{% else %}0{% endif %}{% endwith %}</td>

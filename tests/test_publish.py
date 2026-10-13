@@ -391,3 +391,12 @@ def test_exports_resolve_references(run):
     ]
     underlined = [r.text for p in document.paragraphs for r in p.runs if r.underline]
     assert "temporary bypasses" in underlined
+
+
+def test_markdown_export_with_a_brief_fresh_from_the_form(admin_user):
+    """A brief that wasn't reloaded keeps its region as a TextChoices member; YAML must still work."""
+    brief = ContentBrief.objects.create(topic="MOC", pkeyword="moc", created_by=admin_user)  # default region
+    run = services.create_run(brief, {}, user=admin_user)
+    for key in ("draft", "cleanup"):
+        _approve(run, key, "# MOC\n\nText.")
+    assert "region: US" in exports.markdown_export(run)

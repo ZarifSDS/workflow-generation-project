@@ -10,6 +10,8 @@ import { Editor } from "@tiptap/core";
 import BubbleMenu from "@tiptap/extension-bubble-menu";
 import FileHandler from "@tiptap/extension-file-handler";
 
+import { openShortcuts } from "./help.js";
+import { attachLinkInfo } from "./linkinfo.js";
 import { openLinkDialog } from "./links.js";
 import { editImageDetails, openEmbedDialog, openImageDialog, uploadFiles } from "./media.js";
 import { buildExtensions } from "./schema.js";
@@ -92,6 +94,7 @@ const ICONS = {
   rule: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h16"/></svg>',
   image: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="1.5"/><circle cx="9" cy="10" r="1.5"/><path d="m4 17 5-4 4 3 3-2 4 3"/></svg>',
   video: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="6" width="12" height="12" rx="1.5"/><path d="m15.5 10.5 5-3v9l-5-3"/></svg>',
+  help: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/></svg>',
   undo: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5M4 9h10a6 6 0 0 1 0 12h-3"/></svg>',
   redo: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 14 5-5-5-5M20 9H10a6 6 0 0 0 0 12h3"/></svg>',
 };
@@ -134,6 +137,7 @@ function buildToolbar(ctx) {
     [
       toolbarButton("Undo", ICONS.undo, () => editor.chain().focus().undo().run(), { isEnabled: () => can().undo().run(), shortcut: "Ctrl+Z" }),
       toolbarButton("Redo", ICONS.redo, () => editor.chain().focus().redo().run(), { isEnabled: () => can().redo().run(), shortcut: "Ctrl+Shift+Z" }),
+      toolbarButton("Keyboard shortcuts", ICONS.help, () => openShortcuts(), { shortcut: "Ctrl+/" }),
     ],
   ];
 
@@ -292,8 +296,12 @@ function mount(form) {
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
       event.preventDefault();
       openLinkDialog(ctx);
+    } else if ((event.ctrlKey || event.metaKey) && event.key === "/") {
+      event.preventDefault();
+      openShortcuts();
     }
   });
+  attachLinkInfo(ctx, surface);
   surface.addEventListener("dblclick", (event) => {
     if (event.target.closest(".se-figure")) editImageDetails(ctx);
   });

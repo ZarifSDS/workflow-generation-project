@@ -1,4 +1,3 @@
-import difflib
 import hashlib
 
 from django.contrib import messages
@@ -9,7 +8,7 @@ from django.urls import reverse
 
 from apps.ai import catalog
 
-from .. import permissions, services
+from .. import diffing, permissions, services
 from ..models import GenerationRun, StepRun
 from . import editor_api
 from .common import StudioPage
@@ -259,23 +258,21 @@ class VersionCompareView(StudioPage):
             new = step.versions.get(number=self.kwargs["b"])
         except step.versions.model.DoesNotExist as error:
             raise Http404("That version is no longer kept.") from error
-        lines = []
-        for line in difflib.unified_diff(
-            old.content.splitlines(), new.content.splitlines(), lineterm="", n=2
-        ):
-            if line.startswith(("---", "+++")):
-                continue
-            kind = (
-                "add"
-                if line.startswith("+")
-                else "del"
-                if line.startswith("-")
-                else "hunk"
-                if line.startswith("@@")
-                else "same"
-            )
-            lines.append((kind, line))
-        context.update(run=run, step=step, old=old, new=new, lines=lines)
+        view = "rendered" if self.request.GET.get("view") == "rendered" else "text"
+        rows, stats = diffing.text_diff(old.content, new.content)
+        blocks = []
+        if view == "rendered":
+            from django.utils.safestring import mark_safe
+
+            from apps.content.markup import WagtailResolver, markdown_to_html
+
+            resolver = WagtailResolver()
+
+            def render(markdown):
+                return mark_safe(markdown_to_html(markdown, resolver))  # noqa: S308 - sanitised by nh3
+
+            blocks = diffing.rendered_diff(old.content, new.content, render)
+        context.update(run=run, step=step, old=old, new=new, rows=rows, stats=stats, blocks=blocks, view=view)
         return context
 
     def get_breadcrumbs_items(self):

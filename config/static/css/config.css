@@ -124,3 +124,61 @@ a:focus-visible {
     padding: 0.4rem 0.7rem;
     text-align: left;
 }
+
+/* Figures, embeds and FAQ blocks (ArticlePage body, M9) */
+.article__figure {
+    margin: 2rem 0;
+}
+
+.article__figure img {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    border-radius: 6px;
+}
+
+.article__figure figcaption {
+    margin-top: 0.5rem;
+    color: var(--muted);
+    font-size: 0.9rem;
+}
+
+.article iframe {
+    display: block;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 16 / 9;
+    margin: 2rem 0;
+    border: 0;
+    border-radius: 6px;
+}
+
+.article__faq {
+    margin: 2.5rem 0;
+    padding: 0.5rem 1.25rem 1rem;
+    border: 1px solid var(--line);
+    border-left: 4px solid var(--accent);
+    border-radius: 6px;
+}
+
+.article__faq h3 {
+    margin: 1.25rem 0 0.25rem;
+    font-size: 1.05rem;
+}
+
+.article__tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin: 2.5rem 0 0;
+    padding: 0;
+    list-style: none;
+}
+
+.article__tags li {
+    padding: 0.1rem 0.6rem;
+    border: 1px solid var(--line);
+    border-radius: 1rem;
+    color: var(--muted);
+    font-size: 0.85rem;
+}

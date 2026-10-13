@@ -4,7 +4,7 @@
 <div class="studio">
     <form method="post" class="s-keys__form">{% csrf_token %}
         <h2 class="s-section">{{ question }}</h2>
-        <p class="s-muted" style="margin:0">{{ detail }}</p>
+        <p class="s-muted s-m0">{{ detail }}</p>
         <div class="s-row-actions">
             <button class="button no" type="submit">{{ button }}</button>
             <a class="button button-secondary" href="{% url 'studio:provider_keys' %}">Cancel</a>

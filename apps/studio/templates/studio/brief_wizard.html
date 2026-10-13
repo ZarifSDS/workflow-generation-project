@@ -50,7 +50,7 @@
                             {% if row.def.optional %}
                                 <label><input type="checkbox" name="step_{{ row.def.key }}_enabled" {% if row.def.default_on %}checked{% endif %}> {{ row.def.label }}</label>
                             {% else %}{{ row.def.label }}{% endif %}
-                            {% if row.def.key == "site_crawl" %}<div class="s-muted" style="font-weight:400;font-size:.8rem">Guest posts only. Reads public pages of the target site.</div>{% endif %}
+                            {% if row.def.key == "site_crawl" %}<div class="s-muted s-small s-normal">Guest posts only. Reads public pages of the target site.</div>{% endif %}
                         </th>
                         <td>
                             {% if row.groups %}
@@ -75,7 +75,7 @@
 
     <details class="s-disclosure">
         <summary>Save these settings as a preset</summary>
-        <div class="s-row-actions" style="margin-top:.5rem">
+        <div class="s-row-actions s-stack--top">
             <label for="preset_name" class="w-sr-only">Preset name</label>
             <input type="text" id="preset_name" name="preset_name" placeholder="e.g. SDS Manager blog · US · FKGL 9">
             <button class="button button-secondary" type="submit" name="action" value="save_preset">Save as preset</button>

@@ -59,11 +59,26 @@ Each sub-step's output and grade change is visible on the run screen. Sub-steps 
 On each step awaiting approval you can:
 
 - **Approve:** accept the output and queue the next step.
-- **Edit & approve:** change the output in the admin editor, then continue. Your edited version is what later steps see.
+- **Edit:** change the output in the visual editor (or its Markdown), then **Save as new version** or **Save and approve**. Your edited version is what later steps see.
+- **Compare:** any two kept versions, word by word or as they will look.
 - **Regenerate:** rerun the step. A **provider and model dropdown** lists only models verified as available, marked free or paid, with the step's default profile preselected.
 - **Reject:** stop the run and record why.
 
 **Title, meta description and slug options** from the draft step appear as a **checklist**. Tick the options you want, or use **"Add your own"** to type a custom option into the list. Whatever is ticked or typed is used by later steps and the published page.
+
+## Editing and the Markdown dialect, compared with the skills (M9)
+
+The skills write plain Markdown; the studio stores the same Markdown plus a few additions so editor features survive the next model step and publishing ([ADR 0007](adr/0007-markdown-dialect.md)). Checked against `ehs-seo-blog-optimized` on 2026-10-14:
+
+| Topic | Skills | Studio |
+|---|---|---|
+| Claims to check | `[VERIFY]` after the sentence; the mechanical sweep blocks delivery while any remain | Same marker (shown as a chip in the editor). Publish **warns** and the moderator decides; it doesn't block, because the page is still a draft in moderation |
+| FAQ | `## Frequently Asked Questions`, 3–7 `###` questions, answers mirror the question, no links (`component-specs.md` §FAQs) | Same heading and rules in the draft prompt; the questions sit inside `:::faq` … `:::` so the page gets an FAQ block. The editor doesn't stop you adding a link in an answer; the rule is in the prompt and the guide |
+| Internal links | sdsmanager.com URLs | `wagtail://page?id=…` / `wagtail://document?id=…` from the choosers, resolved to real URLs on the page and in exports |
+| Images | Briefs for images; the hero from `sds-hero-stock` | Library images with required alt text and an optional caption (`![alt](wagtail://image?id=… "caption")`); the hero step is unchanged |
+| Underline, anchors | Not used | `++underline++` and `## Heading {#anchor}`; other Markdown tools show them literally |
+
+Model steps keep these constructs (`apps/studio/prompts/_rules.md`); the visual editor only rewrites the Markdown after a change in the visual view.
 
 ## Reusing the existing skill scripts (M5–M6)
 

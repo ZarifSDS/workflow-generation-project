@@ -3,13 +3,38 @@
 
 {% block main_content %}
 <div class="studio">
-    <p class="s-muted" style="margin:0">{{ step.label }}: version {{ old.number }} ({% if old.source == "edit" %}your edit{% else %}{% model_label old.provider old.model %}{% endif %}) compared with version {{ new.number }} ({% if new.source == "edit" %}your edit{% else %}{% model_label new.provider new.model %}{% endif %}). Removed lines are marked −, added lines +.</p>
-    {% if lines %}
-        <div class="s-diff" role="region" aria-label="Differences">
-            {% for kind, line in lines %}<div class="{{ kind }}">{{ line }}</div>{% endfor %}
-        </div>
+    <div class="s-row-actions">
+        <p class="s-muted s-m0">{{ step.label }}: version {{ old.number }} ({% if old.source == "edit" %}your edit{% else %}{% model_label old.provider old.model %}{% endif %}) compared with version {{ new.number }} ({% if new.source == "edit" %}your edit{% else %}{% model_label new.provider new.model %}{% endif %}).</p>
+        <span class="s-spacer"></span>
+        <nav class="s-segmented" aria-label="How to show the changes">
+            <a href="?view=text" {% if view == "text" %}aria-current="page"{% endif %}>Text</a>
+            <a href="?view=rendered" {% if view == "rendered" %}aria-current="page"{% endif %}>As it will look</a>
+        </nav>
+    </div>
+
+    {% if not rows %}
+        <p class="s-empty">These versions are identical.</p>
     {% else %}
-        <p>These versions are identical.</p>
+        <p class="s-muted s-m0 s-diffstats"><span class="s-diffstats__add">+{{ stats.added }} word{{ stats.added|pluralize }}</span> <span class="s-diffstats__del">−{{ stats.removed }} word{{ stats.removed|pluralize }}</span></p>
+        {% if view == "text" %}
+            <div class="s-diff" role="region" aria-label="Changes, word by word">
+                {% for row in rows %}
+                    {% if row.kind == "fold" %}<div class="fold">… {{ row.count }} unchanged line{{ row.count|pluralize }}</div>
+                    {% else %}<div class="{{ row.kind }}">{% for op, text in row.segments %}{% if op == "add" %}<ins>{{ text }}</ins>{% elif op == "del" %}<del>{{ text }}</del>{% else %}{{ text }}{% endif %}{% endfor %}</div>{% endif %}
+                {% endfor %}
+            </div>
+            <p class="s-muted s-small s-m0">Added text is underlined on green, removed text struck through on red.</p>
+        {% else %}
+            <div class="s-rdiff" role="region" aria-label="Changes as they will look">
+                {% for block in blocks %}
+                    <div class="s-rdiff__block s-rdiff__block--{{ block.kind }}">
+                        {% if block.kind != "same" %}<span class="s-tag s-rdiff__label s-tag--{% if block.kind == 'add' %}ok">Added{% elif block.kind == 'del' %}bad">Removed{% else %}info">Changed{% endif %}</span>{% endif %}
+                        <div class="s-output">{{ block.html }}</div>
+                        {% if block.old_html %}<details class="s-disclosure s-rdiff__old"><summary>Before</summary><div class="s-output">{{ block.old_html }}</div></details>{% endif %}
+                    </div>
+                {% endfor %}
+            </div>
+        {% endif %}
     {% endif %}
     <div><a class="button button-secondary" href="{% url 'studio:run' run.pk %}?step={{ step.key }}">Back to the run</a></div>
 </div>

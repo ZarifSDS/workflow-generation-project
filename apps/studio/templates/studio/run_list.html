@@ -17,7 +17,7 @@
                 <tbody>
                 {% for run in runs %}{% with step=run.current_step %}
                     <tr>
-                        <td><a href="{% url 'studio:run' run.pk %}"><strong>{{ run.brief.topic }}</strong></a><div class="s-muted" style="font-size:.8rem">{{ run.brief.get_content_type_display }} · {{ run.brief.region }}</div></td>
+                        <td><a href="{% url 'studio:run' run.pk %}"><strong>{{ run.brief.topic }}</strong></a><div class="s-muted s-small">{{ run.brief.get_content_type_display }} · {{ run.brief.region }}</div></td>
                         <td><span class="s-tag s-tag--{{ run.status|status_style }}">{{ run.get_status_display }}</span></td>
                         <td>{% if step %}{{ step.label }} <span class="s-muted">({{ step.get_status_display|lower }})</span>{% endif %}</td>
                         <td class="s-mono">{{ run.updated_at|date:"j M Y H:i" }}</td>

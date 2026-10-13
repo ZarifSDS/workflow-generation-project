@@ -1,6 +1,6 @@
 # UI/UX overhaul plan (M9) — status and next steps
 
-Approved 2026-10-13. Phases 1–3 are built and pushed (eb5778d); **phases 4–5 are built** (see below); **phase 6 is next**. A fresh session should read this file, then `docs/HANDOFF.md`.
+Approved 2026-10-13. Phases 1–3 are built and pushed (eb5778d); **phases 4–6 are built**: M9 is complete (see below). A fresh session should read this file, then `docs/HANDOFF.md`.
 
 ## Goal (user's words, condensed)
 
@@ -25,7 +25,7 @@ A **fast, functional, visually better version of the current Wagtail CMS with be
 | 3 Admin theme | **Done** (branding reverted) | `apps/brand/` (theme.css, font, hook), dashboard panels in `apps/studio/wagtail_hooks.py` + `studio/home/*.html`, `tests/test_theme.py` |
 | 4 Toolchain + core editor | **Done** | `frontend/` (`src/schema.js`, `nodes.js`, `editor.js`, `editor.css`, `test/roundtrip.test.js`), Dockerfile `frontend` stage, dev service `frontend`, CI job `frontend`, `services.save_edit`, `run_workspace.html`, `tests/test_editing.py` |
 | 5 Wagtail integrations | **Done** | `apps/studio/views/editor_api.py` (upload, refs, embed), `frontend/src/{links,media,slash,wagtail,ui}.js`, migration `studio/0005`, `WAGTAILEMBEDS_FINDERS`, `tests/test_editor_api.py`, `frontend/test/phase5.test.js` |
-| 6 Polish | **Next** | see below |
+| 6 Polish | **Done** | `apps/studio/diffing.py` + `version_compare.html` (word-level and rendered diff), `frontend/src/{linkinfo,help}.js`, studio templates without inline styles (`studio.css` utilities), public article CSS for figures/embeds/FAQ/tags, draft prompt FAQ rules, docs (`workflow.md`, `user-guide.md`), end-to-end check |
 
 Also done after phase 3: upload limits of **10 MB per image and 25 MB per document (PDF)** (settings + `tests/test_security.py::test_upload_size_limits`; Caddy request cap 30 MB). **SVG and WebP images** (user spec 2026-10-13): WebP is a Wagtail default; SVG added to `WAGTAILIMAGES_EXTENSIONS`, sandboxed by a CSP header on media, rasterised for DOCX (`tests/test_image_formats.py`).
 
@@ -64,6 +64,9 @@ The original plan:
 - Tests: endpoint 403s per role, upload validation, JSON shape.
 
 ## Phase 6 — polish
+
+Built on 2026-10-14. End-to-end check on a throwaway run (deleted afterwards): editor-style content with a page link, #anchor, library photo, decorative SVG, YouTube embed, table and FAQ went through Publish; the page had heading, paragraph, two figures, embed, table and FAQ blocks, rendered with alt text and captions in light and dark, and the HTML, DOCX (SVG rasterised) and Markdown exports were complete. Found and fixed on the way: the public article CSS had no rules for figures, embeds, FAQ or tags (images overflowed the column), the Markdown export failed for a brief whose region was still a choices member, the redaction log filter queried the database during startup, and the draft prompt's FAQ rules were missing the skill's heading and answer rules.
+
 
 Also in scope since 2026-10-14: link titles on hover in the editor, a shortcut list, and moving the remaining inline `style=` attributes in the studio templates into `studio.css`.
 
