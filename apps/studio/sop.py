@@ -436,6 +436,7 @@ def check_article(text, ctx, *, metadata=True):
     linked = [i for i, (_, body) in enumerate(sections) if INTERNAL_LINK.search(body)]
     if any(b - a == 1 for a, b in zip(linked, linked[1:], strict=False)):
         findings.append(Finding("block", "sdsmanager.com anchors sit in two adjacent sections"))
+    findings += check_sourced_urls(text, ctx)
     for anchor in ctx.get("anchors") or []:
         url = anchor.get("url", "")
         if url and (n := text.count(f"]({url}")) != 1:
@@ -510,7 +511,58 @@ def context_from(step):
         "cta_style": brief.cta_style,
         "anchors": list(brief.anchors or []),
         "metadata_counts": counts if step.key == "draft" else {},
+        "allowed_urls": allowed_urls(step),
     }
+
+
+URL = re.compile(r"(?:https?|wagtail)://[^\s)\]\"'>]+")
+
+
+def allowed_urls(step):
+    """Every URL the step was given: the internal index and product registry, the brief's anchors, the search
+    results and the approved research and outline. A URL in an article that isn't among them was invented
+    (the skill's "URLs only from results" rule); `wagtail://…?id=` links come from the editor and are kept."""
+    from . import houseref
+
+    run, brief = step.run, step.run.brief
+    sources = [
+        houseref.related_articles_block(brief),
+        houseref.product_pages_block(brief.region),
+        " ".join(a.get("url", "") for a in (brief.anchors or [])),
+        prompting.approved_output(run, "search_results"),
+        prompting.approved_output(run, "research"),
+        prompting.approved_output(run, "outline"),
+        brief.notes or "",
+    ]
+    return {url.rstrip(".,;:") for source in sources for url in URL.findall(source or "")}
+
+
+def check_sourced_urls(text, ctx):
+    """Block findings for sdsmanager.com and wagtail links that don't come from the inputs."""
+    allowed = ctx.get("allowed_urls")
+    if allowed is None:
+        return []
+    findings = []
+    seen = set()
+    for url in URL.findall(text):
+        url = url.rstrip(".,;:")
+        own = "sdsmanager.com" in url or url.startswith("wagtail://")
+        if (
+            not own
+            or url in allowed
+            or url in seen
+            or re.match(r"wagtail://(?:page|document|image)\?id=\d+", url)
+        ):
+            continue
+        seen.add(url)
+        findings.append(
+            Finding(
+                "block",
+                f"the link {url} isn't in the inputs (invented URL); use a URL from the index, "
+                "the product pages or the research, or drop the link",
+            )
+        )
+    return findings
 
 
 def check(step_key, text, ctx):

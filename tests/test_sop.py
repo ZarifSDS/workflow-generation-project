@@ -615,3 +615,35 @@ def test_broken_bold_links_are_repaired():
 
     fixed, counts = house.mechanical_fix("See **[our guide]**(https://sdsmanager.com/us/x/) now.\n")
     assert counts["broken bold links"] == 1 and "[**our guide**](https://sdsmanager.com/us/x/)" in fixed
+
+
+def test_invented_internal_urls_are_blocked():
+    ctx = {**CTX, "allowed_urls": {"https://sdsmanager.com/us/ehs-software/"}}
+    found = blocking(sop.check("draft", GOOD_DRAFT, ctx))
+    assert any("sds-guide" in f and "invented" in f for f in found)
+    assert not any("ehs-software" in f for f in found)
+    ok_ctx = {
+        **CTX,
+        "allowed_urls": {
+            "https://sdsmanager.com/us/ehs-software/",
+            "https://sdsmanager.com/us/sds-management-articles/sds-guide/",
+        },
+    }
+    assert not any("invented" in f for f in blocking(sop.check("draft", GOOD_DRAFT, ok_ctx)))
+    editor = GOOD_DRAFT.replace(
+        "(https://sdsmanager.com/us/sds-management-articles/sds-guide/)", "(wagtail://page?id=12)"
+    )
+    assert not any("invented" in f for f in blocking(sop.check("draft", editor, ctx)))
+
+
+def test_allowed_urls_come_from_the_inputs(brief):
+    run = services.create_run(brief, {})
+    research = run.steps.get(key="research")
+    services.add_version(
+        research, "## Sources\n- https://www.osha.gov/laws-regs and https://sdsmanager.com/us/x/\n"
+    )
+    research.status = StepRun.Status.APPROVED
+    research.save()
+    allowed = sop.allowed_urls(run.steps.get(key="draft"))
+    assert "https://sdsmanager.com/us/x/" in allowed and "https://www.osha.gov/laws-regs" in allowed
+    assert any("ehs-software" in url for url in allowed)  # the product registry
