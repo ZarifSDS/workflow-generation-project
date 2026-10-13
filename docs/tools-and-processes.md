@@ -5,6 +5,7 @@ Everything we use to produce content with the Content Workflow Studio, and how t
 - [User guide](user-guide.md): writers, editors and moderators.
 - [Operations guide](operations.md): running and maintaining the studio.
 - [Development guide](development.md): developers and AI coding agents.
+- [Deployment](deployment.md): sharing the studio over ngrok, and scaling it.
 
 ## Tools
 
@@ -16,6 +17,7 @@ Everything we use to produce content with the Content Workflow Studio, and how t
 | **Wagtail 8 (Django 6.1)** | The admin, page tree, image library, revisions and the **Moderators approval** workflow that publishes articles |
 | **Postgres 17** | All content, run history and the background task queue |
 | **Docker Desktop** | Runs the web, worker, database and migrate containers on the Windows host |
+| **Caddy** and **ngrok** | Share mode: Caddy serves images and balances web containers; ngrok publishes it over HTTPS ([deployment.md](deployment.md)) |
 
 ### Content skills (Claude Code)
 

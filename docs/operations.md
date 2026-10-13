@@ -1,6 +1,6 @@
 # Operations guide: running the studio
 
-For whoever keeps the studio running: starting and stopping it, configuration, providers and models, backups, updates and troubleshooting. First-time installation is in [setup.md](setup.md); this guide covers the day-to-day.
+For whoever keeps the studio running: starting and stopping it, configuration, providers and models, backups, updates and troubleshooting. First-time installation is in [setup.md](setup.md); sharing over ngrok and scaling are in [deployment.md](deployment.md); this guide covers the day-to-day.
 
 ## What runs where
 
@@ -11,6 +11,7 @@ For whoever keeps the studio running: starting and stopping it, configuration, p
 | `db` | Docker | Postgres 17: content, run history and the task queue. Volume `workflow-generation-project_pgdata` |
 | `migrate` | Docker | Applies migrations on every start, then exits |
 | Media | Docker volume `workflow-generation-project_media` | Uploaded and generated images (hero photos and branded heroes) |
+| `proxy`, `ngrok` | Docker, share mode only | Caddy in front of web, and the HTTPS tunnel ([deployment.md](deployment.md)) |
 | Ollama | Windows host, port 11434 | Local text and vision models |
 | ComfyUI | Windows host, port 8188 | Optional local image generation |
 | Cloud providers | Internet | Ollama Cloud, Gemini, Groq, Cloudflare Workers AI (free tiers; keys in `.env`) |
@@ -46,6 +47,7 @@ Secrets live only in `.env` (never in git, the database or logs). After changing
 | `GEMINI_API_KEY`, `OLLAMA_CLOUD_API_KEY`, `GROQ_API_KEY` | Free text providers |
 | `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN` | Cloudflare Workers AI (hero images) |
 | `STUDIO_PUBLISH_WEBHOOK_URL`, `STUDIO_WEBHOOK_SECRET` | Optional publish webhook and its signing secret |
+| `NGROK_CONFIG_FILE` or `NGROK_AUTHTOKEN`, `NGROK_DOMAIN`, `STUDIO_PUBLIC_URL`, `GUNICORN_WORKERS` | Share mode ([deployment.md](deployment.md)) |
 | `NVIDIA_API_KEY`, `MISTRAL_API_KEY`, `OPENROUTER_API_KEY` | Listed for completeness; not usable in this deployment |
 
 ## Providers and models
@@ -114,6 +116,16 @@ The quality and hero scripts are copied **unchanged** from the Claude Code skill
 | clean-user-facing-text | `apps/quality/vendor/clean_user_facing_text/` |
 | ehs-seo-blog-optimized | `apps/quality/vendor/ehs_seo_blog/` |
 | sds-hero-stock | `apps/quality/vendor/sds_hero_stock/` (scripts and font; brand assets stay local) |
+
+## Disk space
+
+Docker's virtual disk lives on **D:** (`D:\DockerData`, moved there on 2026-10-13 via **Docker Desktop › Settings › Resources › Advanced › Disk image location**), and the Hugging Face and sds-hero caches are in `D:\caches` behind links at their old paths. Keep at least 15 GB free on C: anyway: when C: filled up on 2026-10-13, Docker crashed and kept trying to reformat its disk on restart, and only a full `wsl --shutdown` brought it back. If Docker loops on "Starting the Docker Engine":
+
+1. Quit Docker Desktop (`docker desktop stop`).
+2. Free space, then copy `docker_data.vhdx` somewhere safe before anything else.
+3. `wsl --shutdown`, then start Docker Desktop again.
+
+`docker system df` shows what Docker can reclaim; `docker builder prune -a` and `docker image prune -a` free build cache and unused images without touching volumes.
 
 ## Troubleshooting
 

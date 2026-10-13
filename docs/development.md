@@ -134,5 +134,6 @@ services.refresh_run_status(step.run)
 | [0002](adr/0002-django-tasks-db.md) | Background work uses `django-tasks-db` in Postgres, one worker |
 | [0003](adr/0003-provider-registry.md) | One OpenAI-compatible client, profiles, free providers only, Ollama native API for local models |
 | [0004](adr/0004-brand-assets-outside-git.md) | Hero brand assets stay outside git |
+| [0005](adr/0005-containerised-sharing-and-scaling.md) | Share mode behind Caddy and ngrok; stateless web and workers that scale out |
 
 Other standing decisions: free models only (no paid APIs, no Claude API); model defaults come from blind evaluation on real briefs; local-first where the hardware allows.

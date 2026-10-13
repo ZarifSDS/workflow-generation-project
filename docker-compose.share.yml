@@ -1,0 +1,64 @@
+# Share the studio over the internet through an ngrok tunnel, in production mode
+# (gunicorn, DEBUG off, secure cookies) behind Caddy. See docs/deployment.md.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.share.yml up -d --build
+#
+# Scale the stateless parts with --scale web=2 --scale worker=2.
+# This replaces the dev stack (same services and volumes, so the data is shared); run one mode at a time.
+#
+# ngrok credentials: either point NGROK_CONFIG_FILE at the ngrok.yml your Windows ngrok agent
+# already uses (`ngrok config check` prints its path), or set NGROK_AUTHTOKEN. NGROK_DOMAIN is
+# optional: without it ngrok uses your account's assigned free dev domain.
+
+x-share-env: &share-env
+  DJANGO_SETTINGS_MODULE: config.settings.production
+  # ngrok's free and paid domain suffixes, plus an explicit NGROK_DOMAIN if you set one.
+  DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1,.ngrok-free.app,.ngrok-free.dev,.ngrok.app,.ngrok.dev,${NGROK_DOMAIN:-localhost}
+  DJANGO_CSRF_TRUSTED_ORIGINS: https://*.ngrok-free.app,https://*.ngrok-free.dev,https://*.ngrok.app,https://*.ngrok.dev,http://localhost:8080
+  DJANGO_BEHIND_PROXY: "true"
+  DJANGO_SECURE_COOKIES: "true"
+  WAGTAILADMIN_BASE_URL: ${STUDIO_PUBLIC_URL:-http://localhost:8080}
+
+services:
+  web:
+    # Only Caddy talks to web; no host port, so replicas don't collide.
+    ports: !reset []
+    environment: *share-env
+
+  worker:
+    environment: *share-env
+
+  proxy:
+    image: caddy:2.11.4-alpine
+    restart: unless-stopped
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - media:/srv/media:ro
+    ports:
+      # For a local check without the tunnel: http://localhost:8080/admin/
+      - "127.0.0.1:8080:80"
+    depends_on:
+      web:
+        condition: service_healthy
+
+  ngrok:
+    image: ngrok/ngrok:3.39.11-alpine
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "-c"]
+    # The image's own config (inspector on 0.0.0.0:4040) first, then your agent config with the authtoken.
+    command:
+      - >-
+        exec ngrok http proxy:80 --log stdout
+        --config /var/lib/ngrok/ngrok.yml$${NGROK_CONFIG_MOUNTED:+,/etc/ngrok/agent.yml}
+        $${NGROK_DOMAIN:+--url https://$$NGROK_DOMAIN}
+    environment:
+      NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN:-}
+      NGROK_DOMAIN: ${NGROK_DOMAIN:-}
+      NGROK_CONFIG_MOUNTED: ${NGROK_CONFIG_FILE:+1}
+    volumes:
+      - ${NGROK_CONFIG_FILE:-./deploy/ngrok-empty.yml}:/etc/ngrok/agent.yml:ro
+    ports:
+      # ngrok's request inspector and API, local only: http://localhost:4040
+      - "127.0.0.1:4040:4040"
+    depends_on:
+      - proxy

@@ -51,6 +51,7 @@ Start with **[Tools and processes](docs/tools-and-processes.md)**, then the guid
 - [User guide](docs/user-guide.md): writers, editors, moderators
 - [Operations guide](docs/operations.md): running and maintaining the studio
 - [Development guide](docs/development.md): developers and AI agents
+- [Deployment](docs/deployment.md): sharing over ngrok and scaling
 
 Reference:
 
