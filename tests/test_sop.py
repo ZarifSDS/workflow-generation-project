@@ -555,3 +555,10 @@ def test_section_names_and_heading_lines_are_matched_loosely():
     assert blocking(sop.check("outline", loose, CTX)) == []
     research = GOOD_RESEARCH.replace("## Questions for the Requester", "## Questions For The Requester")
     assert blocking(sop.check("research", research, CTX)) == []
+
+
+def test_an_intro_line_in_the_headings_only_outline_is_ignored():
+    with_intro = GOOD_OUTLINE.replace("H1: SDS Retention", "H1: SDS Retention").replace(
+        "\nH2: Key Takeaways\n", "\nH2: Intro\nH2: Key Takeaways\n"
+    )
+    assert blocking(sop.check("outline", with_intro, CTX)) == []

@@ -403,9 +403,9 @@ def outline_export(run, fmt):
     section = re.search(r"(?ms)^##\s+Headings-Only Outline\s*$\n(.*?)(?=^##\s|\Z)", version.content)
     lines = []
     for line in (section.group(1) if section else "").splitlines():
-        match = re.match(r"^\s*H([1-4]):\s*(.+?)\s*$", line)
-        if match:
-            lines.append("#" * int(match.group(1)) + " " + match.group(2))
+        match = re.match(r"^\s*(?:[-*]\s+)?\**H([1-4]):\**\s*(.+?)\s*$", line)
+        if match and match.group(2).strip("*").lower().rstrip(":") not in ("intro", "introduction"):
+            lines.append("#" * int(match.group(1)) + " " + match.group(2).strip("*"))
     if not lines:
         raise ValueError("The outline has no Headings-Only Outline section with H1:/H2:/H3: lines yet.")
     return "\n\n".join(lines) + "\n", f"outline-{slug}"

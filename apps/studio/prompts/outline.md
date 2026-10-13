@@ -62,4 +62,4 @@ Three to seven questions, "People also ask" first, that the body doesn't already
 One line per decision (order, split, merge, depth, what was left out): the decision, the reason, and the alternative you considered. Include how the outline compares with the ranking pages.
 
 ## Headings-Only Outline
-Plain lines only, no prose: `H1: …`, then `H2: Key Takeaways`, every body `H2:`/`H3:` in order, the conclusion's CTA heading as an `H2:`, and last `H2: Frequently Asked Questions` with each question as `H3: …`.
+Plain lines only, no prose and no line for the intro (it has no heading): `H1: …`, then `H2: Key Takeaways`, every body `H2:`/`H3:` in order, the conclusion's CTA heading as an `H2:`, and last `H2: Frequently Asked Questions` with each question as `H3: …`.

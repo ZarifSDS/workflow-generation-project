@@ -250,7 +250,10 @@ def _headings_only(text):
         # Tolerate a list bullet or bold around the level ("- H2: ...", "**H2:** ...").
         match = re.match(r"^\s*(?:[-*]\s+)?\**(H[1-4]):\**\s*(\S.*?)\s*$", line)
         if match:
-            lines.append(f"{match.group(1)}: {match.group(2).strip('*').strip()}")
+            text = match.group(2).strip("*").strip()
+            if text.lower().rstrip(":") in ("intro", "introduction"):
+                continue  # the intro has no heading; models list it anyway, so it isn't held against them
+            lines.append(f"{match.group(1)}: {text}")
     return lines
 
 
