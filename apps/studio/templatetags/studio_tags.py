@@ -38,7 +38,7 @@ def model_label(provider, model):
         return "Default model"
     item = catalog.find(provider, model)
     if item:
-        return f"{item.label} · {catalog.PROVIDER_LABELS.get(provider, provider)}"
+        return f"{item.label} · {catalog.provider_label(provider)}"
     return f"{model} · {provider}"
 
 

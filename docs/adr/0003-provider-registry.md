@@ -27,3 +27,7 @@ There is no paid Claude/OpenAI API. Candidates are local Ollama models (host GPU
 - **Every request sends an explicit `User-Agent`** (`AI_USER_AGENT`). Groq's edge returns 403 for Python's default one.
 - The `openai` SDK (3.x) bundles its own httpx fork (`httpx2`), which `respx` can't intercept. Tests inject a mock transport through `openai_compat.http_client_factory`.
 - The `openai` and `httpx` loggers are set to WARNING, so request URLs (which contain the Cloudflare account ID) aren't logged.
+
+## Amendment (2026-10-13, ADR 0008)
+
+- Keys may also be stored through the admin, encrypted under `STUDIO_SECRETS_KEY` from `.env`; a stored key takes precedence over the environment variable. Added providers are OpenAI-compatible.

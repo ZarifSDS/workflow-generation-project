@@ -3,6 +3,15 @@ from django.urls import path
 from .views.briefs import BriefListView, BriefWizardView
 from .views.dashboard import DashboardView
 from .views.metadata import MetadataView
+from .views.provider_keys import (
+    AddedModelView,
+    AddedProviderView,
+    DeleteModelView,
+    DeleteProviderView,
+    ProviderKeysView,
+    ProviderKeyView,
+    RemoveKeyView,
+)
 from .views.providers import ProvidersView
 from .views.runs import RunListView, RunWorkspaceView, VersionCompareView, run_export, run_status
 
@@ -24,4 +33,13 @@ urlpatterns = [
         name="compare",
     ),
     path("models/", ProvidersView.as_view(), name="providers"),
+    # Settings › AI providers (superusers): keys, added providers and models (ADR 0008)
+    path("ai-providers/", ProviderKeysView.as_view(), name="provider_keys"),
+    path("ai-providers/add/", AddedProviderView.as_view(), name="provider_add"),
+    path("ai-providers/models/add/", AddedModelView.as_view(), name="provider_model_add"),
+    path("ai-providers/models/<int:pk>/remove/", DeleteModelView.as_view(), name="provider_model_remove"),
+    path("ai-providers/<slug:name>/key/", ProviderKeyView.as_view(), name="provider_key"),
+    path("ai-providers/<slug:name>/key/remove/", RemoveKeyView.as_view(), name="provider_key_remove"),
+    path("ai-providers/<slug:name>/edit/", AddedProviderView.as_view(), name="provider_edit"),
+    path("ai-providers/<slug:name>/delete/", DeleteProviderView.as_view(), name="provider_delete"),
 ]

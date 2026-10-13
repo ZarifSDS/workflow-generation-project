@@ -31,8 +31,10 @@ class ProvidersView(StudioPage):
         checks = {check.provider: check for check in ProviderCheck.objects.all()}
         configured = get_providers()
         rows = []
-        for provider, label in catalog.PROVIDER_LABELS.items():
-            models = [m for m in catalog.CATALOG if m.provider == provider]
+        all_models = catalog.all_models()
+        labels = {**catalog.provider_labels(), **{n: s.label for n, s in configured.items() if s.added}}
+        for provider, label in labels.items():
+            models = [m for m in all_models if m.provider == provider]
             rows.append(
                 {
                     "label": label,

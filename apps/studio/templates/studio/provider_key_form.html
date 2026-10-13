@@ -1,0 +1,27 @@
+{% extends "wagtailadmin/generic/base.html" %}
+
+{% block main_content %}
+<div class="studio">
+    {% if not secrets_ready and not model_form %}
+        <div class="s-callout" role="alert"><strong>Keys can't be stored yet.</strong> Add <code>{{ secrets_env }}</code> to <code>.env</code> and restart the studio (docs/security.md › Provider keys).</div>
+    {% endif %}
+    {% if spec %}
+        <p class="s-muted" style="margin:0">{% if spec.key_source == "studio" %}A key is stored. Entering a new one replaces it; the stored key can't be shown.{% elif spec.key_source == "env" %}The key from <code>.env</code> is in use. A key saved here takes its place.{% else %}No key is set yet.{% endif %}</p>
+    {% endif %}
+    <form method="post" class="s-keys__form" novalidate>{% csrf_token %}
+        {% if form.non_field_errors %}<div class="s-callout" role="alert">{{ form.non_field_errors|join:" " }}</div>{% endif %}
+        {% for field in form %}
+            <div class="s-keys__field">
+                <label for="{{ field.id_for_label }}">{{ field.label }}{% if field.field.required %} <span aria-hidden="true">*</span>{% endif %}</label>
+                {{ field }}
+                {% if field.help_text %}<p class="s-muted">{{ field.help_text }}</p>{% endif %}
+                {% for error in field.errors %}<p class="s-keys__error" role="alert">{{ error }}</p>{% endfor %}
+            </div>
+        {% endfor %}
+        <div class="s-row-actions">
+            <button class="button" type="submit">{% if model_form %}Add model{% elif adding %}Add provider{% else %}Save{% endif %}</button>
+            <a class="button button-secondary" href="{% url 'studio:provider_keys' %}">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

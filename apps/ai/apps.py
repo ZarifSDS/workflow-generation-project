@@ -6,3 +6,6 @@ class AIConfig(AppConfig):
     name = "apps.ai"
     label = "ai"
     verbose_name = "AI providers"
+
+    def ready(self):
+        from . import signals  # noqa: F401

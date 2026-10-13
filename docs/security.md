@@ -28,9 +28,20 @@ How the studio protects accounts, secrets and data, and the result of the M8 sec
 | Secret | Where it lives | Never in |
 |---|---|---|
 | `DJANGO_SECRET_KEY`, `POSTGRES_PASSWORD` | `.env` | git, the database, logs |
-| Provider keys (`GEMINI_API_KEY`, `OLLAMA_CLOUD_API_KEY`, `GROQ_API_KEY`, `CLOUDFLARE_API_TOKEN`) and `CLOUDFLARE_ACCOUNT_ID` | `.env`, read at call time | the database, logs, step errors, notes |
+| Provider keys (`GEMINI_API_KEY`, `OLLAMA_CLOUD_API_KEY`, `GROQ_API_KEY`, `CLOUDFLARE_API_TOKEN`) and `CLOUDFLARE_ACCOUNT_ID` | `.env`, read at call time, **or** Settings › AI providers (encrypted in the database, ADR 0008) | plaintext in the database or backups, logs, step errors, notes, any page |
+| `STUDIO_SECRETS_KEY` (encrypts stored provider keys) | `.env` only | the database, backups, git |
 | `STUDIO_WEBHOOK_SECRET` | `.env` | the webhook payload (only its HMAC is sent) |
 | ngrok authtoken | The ngrok agent's own config, mounted read-only (`NGROK_CONFIG_FILE`), or `NGROK_AUTHTOKEN` in `.env` | git, the images |
+
+## Provider keys
+
+Superusers can set, replace and remove provider keys, and add OpenAI-compatible providers such as OpenRouter, under **Settings › AI providers** (ADR 0008). Keys are encrypted with `STUDIO_SECRETS_KEY` and never shown again (only `••••` and the last four characters). A stored key replaces the `.env` one; removing it falls back to `.env`.
+
+- **Set up**: add `STUDIO_SECRETS_KEY` to `.env` (the command is in `.env.example`) and restart. Back up `.env` separately from `backups/`: a database backup holds only ciphertext.
+- **Rotate the encryption key**: put the new key first, comma-separated with the old one, restart, run `docker compose exec web python manage.py rotate_provider_keys`, then remove the old key and restart.
+- **Rotate a provider key**: create the new key at the provider, **Replace key** in the admin, then revoke the old one at the provider.
+- Changing an added provider's address removes its stored key unless you enter it again, so a key can't be redirected elsewhere.
+- Every change is listed under Reports › Site history with the user's name.
 
 ## Secret handling review (M8, 2026-10-13)
 
@@ -41,7 +52,7 @@ How the studio protects accounts, secrets and data, and the result of the M8 sec
 | Provider errors | Error text from providers can echo request URLs (the Cloudflare account ID is in the path) or parts of a key, and it was stored in step errors, provider-check results and version notes | **Fixed:** every `ProviderError` message, every failed step's error and every log line passes through `apps.ai.redact`, which replaces configured secret values and the first and last 12 characters of long keys with `[redacted]` |
 | Logs | httpx and openai request logging was already at WARNING (URLs contain the account ID) | Kept, plus the redacting log filter on the console handler |
 | Webhook | Payload signed with HMAC-SHA256 when a secret is set; the secret itself is never sent | OK |
-| Database | Keys aren't stored; provider checks store only a redacted status line | OK after the redaction fix |
+| Database | Keys aren't stored; provider checks store only a redacted status line | OK after the redaction fix. Since ADR 0008, keys entered in the admin are stored encrypted; the encryption key stays in `.env` |
 | Brand assets | Kept out of the public repository (ADR 0004) | OK |
 | Public tunnel URL | Was in the handoff doc of the public repository | Removed before it was committed |
 | `docker compose config` | Prints every `.env` value | Documented: use `config --quiet` to validate |

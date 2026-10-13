@@ -12,6 +12,9 @@ from apps.ai.providers import get_provider
 from apps.ai.service import generate, generate_image
 from apps.ai.types import ProviderError
 
+# The registry reads keys stored through the admin (ADR 0008) from the database.
+pytestmark = pytest.mark.django_db
+
 OPENAI_BASE = "https://llm.test/v1"
 OLLAMA_BASE = "http://ollama.test:11434"
 CF_BASE = "https://cf.test/client/v4"

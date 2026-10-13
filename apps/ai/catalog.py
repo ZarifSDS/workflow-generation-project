@@ -1,7 +1,9 @@
 """Models the studio can offer in its dropdowns, with availability verified 2026-10-13.
 
 `status` is one of: free, limited, paid, unavailable. Only free and limited models are selectable;
-paid and unavailable ones are listed with their reason so nobody picks them by mistake.
+paid and unavailable ones are listed with their reason so nobody picks them by mistake. Models an admin
+adds under Settings › AI providers (AddedModel, ADR 0008) are merged in and are selectable even when
+paid: adding one is the opt-in. They replace a built-in entry with the same provider and model.
 `typical_seconds` is a rough per-step duration shown in the UI, measured in the M2 evaluation.
 """
 
@@ -18,6 +20,7 @@ class CatalogModel:
     reason: str = ""
     typical_seconds: int | None = None
     options: dict | None = None
+    added: bool = False  # added by an admin
 
     @property
     def key(self):
@@ -25,7 +28,7 @@ class CatalogModel:
 
     @property
     def selectable(self):
-        return self.status in {"free", "limited"}
+        return self.status in {"free", "limited"} or (self.added and self.status == "paid")
 
 
 PROVIDER_LABELS = {
@@ -143,8 +146,64 @@ CATALOG = [
 ]
 
 
+ADDED_CACHE_KEY = "ai:added-models"
+ADDED_CACHE_SECONDS = 30
+
+
+def _added():
+    """(models, labels) an admin added; cached briefly, cleared when they change (apps.ai.signals)."""
+    from django.core.cache import cache
+    from django.db import DatabaseError
+
+    from .models import AddedModel, ProviderConfig
+
+    cached = cache.get(ADDED_CACHE_KEY)
+    if cached is not None:
+        return cached
+    try:
+        labels = {row.name: row.label for row in ProviderConfig.objects.all() if row.label}
+        models = [
+            CatalogModel(
+                row.provider,
+                row.model,
+                row.label,
+                "text",
+                status=row.status,
+                reason="Paid: billed to your key" if row.status == "paid" else "",
+                typical_seconds=row.typical_seconds,
+                added=True,
+            )
+            for row in AddedModel.objects.all()
+        ]
+    except DatabaseError:
+        return [], {}
+    cache.set(ADDED_CACHE_KEY, (models, labels), ADDED_CACHE_SECONDS)
+    return models, labels
+
+
+def clear_cache():
+    from django.core.cache import cache
+
+    cache.delete(ADDED_CACHE_KEY)
+
+
+def all_models():
+    added, _ = _added()
+    replaced = {m.key for m in added}
+    return [m for m in CATALOG if m.key not in replaced] + added
+
+
+def provider_labels():
+    _, labels = _added()
+    return {**labels, **PROVIDER_LABELS}
+
+
+def provider_label(provider):
+    return provider_labels().get(provider, provider)
+
+
 def find(provider, model):
-    return next((m for m in CATALOG if m.provider == provider and m.model == model), None)
+    return next((m for m in all_models() if m.provider == provider and m.model == model), None)
 
 
 def by_key(key):
@@ -155,10 +214,11 @@ def by_key(key):
 def grouped(kind):
     """[(group label, [CatalogModel, ...]), ...] for a dropdown; unavailable models last."""
     groups = {}
-    for item in CATALOG:
+    labels = provider_labels()
+    for item in all_models():
         if item.kind != kind:
             continue
-        group = "Not available" if not item.selectable else PROVIDER_LABELS.get(item.provider, item.provider)
+        group = "Not available" if not item.selectable else labels.get(item.provider, item.provider)
         groups.setdefault(group, []).append(item)
     ordered = [(name, items) for name, items in groups.items() if name != "Not available"]
     if "Not available" in groups:

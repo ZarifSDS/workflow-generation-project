@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import models
 
 
@@ -11,3 +12,61 @@ class ProviderCheck(models.Model):
 
     def __str__(self):
         return f"{self.provider}: {'ok' if self.ok else 'problem'}"
+
+
+class ProviderConfig(models.Model):
+    """A provider's key stored through the admin (ADR 0008), or a provider added there.
+
+    Built-in providers (settings.AI_PROVIDERS) get a row only when a key is stored for them; their address
+    stays in settings. Added providers are OpenAI-compatible endpoints with their own address.
+    Keys are stored encrypted (apps.ai.secrets) and never shown again; `*_hint` keeps the last characters.
+    """
+
+    name = models.SlugField(
+        max_length=30, unique=True, help_text="Short id used in the code, e.g. openrouter"
+    )
+    label = models.CharField(max_length=80)
+    base_url = models.URLField(blank=True, help_text="Only for added providers")
+    api_key_encrypted = models.TextField(blank=True, editable=False)
+    api_key_hint = models.CharField(max_length=12, blank=True, editable=False)
+    account_id_encrypted = models.TextField(blank=True, editable=False)  # Cloudflare
+    account_id_hint = models.CharField(max_length=12, blank=True, editable=False)
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+
+    class Meta:
+        ordering = ["label"]
+
+    def __str__(self):
+        return self.label or self.name
+
+    @property
+    def built_in(self):
+        return self.name in settings.AI_PROVIDERS
+
+
+class AddedModel(models.Model):
+    """A model offered in the dropdowns in addition to apps.ai.catalog (e.g. a paid OpenRouter model)."""
+
+    class Status(models.TextChoices):
+        FREE = "free", "Free"
+        LIMITED = "limited", "Free with limits"
+        PAID = "paid", "Paid (billed to your key)"
+
+    provider = models.CharField(max_length=30)
+    model = models.CharField(max_length=200, help_text="The provider's model id, e.g. openai/gpt-5.5")
+    label = models.CharField(max_length=80)
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.PAID)
+    typical_seconds = models.PositiveIntegerField(
+        null=True, blank=True, help_text="Rough time per step in seconds, shown next to the model"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["provider", "label"]
+        constraints = [models.UniqueConstraint(fields=["provider", "model"], name="ai_addedmodel_unique")]
+
+    def __str__(self):
+        return f"{self.label} ({self.provider})"

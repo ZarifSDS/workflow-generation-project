@@ -126,6 +126,36 @@ for _order, (_label, _url, _icon, _name, _permission) in enumerate(STUDIO_ITEMS)
     _make_item(_label, _url, _icon, _name, _order * 10, _permission)
 
 
+class SuperuserMenuItem(MenuItem):
+    def is_shown(self, request):
+        return request.user.is_superuser
+
+
+@hooks.register("register_settings_menu_item")
+def register_provider_keys_menu():
+    """Settings › AI providers: API keys and added providers (ADR 0008). Superusers only."""
+    return SuperuserMenuItem(
+        "AI providers", reverse("studio:provider_keys"), icon_name="key", name="ai-providers", order=900
+    )
+
+
+@hooks.register("register_log_actions")
+def register_ai_log_actions(actions):
+    """History entries for provider settings. They never contain a key, only its last characters."""
+
+    def changed(log_entry):
+        parts = (log_entry.data or {}).get("changed") or []
+        return f"Set {', '.join(parts)}" if parts else "Set API key"
+
+    actions.register_action("ai.key_set", "Set API key", changed)
+    actions.register_action("ai.key_removed", "Remove API key", "Removed the stored API key")
+    actions.register_action("ai.provider_added", "Add AI provider", "Added the provider")
+    actions.register_action("ai.provider_changed", "Change AI provider", "Changed the provider")
+    actions.register_action("ai.provider_deleted", "Delete AI provider", "Deleted the provider")
+    actions.register_action("ai.model_added", "Add AI model", "Added the model")
+    actions.register_action("ai.model_removed", "Remove AI model", "Removed the model")
+
+
 @hooks.register("insert_global_admin_css")
 def studio_css():
     return format_html('<link rel="stylesheet" href="{}">', static("studio/studio.css"))
