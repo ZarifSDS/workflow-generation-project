@@ -34,6 +34,7 @@ from . import prompting
 STEPS = ("site_crawl", "research", "outline", "draft", "review_edit", "localise")
 ARTICLE_STEPS = ("draft", "review_edit", "localise")
 PLAN_STEPS = ("research", "outline")
+MAX_FINDINGS_PER_REVISION = 6  # more than this and models restructure instead of fixing
 
 DASH = re.compile("[–—]")
 CURLY = re.compile("[“”‘’]")
@@ -588,6 +589,10 @@ def _guard(step_key, before, after):
         return False, "empty output"
     if len(after.split()) < 0.6 * len(before.split()):
         return False, "too much text was removed"
+    kept = {_norm(name) for name, _ in _sections(after)}
+    lost = [name for name, _ in _sections(before) if name and _norm(name) not in kept]
+    if lost:
+        return False, "it dropped or renamed the section(s) " + ", ".join(f"'{n}'" for n in lost[:4])
     if len(re.findall(r"(?m)^#{1,3}\s+.+$", after)) < len(re.findall(r"(?m)^#{1,3}\s+.+$", before)):
         return False, "sections were dropped"
     return True, ""
@@ -634,7 +639,8 @@ def run_loop(step, text, call, max_rounds=None):
             break
         if number > max_rounds:
             break
-        to_fix = blocking + current.findings
+        # Blocking checks always go; a handful of reviewer findings keeps the revision targeted.
+        to_fix = blocking + current.findings[:MAX_FINDINGS_PER_REVISION]
         revised, _ = call(
             "sop_revise",
             {

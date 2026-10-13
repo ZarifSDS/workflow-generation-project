@@ -562,3 +562,12 @@ def test_an_intro_line_in_the_headings_only_outline_is_ignored():
         "\nH2: Key Takeaways\n", "\nH2: Intro\nH2: Key Takeaways\n"
     )
     assert blocking(sop.check("outline", with_intro, CTX)) == []
+
+
+def test_a_plan_revision_that_drops_a_section_is_refused():
+    ok, reason = sop._guard(
+        "outline", GOOD_OUTLINE, GOOD_OUTLINE.replace("## Headings-Only Outline", "### Headings")
+    )
+    assert not ok and "Headings-Only Outline" in reason
+    ok, _ = sop._guard("outline", GOOD_OUTLINE, GOOD_OUTLINE + "\n## Extra Notes\n\nmore\n")
+    assert ok
