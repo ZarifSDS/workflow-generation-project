@@ -1,4 +1,4 @@
-"""State changes for runs and steps. Views call these; M4's background tasks will too."""
+"""State changes for runs and steps. Views and the background task call these."""
 
 from django.conf import settings
 from django.db import transaction
@@ -9,6 +9,16 @@ from apps.ai.evaluation import metrics as text_metrics
 
 from .models import VERSIONS_TO_KEEP, GenerationRun, MetadataOption, StepRun, StepVersion
 from .pipeline import steps_for
+
+
+def enqueue(step):
+    """Hand a queued step to the worker once the surrounding transaction commits."""
+    if not getattr(settings, "STUDIO_EXECUTE_STEPS", False):
+        return
+    from .tasks import run_step
+
+    step_id = step.pk
+    transaction.on_commit(lambda: run_step.enqueue(step_id))
 
 
 def default_model_for(step_def, profiles):
@@ -24,6 +34,7 @@ def create_run(brief, step_config, user=None):
     """step_config: {step_key: {"enabled": bool, "gate": bool, "model": "provider::model"}}."""
     run = GenerationRun.objects.create(brief=brief, created_by=user)
     first = True
+    queued = None
     for order, step_def in enumerate(steps_for(brief.content_type)):
         config = step_config.get(step_def.key, {})
         enabled = config.get("enabled", step_def.default_on) if step_def.optional else True
@@ -33,7 +44,7 @@ def create_run(brief, step_config, user=None):
         if enabled:
             status = StepRun.Status.QUEUED if first else StepRun.Status.PENDING
             first = False
-        StepRun.objects.create(
+        created = StepRun.objects.create(
             run=run,
             key=step_def.key,
             order=order,
@@ -43,6 +54,10 @@ def create_run(brief, step_config, user=None):
             model=model,
             status=status,
         )
+        if status == StepRun.Status.QUEUED:
+            queued = created
+    if queued:
+        enqueue(queued)
     return run
 
 
@@ -114,10 +129,16 @@ def approve_step(step, user, edited_content=None):
     step.status = StepRun.Status.APPROVED
     step.approved_by, step.approved_at = user, timezone.now()
     step.save()
+    return queue_next(step)
+
+
+def queue_next(step):
+    """After a step is approved (by you or automatically), queue the next enabled step."""
     following = _next_enabled(step)
     if following and following.status == StepRun.Status.PENDING:
         following.status = StepRun.Status.QUEUED
         following.save(update_fields=["status"])
+        enqueue(following)
     return refresh_run_status(step.run)
 
 
@@ -140,7 +161,20 @@ def request_regenerate(step, model_key, note=""):
     step.regenerate_note = note
     step.status = StepRun.Status.QUEUED
     step.error = ""
+    step.notified_at = None
     step.save()
+    enqueue(step)
+    return refresh_run_status(step.run)
+
+
+@transaction.atomic
+def retry_step(step):
+    """Queue a failed step again with the same model."""
+    if step.status != StepRun.Status.FAILED:
+        raise ValueError("Only a failed step can be retried.")
+    step.status, step.error = StepRun.Status.QUEUED, ""
+    step.save(update_fields=["status", "error"])
+    enqueue(step)
     return refresh_run_status(step.run)
 
 

@@ -6,7 +6,7 @@ The studio automates an existing, proven manual workflow that runs as a set of C
 
 | Field | Meaning |
 |---|---|
-| Type | `seo_blog` (for sdsmanager.com), `outbound` (guest post), `pillar`, `lead_magnet`, `whitepaper` |
+| Type | `seo_blog` (for sdsmanager.com; includes pillar pages), `outbound` (guest post), `lead_magnet`, `whitepaper` |
 | TOPIC | What the piece is about |
 | PKEYWORD / SKEYWORD | Primary keyword and secondary keywords |
 | WORDCOUNT | Target length |
@@ -86,4 +86,15 @@ Runs after the brief for `outbound` content and mirrors the SITE_PROFILE in the 
 - robots.txt is respected; pace is about one page every 5 seconds; at most 8 pages.
 - Pages are fetched with the `Fetch Page` fallback chain (direct request with an honest user agent, then a reader service, then a scraping API). A page that still fails is skipped and listed, never forced.
 - You can add a specific article URL to read, edit the profile, or re-crawl before approving.
+
+## How steps run (M4)
+
+- Starting a run, approving a step, regenerating and retrying all **queue** a step; the `worker` container runs it as a background task (`apps/studio/tasks.py`).
+- Each step's prompt lives in `apps/studio/prompts/` and receives the brief plus the approved output of earlier steps (site profile → research → outline → draft → edited draft). A regenerate note is passed to the model for that attempt only.
+- Model choice: the step's chosen model, else its profile default. If the call still fails after the provider retries, the profile's **fallback model** is tried once and the version notes say so. If that fails too, the step shows **Failed** with a plain-language reason and a **Retry** button.
+- Steps without an approval gate (Final cleanup) continue automatically.
+- When a step becomes ready, a message appears on your next admin page view, and the sidebar badge counts it. The run workspace refreshes itself while a step is queued or running, with elapsed time against the model's typical duration.
+- **Research has no live web search yet.** The model works from what it knows and marks uncertain claims `[VERIFY]`; a search provider can be added later.
+- The interim Review and edit step is a single pass of the rules in the review sequence; M5 replaces it with the full seven-part sequence.
+- Publish is a final confirmation; creating the Wagtail page and exports arrive in M7.
 

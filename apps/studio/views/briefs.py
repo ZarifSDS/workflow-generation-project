@@ -60,7 +60,6 @@ class BriefWizardView(StudioPage):
                 "seo_blog": "For sdsmanager.com",
                 "outbound": "Third-party site",
                 "lead_magnet": "Checklist, guide",
-                "pillar": "Topic hub",
                 "whitepaper": "Long-form report",
             },
         )

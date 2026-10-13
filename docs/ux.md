@@ -54,7 +54,7 @@ Approved content becomes an `ArticlePage` draft and enters Wagtail's own moderat
 | Screen | Purpose | Key elements |
 |---|---|---|
 | **Studio dashboard** | Overview and entry point | "New brief" button; runs needing your review (top); runs in progress with live status; recent output; host service status (Ollama, ComfyUI) |
-| **Brief wizard** | Create a brief in a few short steps | Content-type cards (SEO blog, guest post, lead magnet, pillar, whitepaper); per-type fields with sensible defaults; inline help per field; step and model selection with a recommended preset |
+| **Brief wizard** | Create a brief in a few short steps | Content-type cards (SEO blog, guest post, lead magnet, whitepaper; pillar pages are covered by the SEO blog spec); per-type fields with sensible defaults; inline help per field; step and model selection with a recommended preset |
 | **Briefs listing** | Find and reuse briefs | Wagtail listing with filters (type, region, status), search, "Start run from brief" |
 | **Run workspace** | Where all the work happens | Left: vertical **step timeline** with status tags (queued, running with elapsed time, ready to review, approved, failed). Centre: the selected step's output in a reader/editor view. Right side panel: **checks** (grade per section, keywords, accuracy flags), **model** used with the dropdown to regenerate, step history and versions. |
 | **Step review panel** | Decide on one step's output | Approve / Edit & approve / Regenerate / Reject in Wagtail's action-menu style; side-by-side compare of versions; changelog for edit steps |

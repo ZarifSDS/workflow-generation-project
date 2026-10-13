@@ -58,6 +58,6 @@ class StudioPage(WagtailAdminTemplateMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context["generation_connected"] = False  # True from M4, when the worker runs steps
+        context["generation_connected"] = getattr(settings, "STUDIO_EXECUTE_STEPS", False)
         context["profiles_interim"] = getattr(settings, "AI_PROFILES_INTERIM", False)
         return context

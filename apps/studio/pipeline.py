@@ -33,7 +33,6 @@ _ARTICLE = ["research", "outline", "draft", "review_edit", "cleanup", "hero_imag
 
 PIPELINES = {
     "seo_blog": _ARTICLE,
-    "pillar": _ARTICLE,
     "whitepaper": _ARTICLE,
     "outbound": [
         "site_crawl",

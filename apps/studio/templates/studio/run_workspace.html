@@ -33,19 +33,31 @@
             <article class="s-doc" aria-labelledby="step-head">
                 {% if step %}
                     <h2 id="step-head" style="margin:0">{{ step.label }}</h2>
-                    {% if version %}
+                    {% if version and step.status != "running" %}
                         <p class="s-muted" style="margin:0">Version {{ version.number }} · {{ version.get_source_display }}{% if version.model %} · {% model_label version.provider version.model %}{% endif %} · {{ version.created_at|date:"j M H:i" }}</p>
                         {% if version.image %}<img src="{{ version.image.file.url }}" alt="Generated hero image for {{ brief.topic }}" style="max-width:100%;border-radius:.4rem">{% endif %}
                         <div class="s-output">{{ version.content|render_markdown }}</div>
+                    {% endif %}
+                    {% if step.status == "running" %}
+                        <div class="s-callout s-callout--info" role="status">
+                            <strong>Running</strong> with {% model_label step.provider step.model %} ·
+                            <span class="s-mono" data-elapsed-since="{{ step.started_at|date:'c' }}">0:00</span> elapsed{% if typical %} · usually {{ typical|duration }}{% endif %}.
+                            You can leave this page; you'll see a message when it's ready for review.
+                        </div>
                     {% elif step.status == "queued" or step.status == "pending" %}
-                        <div class="s-callout s-callout--info">
-                            {% if step.status == "queued" %}<strong>Queued</strong> with {% model_label step.provider step.model %}.{% else %}<strong>Waiting</strong> for the previous step to be approved.{% endif %}
-                            {% if not generation_connected %} Generation is connected in milestone M4; until then steps don't run automatically.{% endif %}
+                        <div class="s-callout s-callout--info" role="status">
+                            {% if step.status == "queued" %}<strong>Queued</strong> with {% model_label step.provider step.model %}. It starts as soon as the worker is free.{% else %}<strong>Waiting</strong> for the previous step to be approved.{% endif %}
+                            {% if not generation_connected %} Step execution is switched off in these settings.{% endif %}
                         </div>
                     {% elif step.status == "skipped" %}
                         <p class="s-muted">This step is switched off for this run.</p>
                     {% elif step.status == "failed" %}
-                        <div class="s-callout"><strong>This step failed.</strong> {{ step.error|default:"No details were recorded." }} Choose another model on the right and regenerate.</div>
+                        <div class="s-callout" role="alert"><strong>This step failed.</strong> {{ step.error|default:"No details were recorded." }}
+                            <form method="post" style="margin-top:.6rem">{% csrf_token %}<input type="hidden" name="step" value="{{ step.key }}"><button class="button button-small" type="submit" name="action" value="retry">Retry with the same model</button> <span class="s-muted">or choose another model on the right.</span></form>
+                        </div>
+                    {% endif %}
+                    {% if version and version.note %}
+                        <details class="s-disclosure"{% if "fallback" in version.note %} open{% endif %}><summary>Notes for this version</summary><div class="s-output">{{ version.note|render_markdown }}</div></details>
                     {% endif %}
                 {% else %}
                     <p class="s-muted">This run has no steps.</p>
@@ -139,4 +151,36 @@
         </aside>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+    {{ block.super }}
+    <script>
+    (function () {
+        // Live elapsed time for a running step.
+        document.querySelectorAll("[data-elapsed-since]").forEach(function (el) {
+            var since = Date.parse(el.dataset.elapsedSince);
+            if (isNaN(since)) return;
+            function tick() {
+                var s = Math.max(0, Math.round((Date.now() - since) / 1000));
+                el.textContent = Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
+            }
+            tick(); setInterval(tick, 1000);
+        });
+        // While steps are queued or running, check every 5 s and reload when something changes.
+        var url = "{% url 'studio:run_status' run.pk %}", last = null;
+        function poll() {
+            fetch(url, {headers: {"X-Requested-With": "fetch"}, credentials: "same-origin"})
+                .then(function (r) { return r.ok ? r.json() : null; })
+                .then(function (data) {
+                    if (!data) return;
+                    if (last && data.signature !== last) { window.location.reload(); return; }
+                    last = data.signature;
+                    if (data.active) setTimeout(poll, 5000);
+                })
+                .catch(function () { setTimeout(poll, 15000); });
+        }
+        {% if run_active %}poll();{% endif %}
+    })();
+    </script>
 {% endblock %}

@@ -32,6 +32,7 @@ class BriefForm(forms.ModelForm):
             "site",
             "site_domain",
             "narrative_mode",
+            "localise_to",
             "notes",
         ]
         widgets = {

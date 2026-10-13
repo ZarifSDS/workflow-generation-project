@@ -1,7 +1,8 @@
 import difflib
+import hashlib
 
 from django.contrib import messages
-from django.http import Http404
+from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 
@@ -98,6 +99,14 @@ class RunWorkspaceView(StudioPage):
                 and self.run.status != GenerationRun.Status.REJECTED
             ),
             has_metadata=self.run.metadata_options.exists(),
+            typical=(
+                catalog.find(step.provider, step.model).typical_seconds
+                if step and catalog.find(step.provider, step.model)
+                else None
+            ),
+            run_active=self.run.steps.filter(
+                status__in=[StepRun.Status.QUEUED, StepRun.Status.RUNNING]
+            ).exists(),
         )
         return context
 
@@ -117,6 +126,9 @@ class RunWorkspaceView(StudioPage):
             elif action == "regenerate":
                 services.request_regenerate(step, request.POST.get("model", ""), request.POST.get("note", ""))
                 messages.success(request, f"{step.label} is queued with the chosen model.")
+            elif action == "retry":
+                services.retry_step(step)
+                messages.success(request, f"{step.label} is queued again.")
             elif action == "reject":
                 reason = request.POST.get("reason", "").strip()
                 if not reason:
@@ -170,3 +182,17 @@ class VersionCompareView(StudioPage):
             {"url": f"{run_url}?step={self.kwargs['step']}", "label": "Run"},
             {"url": "", "label": "Compare versions"},
         ]
+
+
+def run_status(request, pk):
+    """Polled by the run workspace while steps are queued or running."""
+    run = get_object_or_404(GenerationRun, pk=pk)
+    steps = [
+        {"key": s.key, "status": s.status, "started_at": s.started_at.isoformat() if s.started_at else None}
+        for s in run.steps.all()
+    ]
+    signature = hashlib.sha1(
+        "|".join(f"{s['key']}:{s['status']}" for s in steps).encode() + run.status.encode()
+    ).hexdigest()
+    active = any(s["status"] in (StepRun.Status.QUEUED, StepRun.Status.RUNNING) for s in steps)
+    return JsonResponse({"run": run.status, "steps": steps, "signature": signature, "active": active})

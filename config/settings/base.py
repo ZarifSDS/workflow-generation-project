@@ -61,6 +61,7 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "wagtail.contrib.redirects.middleware.RedirectMiddleware",
+    "apps.studio.middleware.ReviewNotificationsMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"
@@ -218,6 +219,11 @@ AI_PROFILES = {
     },
 }
 AI_PROFILES_INTERIM = True  # flips to False once docs/model-eval.md records the chosen defaults
+
+# Content Studio pipeline execution (the worker container runs queued steps).
+STUDIO_EXECUTE_STEPS = True
+STUDIO_CRAWL_MAX_PAGES = 8
+STUDIO_CRAWL_PACE_SECONDS = 5
 
 AI_RETRIES = 3
 AI_RETRY_BACKOFF = 5  # seconds; grows 5, 15, 45

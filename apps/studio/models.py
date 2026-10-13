@@ -11,7 +11,6 @@ class ContentType(models.TextChoices):
     SEO_BLOG = "seo_blog", "SEO blog"
     OUTBOUND = "outbound", "Guest post"
     LEAD_MAGNET = "lead_magnet", "Lead magnet"
-    PILLAR = "pillar", "Pillar page"
     WHITEPAPER = "whitepaper", "Whitepaper"
 
 
@@ -99,6 +98,13 @@ class ContentBrief(BriefFieldsMixin):
     site = models.CharField("Target site", max_length=255, blank=True, help_text="Guest posts only.")
     site_domain = models.URLField("Target site URL", blank=True, help_text="Guest posts only.")
     notes = models.TextField(blank=True)
+    localise_to = models.CharField(
+        "Localise to",
+        max_length=4,
+        choices=Region.choices,
+        blank=True,
+        help_text="Used by the optional Localise step: the region of the variant to produce.",
+    )
     preset = models.ForeignKey(
         BriefPreset, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
     )
@@ -199,6 +205,7 @@ class StepRun(models.Model):
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
     error = models.TextField(blank=True)
     regenerate_note = models.TextField(blank=True)
+    notified_at = models.DateTimeField(null=True, blank=True)  # "ready for review" message shown
     started_at = models.DateTimeField(null=True, blank=True)
     finished_at = models.DateTimeField(null=True, blank=True)
     approved_by = models.ForeignKey(

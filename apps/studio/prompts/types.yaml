@@ -1,0 +1,29 @@
+# Per content-type instructions inserted into the step prompts as {{type_instructions}}.
+
+seo_blog:
+  label: "SEO blog article for sdsmanager.com (including pillar pages)"
+  instructions: >
+    This article is published on the SDS Manager blog. If the topic is broad enough to be a pillar
+    page, structure it as a hub that covers each subtopic briefly and names the deeper articles it
+    should link to. End with a short conclusion naming the gap the reader still has, one practical
+    next action, and at most one sentence naming SDS Manager as a way to handle it (no hard sell).
+
+outbound:
+  label: "Guest post for a third-party website"
+  instructions: >
+    This is a guest post on someone else's site: no sales pitch and no product promotion. Follow the
+    site profile (narrative mode, voice, heading style, typical length, link habits). Build each H2 on
+    a phrase people actually search for.
+
+lead_magnet:
+  label: "Downloadable lead magnet (checklist or guide)"
+  instructions: >
+    This is a practical resource people download and use. For a checklist, use numbered items grouped
+    under a few H2 headings, each with a one- or two-sentence explanation of what to check and why.
+    Keep the introduction to two sentences.
+
+whitepaper:
+  label: "Whitepaper"
+  instructions: >
+    A long-form, evidence-led report for decision makers: executive summary first, then sections that
+    each make one argument with its evidence, then recommendations. Formal but plain.
