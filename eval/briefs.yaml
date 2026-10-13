@@ -1,0 +1,66 @@
+# Evaluation briefs (made up, realistic). Edit freely; ids are used in output paths.
+# `checks` drive automatic hints in metrics.json. They are hints, not verdicts: the
+# human Accuracy score decides.
+
+- id: b1-sds-retention
+  type: seo_blog
+  topic: "How long you must keep Safety Data Sheets: SDS retention rules under OSHA"
+  pkeyword: "SDS retention requirements"
+  skeywords: ["how long to keep safety data sheets"]
+  wordcount: 1800
+  fkgl: 9
+  audience: "EHS managers at US manufacturing sites"
+  comprehension: practitioner
+  region: US
+  cta_style: subtle
+  notes: >
+    Published on sdsmanager.com. SDS Manager is a SaaS for managing Safety Data Sheets
+    and chemical inventories. Mention the product once at most, in the conclusion.
+  checks:
+    good: ["1910\\.1020", "30 years", "exposure record"]
+    red_flags: ["keep (your |all )?(sdss?|safety data sheets) for (3|three|5|five|30|thirty) years"]
+  hero_prompt: >
+    Editorial photograph of an organised industrial records room with binders and a tablet
+    showing a digital safety data sheet library, soft natural light, no text
+
+- id: b2-secondary-labelling
+  type: outbound
+  topic: "Secondary container labelling: what warehouse teams get wrong"
+  site: "A UK logistics and warehouse operations blog"
+  narrative_mode: informational
+  pkeyword: "secondary container labelling"
+  skeywords: ["workplace chemical labels", "GB CLP label requirements", "decanting chemicals safely"]
+  wordcount: 1200
+  fkgl: 8
+  audience: "Warehouse supervisors and site health and safety leads in the UK"
+  comprehension: practitioner
+  region: UK
+  notes: >
+    Guest post for a third-party site, so no sales pitch. British spelling. UK law: COSHH
+    and GB CLP, not US OSHA rules.
+  checks:
+    good: ["COSHH", "\\bCLP\\b"]
+    red_flags: ["OSHA", "29 CFR", "HazCom"]
+  hero_prompt: >
+    Photograph of a UK warehouse worker in a hi-vis vest applying a label to a small spray
+    bottle decanted from a large chemical drum, realistic, no readable text
+
+- id: b3-lab-checklist
+  type: lead_magnet
+  topic: "SDS compliance audit checklist for small laboratories"
+  pkeyword: "SDS compliance checklist"
+  skeywords: ["chemical register"]
+  wordcount: 900
+  fkgl: 9
+  audience: "Lab managers at universities and small biotech labs in Australia"
+  comprehension: practitioner
+  region: AU
+  notes: >
+    A downloadable 20-point checklist with a one- or two-sentence explanation per item.
+    Australian WHS Regulations and GHS revision 7. Australian spelling.
+  checks:
+    good: ["5 years|five years", "register", "GHS (7|Rev(ision)? ?7)"]
+    red_flags: ["OSHA", "29 CFR"]
+  hero_prompt: >
+    Clean modern university laboratory shelf with neatly arranged chemical bottles and a
+    clipboard checklist, bright, shallow depth of field, no readable text

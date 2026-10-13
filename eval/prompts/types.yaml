@@ -1,0 +1,23 @@
+# Per content-type instructions inserted into the prompts as {{type_instructions}}.
+
+seo_blog:
+  label: "SEO blog article for sdsmanager.com"
+  instructions: >
+    This article is published on the SDS Manager blog. End with a short conclusion naming the
+    gap the reader still has, one practical next action, and at most one sentence naming SDS
+    Manager as a way to handle it (subtle call to action, no hard sell).
+
+outbound:
+  label: "Guest post for a third-party website"
+  instructions: >
+    This is a guest post on someone else's site: no sales pitch and no product promotion.
+    Write in the narrative mode given (informational = second or third person, no personal
+    anecdotes). Build each H2 on a phrase people actually search for.
+
+lead_magnet:
+  label: "Downloadable lead magnet (checklist)"
+  instructions: >
+    This is a practical checklist people download and use during an audit. Structure it as
+    numbered checklist items grouped under a few H2 headings, each item with a one- or
+    two-sentence explanation of what to check and why. Keep the introduction to two
+    sentences.

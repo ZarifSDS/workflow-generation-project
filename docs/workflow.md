@@ -23,7 +23,7 @@ The studio automates an existing, proven manual workflow that runs as a set of C
 | 1 | Research | Sources, claims, verification table | Approve | fast |
 | 2 | Outline | Detailed outline + headings-only outline + structure decisions | Approve (edit allowed) | quality |
 | 3 | Draft | Full draft, three metadata options per field, link map | Approve (optionally per H2) | quality |
-| 4 | Edit and de-AI | Revised article plus changelog, with quality-check results | Approve | quality |
+| 4 | Review and edit | Revised article plus a per-section changelog and grade report ([sequence below](#review-and-edit-step-m5)) | Approve | edit |
 | 5 | Final cleanup | Hidden-Unicode removal, final mechanical sweep | Auto | none (deterministic) |
 | 6 | Hero image | Generated image plus branded hero (WebP/PNG) | Approve | image |
 | 7 | Localise (optional) | Regional or language variants | Approve | quality |
@@ -33,16 +33,34 @@ The studio automates an existing, proven manual workflow that runs as a set of C
 
 - `quality`: slower, best writing
 - `fast`: quick extraction and summaries
+- `edit`: targeted revision in the review-and-edit step (may differ from the drafting model)
 - `image`: hero image generation
 
-## Approval actions
+## Review and edit step (M5)
+
+This replaces Step 3 of the blog skills with the sequence used in practice:
+
+1. **Per-section grade scan:** FKGL for every H2 section, shown as a table and badges.
+2. **De-slop pass:** the `deslop` mechanisms (lexical, structure and redundancy scans, then a rewrite of what they flag).
+3. **Clarity review:** the `clarity-review` checks (repeated sentence frames, unclear references, jargon).
+4. **Strip meta narration** ("In this article we'll…", "Let's dive in", "As mentioned above", and similar).
+5. **Sections above grade 13:** word-level edits first. No sentence splitting at this stage.
+6. **Re-scan** the per-section grade.
+7. **Targeted splits:** split only sentences whose split drastically lowers the section's grade while keeping clarity. Each candidate split is shown with its before and after grade.
+8. **Approval**, with a changelog of every edit by section.
+
+Each sub-step's output and grade change is visible on the run screen. Sub-steps 2, 3, 5 and 7 use the `edit` profile. M5 also adds an **edit round** to the model evaluation, since the best editing model may differ from the best drafting model.
+
+## Approval actions and UI (M3–M4)
 
 On each step awaiting approval you can:
 
 - **Approve:** accept the output and queue the next step.
 - **Edit & approve:** change the output in the admin editor, then continue. Your edited version is what later steps see.
-- **Regenerate:** rerun the step, optionally with a different provider or model.
+- **Regenerate:** rerun the step. A **provider and model dropdown** lists only models verified as available, marked free or paid, with the step's default profile preselected.
 - **Reject:** stop the run and record why.
+
+**Title, meta description and slug options** from the draft step appear as a **checklist**. Tick the options you want, or use **"Add your own"** to type a custom option into the list. Whatever is ticked or typed is used by later steps and the published page.
 
 ## Reusing the existing skill scripts (M5–M6)
 

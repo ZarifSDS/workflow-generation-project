@@ -22,3 +22,6 @@ config/settings/local.py
 .idea/
 Thumbs.db
 .DS_Store
+
+# Evaluation runs (outputs stay local; only docs/model-eval.md is committed)
+/eval/runs/

@@ -1,0 +1,18 @@
+# Free candidates verified 2026-10-13 (docs/providers.md). Labels are assigned blind per brief.
+# `options` are passed to the adapter: local Ollama understands num_ctx, think, keep_alive.
+
+text:
+  - {provider: ollama, model: "huihui_ai/Qwen3.8-abliterated:latest", options: {num_ctx: 32768, think: true}}
+  - {provider: ollama, model: "glm-4.7-flash:latest", options: {num_ctx: 32768}}
+  - {provider: ollama, model: "hf.co/mradermacher/Huihui-Ornith-1.5-35B-A3B-abliterated-i1-GGUF:latest", options: {num_ctx: 32768}}
+  - {provider: ollama_cloud, model: "nemotron-3-ultra"}
+  - {provider: ollama_cloud, model: "gpt-oss:120b"}
+  - {provider: ollama_cloud, model: "gemma4:31b"}
+  - {provider: gemini, model: "gemini-3.8-flash"}
+  - {provider: gemini, model: "gemini-3.7-flash"}
+  - {provider: groq, model: "qwen/qwen3.8-27b"}
+  - {provider: groq, model: "openai/gpt-oss-120b"}
+
+image:
+  - {provider: cloudflare, model: "@cf/black-forest-labs/flux-2-klein-4b", options: {width: 1024, height: 576}}
+  - {provider: cloudflare, model: "@cf/black-forest-labs/flux-1-schnell", options: {steps: 8}}

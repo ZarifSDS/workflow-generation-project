@@ -3,10 +3,10 @@
 | # | Milestone | Deliverable | Status |
 |---|---|---|---|
 | M1 | Bootstrap and docs | Wagtail 8 project; Docker stack (web, worker, db, migrate); Postgres; healthchecks; Content Studio menu; tests; CI; docs | Done |
-| M2 | AI layer and model evaluation | Provider registry and OpenAI-compatible client; Ollama tuning; `scripts/eval_models.py`; results in model-eval.md; defaults chosen | Next |
-| M3 | Studio data and admin | `ContentBrief`, `PipelineTemplate`, `GenerationRun`, `StepRun`; Briefs/Runs/Prompts screens; run detail view | Planned |
+| M2 | AI layer and model evaluation | Provider registry; OpenAI-compatible and Ollama-native adapters; Cloudflare images; `ai_smoke`, `eval_models`, `eval_report` commands; results in model-eval.md; defaults chosen | In progress (layer built; evaluation running) |
+| M3 | Studio data and admin | `ContentBrief`, `PipelineTemplate`, `GenerationRun`, `StepRun`; Briefs/Runs/Prompts screens; run detail view; **provider/model dropdowns** (verified models only, free/paid marked); **title/meta/slug options as a checklist with "Add your own"** | Planned |
 | M4 | Pipeline and worker | Steps as background tasks; approval gates; retries and provider fallback; live status | Planned |
-| M5 | Quality tools | Wrap the skill scripts (deslop, clean-user-facing-text, metrics) as checks and badges | Planned |
+| M5 | Quality tools and review step | Wrap the skill scripts (deslop, clarity-review, clean-user-facing-text, metrics); the **review-and-edit sequence** in [workflow.md](workflow.md#review-and-edit-step-m5) (per-section grade scan → de-slop → clarity review → strip meta narration → word-level edits above grade 13 → re-scan → targeted splits); **edit-model evaluation round** | Planned |
 | M6 | Images | ComfyUI and Cloudflare providers; VRAM handoff; sds-hero-stock branding | Planned |
 | M7 | Publish and integrate | `ArticlePage`; moderation workflow; Markdown/HTML/DOCX export; optional n8n webhook | Planned |
 | M8 | Hardening | Roles and permissions; secret handling review; database backups; production compose | Planned |

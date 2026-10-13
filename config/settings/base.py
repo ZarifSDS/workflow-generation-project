@@ -24,6 +24,7 @@ INSTALLED_APPS = [
     "apps.home",
     "apps.search",
     "apps.studio",
+    "apps.ai",
     "wagtail.contrib.forms",
     "wagtail.contrib.redirects",
     "wagtail.contrib.settings",
@@ -158,10 +159,54 @@ WAGTAILDOCS_MAX_UPLOAD_SIZE = 10 * 1024 * 1024  # 10MB
 OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://host.docker.internal:11434")
 COMFYUI_BASE_URL = os.environ.get("COMFYUI_BASE_URL", "http://host.docker.internal:8188")
 
+# Some provider edges (e.g. Groq) reject requests without a real User-Agent.
+AI_USER_AGENT = "workflow-studio/0.1 (+https://github.com/ZarifSDS/workflow-generation-project)"
+
+# Free providers verified 2026-10-13 (docs/providers.md).
+AI_PROVIDERS = {
+    "ollama": {"adapter": "ollama_native", "base_url": OLLAMA_BASE_URL},
+    "ollama_cloud": {
+        "adapter": "openai_compat",
+        "base_url": "https://ollama.com/v1",
+        "api_key_env": "OLLAMA_CLOUD_API_KEY",
+    },
+    "gemini": {
+        "adapter": "openai_compat",
+        "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
+        "api_key_env": "GEMINI_API_KEY",
+    },
+    "groq": {
+        "adapter": "openai_compat",
+        "base_url": "https://api.groq.com/openai/v1",
+        "api_key_env": "GROQ_API_KEY",
+    },
+    "cloudflare": {
+        "adapter": "cloudflare_images",
+        "base_url": "https://api.cloudflare.com/client/v4",
+        "api_key_env": "CLOUDFLARE_API_TOKEN",
+        "account_env": "CLOUDFLARE_ACCOUNT_ID",
+    },
+}
+
+# Profiles map pipeline steps to a provider and model. Filled in after the model
+# evaluation (docs/model-eval.md); M3 makes them editable in the admin.
+# Shape: {"quality": {"provider": ..., "model": ..., "options": {...}, "fallback": {...}}}
+AI_PROFILES = {}
+
+AI_RETRIES = 3
+AI_RETRY_BACKOFF = 5  # seconds; grows 5, 15, 45
+
 
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
     "handlers": {"console": {"class": "logging.StreamHandler"}},
     "root": {"handlers": ["console"], "level": os.environ.get("LOG_LEVEL", "INFO")},
+    # httpx logs every request URL at INFO, which would print account IDs.
+    "loggers": {
+        "httpx": {"level": "WARNING"},
+        "httpcore": {"level": "WARNING"},
+        "openai": {"level": "WARNING"},
+        "httpx2": {"level": "WARNING"},  # the openai SDK's bundled httpx fork
+    },
 }

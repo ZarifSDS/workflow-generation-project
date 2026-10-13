@@ -26,7 +26,7 @@ Each key was checked with a list-models call from inside the `web` container.
 |---|---|---|
 | Ollama (local) | Active | Qwen3.8 27B, glm-4.7-flash, 35B-A3B MoE, qwen3-vl 30B-A3B, gemma4:e4b, nemotron-cascade-2 |
 | Ollama Cloud (free plan) | Active | **Free:** nemotron-3-ultra, nemotron-3-super, gpt-oss:120b, gemma4:31b, nemotron-3-nano:30b, gpt-oss:20b. Paid only (HTTP 402): kimi-k3/k2.x, deepseek-v4-*, glm-5.x, minimax-m*, mistral-large-3. mistral-large-4 is still rolling out (403). |
-| Gemini | Active | gemini-2.5-pro, gemini-2.5-flash, gemini-3-flash-preview, gemma-4-31b-it |
+| Gemini (free tier) | Active | **Free:** gemini-3.8-flash, gemini-3.7-flash, gemini-3.5-flash-lite, gemini-3.1-flash-lite, gemma-4-26b-a4b-it. Pro models (gemini-3.1-pro-preview, gemini-pro-latest) have **no free quota** (429 on first call). The 2.5 generation is closed to new users (404). Newer Flash models sometimes return 503 "high demand"; the service retries. |
 | Groq | Active | qwen/qwen3.8-27b, openai/gpt-oss-120b, openai/gpt-oss-20b |
 | Cloudflare Workers AI | Active (images) | flux-2-klein-4b, flux-1-schnell (see the licence note below) |
 | NVIDIA NIM | Not used | Account verification isn't available in the operator's country |

@@ -19,3 +19,11 @@ There is no paid Claude/OpenAI API. Candidates are local Ollama models (host GPU
 - Adding a provider is configuration plus, at most, a small adapter.
 - Provider-specific features (e.g. Ollama `think`) are passed through options and ignored by providers that don't support them.
 - Model defaults are recorded in [model-eval.md](../model-eval.md) with the evidence behind them.
+
+## Amendment (2026-10-13, M2 implementation)
+
+- **Local Ollama uses its native `/api/chat` endpoint** (`apps/ai/adapters/ollama_native.py`), not the OpenAI-compatible one. The compatible endpoint ignores `num_ctx`, `keep_alive` and `think`, and doesn't report `eval_count` / `eval_duration`, which are needed for true generation speed. `/api/ps` additionally gives the model's GPU vs CPU memory split. Ollama **Cloud** stays on the OpenAI-compatible adapter.
+- **Cloudflare Workers AI** differs per model: FLUX.1 schnell takes JSON (`prompt`, `steps`, `seed` only); FLUX.2 models take multipart form data (`prompt`, `width`, `height`, …). Both return a base64 JPEG in `result.image`.
+- **Every request sends an explicit `User-Agent`** (`AI_USER_AGENT`). Groq's edge returns 403 for Python's default one.
+- The `openai` SDK (3.x) bundles its own httpx fork (`httpx2`), which `respx` can't intercept. Tests inject a mock transport through `openai_compat.http_client_factory`.
+- The `openai` and `httpx` loggers are set to WARNING, so request URLs (which contain the Cloudflare account ID) aren't logged.
