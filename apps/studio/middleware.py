@@ -1,4 +1,5 @@
-"""Admin-only notifications: on your next admin page view, say which steps became ready for review."""
+"""Admin-only notifications (on your next admin page view, say which steps became ready for review)
+and the SVG sandbox header."""
 
 from django.contrib import messages
 from django.urls import reverse
@@ -6,6 +7,24 @@ from django.utils import timezone
 from django.utils.html import format_html
 
 from .models import GenerationRun, StepRun
+
+SVG_CSP = "default-src 'none'; style-src 'unsafe-inline'; sandbox"
+
+
+class SvgSandboxMiddleware:
+    """Serves SVG files so scripts inside them can't run if someone opens the file directly.
+
+    Covers media served by Django (dev); Caddy sets the same header in share and production mode.
+    """
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        response = self.get_response(request)
+        if response.get("Content-Type", "").startswith("image/svg+xml"):
+            response["Content-Security-Policy"] = SVG_CSP
+        return response
 
 
 class ReviewNotificationsMiddleware:

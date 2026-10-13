@@ -10,6 +10,9 @@ handle_path /media/* {
 	root * /srv/media
 	file_server
 	header Cache-Control "public, max-age=86400"
+	# SVG images can carry scripts: sandbox them when opened directly (same as SvgSandboxMiddleware)
+	@svg path *.svg *.SVG
+	header @svg Content-Security-Policy "default-src 'none'; style-src 'unsafe-inline'; sandbox"
 }
 
 handle {

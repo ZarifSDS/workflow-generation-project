@@ -133,10 +133,25 @@ def html_export(run, variant="final"):
     )
 
 
+SVG_RASTER_WIDTH = 1440  # DOCX and Pillow can't use SVG; it's drawn at this width first
+
+
+def _open_picture(image, handle):
+    from PIL import Image
+
+    if not image.is_svg():
+        return Image.open(handle)
+    import cairosvg
+
+    # unsafe=False (the default): no external files or URLs are fetched while drawing.
+    png = cairosvg.svg2png(file_obj=handle, output_width=SVG_RASTER_WIDTH, background_color="white")
+    return Image.open(io.BytesIO(png))
+
+
 def _image_bytes(image, size=None, fmt="PNG"):
     from PIL import Image, ImageOps
 
-    with image.file.open("rb") as handle, Image.open(handle) as source:
+    with image.file.open("rb") as handle, _open_picture(image, handle) as source:
         picture = source.convert("RGB")
         if size:
             picture = ImageOps.fit(picture, size, Image.LANCZOS)

@@ -67,6 +67,7 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "wagtail.contrib.redirects.middleware.RedirectMiddleware",
     "apps.studio.middleware.ReviewNotificationsMiddleware",
+    "apps.studio.middleware.SvgSandboxMiddleware",
     # Keep last: turns failed-login lockouts into the lockout page.
     "axes.middleware.AxesMiddleware",
 ]
@@ -180,6 +181,10 @@ DATA_UPLOAD_MAX_NUMBER_FIELDS = 10_000
 WAGTAIL_SITE_NAME = "Content Workflow Studio"
 WAGTAILSEARCH_BACKENDS = {"default": {"BACKEND": "wagtail.search.backends.database"}}
 WAGTAILADMIN_BASE_URL = os.environ.get("WAGTAILADMIN_BASE_URL", "http://localhost:8000")
+# Image types (user spec 2026-10-13): Wagtail's defaults plus SVG. WebP is a default already.
+# SVGs can carry scripts: media serves them with a sandboxing CSP (apps/studio/middleware.py,
+# deploy/caddy/routes.caddy) and exports rasterise them (apps/content/exports.py).
+WAGTAILIMAGES_EXTENSIONS = ["avif", "gif", "jpg", "jpeg", "png", "webp", "svg"]
 WAGTAILDOCS_EXTENSIONS = ["csv", "docx", "key", "odt", "pdf", "pptx", "rtf", "txt", "xlsx", "zip"]
 # Upload limits (user decision 2026-10-13): 10 MB per image, 25 MB per document (sized for PDFs).
 # Wagtail has one limit for all document types. The proxies allow a little more for form overhead.

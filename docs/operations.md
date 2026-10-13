@@ -53,6 +53,8 @@ Secrets live only in `.env` (never in git, the database or logs). After changing
 | `BACKUP_DIR`, `BACKUP_INTERVAL_HOURS`, `BACKUP_KEEP_DAYS` | Automated backups |
 
 Upload limits are settings, not environment variables: 10 MB per image (`WAGTAILIMAGES_MAX_UPLOAD_SIZE`) and 25 MB per document, sized for PDFs (`WAGTAILDOCS_MAX_UPLOAD_SIZE`), in `config/settings/base.py`. Caddy accepts up to 30 MB per request to leave room for form overhead.
+
+Image types (`WAGTAILIMAGES_EXTENSIONS`): AVIF, GIF, JPEG, PNG, WebP and SVG. SVG files can contain scripts, so media responses for them carry a sandboxing `Content-Security-Policy` (`SvgSandboxMiddleware` when Django serves media in dev, `deploy/caddy/routes.caddy` in share and production mode). DOCX exports rasterise SVGs with CairoSVG (`libcairo2` in the image), which never fetches external files.
 | `NVIDIA_API_KEY`, `MISTRAL_API_KEY`, `OPENROUTER_API_KEY` | Listed for completeness; not usable in this deployment |
 
 ## Providers and models

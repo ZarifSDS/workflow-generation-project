@@ -39,6 +39,7 @@ RUN apt-get update --yes --quiet && apt-get install --yes --quiet --no-install-r
     libpq5 \
     libjpeg62-turbo \
     libwebp7 \
+    libcairo2 \
  && rm -rf /var/lib/apt/lists/*
 
 RUN useradd --create-home wagtail
