@@ -42,9 +42,12 @@ class KeysPage(StudioPage):
     def prepare(self, **kwargs):
         """Load what the page is about (after the permission check)."""
 
+    home = ("studio:provider_keys", "AI providers")  # the settings page this one belongs to
+
     def get_breadcrumbs_items(self):
-        items = [{"url": reverse("studio:provider_keys"), "label": "AI providers"}]
-        if self.page_title != "AI providers":
+        url_name, label = self.home
+        items = [{"url": reverse(url_name), "label": label}]
+        if self.page_title != label:
             items.append({"url": "", "label": self.page_title})
         return items
 
@@ -57,6 +60,17 @@ class KeysPage(StudioPage):
         context = super().get_context_data(**kwargs)
         context.update(secrets_ready=secrets.available(), secrets_env=secrets.ENV_NAME)
         return context
+
+
+def is_search(name):
+    """Search data providers (Serper, Brave, Google Programmable Search) have their own settings page."""
+    return settings.AI_PROVIDERS.get(name, {}).get("adapter") == "search"
+
+
+def home_for(name):
+    if is_search(name):
+        return ("studio:search_providers", "Search data providers")
+    return ("studio:provider_keys", "AI providers")
 
 
 def _row_for(name, label):
@@ -77,12 +91,15 @@ def _clear_secret(row, field):
 class ProviderKeysView(KeysPage):
     template_name = "studio/provider_keys.html"
     page_title = "AI providers"
+    search = False  # True on Settings › Search data providers
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         stored = {row.name: row for row in ProviderConfig.objects.select_related("updated_by")}
         providers = []
         for name, spec in get_providers().items():
+            if is_search(name) != self.search:
+                continue
             row = stored.get(name)
             env_value = spec.api_key if spec.key_source == "env" else ""
             providers.append(
@@ -117,12 +134,14 @@ class ProviderKeyView(KeysPage):
         if self.spec is None or not (self.spec.needs_key or self.spec.account_env):
             raise Http404
         self.page_title = f"Key for {self.label_for(self.spec.name, self.spec)}"
+        self.home = home_for(self.spec.name)
 
     def get_form(self):
         return KeyForm(
             self.request.POST or None,
             needs_account=bool(self.spec.account_env),
             required=not self.spec.account_env,
+            account_label=self.spec.account_label,
         )
 
     def get_context_data(self, **kwargs):
@@ -150,7 +169,7 @@ class ProviderKeyView(KeysPage):
             row.save()
             log(instance=row, action="ai.key_set", user=request.user, data={"changed": changed})
         messages.success(request, f"Saved {' and '.join(changed)} for {row.label}. It's used from now on.")
-        return redirect("studio:provider_keys")
+        return redirect(home_for(row.name)[0])
 
 
 class ConfirmView(KeysPage):
@@ -181,6 +200,7 @@ class RemoveKeyView(ConfirmView):
             else "The provider stays in the list but can't be used until you enter a key again."
         )
         self.button = "Remove key"
+        self.home = home_for(self.row.name)
 
     def post(self, request, *args, **kwargs):
         row = self.row
@@ -194,7 +214,7 @@ class RemoveKeyView(ConfirmView):
                 row.updated_by = request.user
                 row.save()
         messages.success(request, f"Removed the stored key for {row.label}.")
-        return redirect("studio:provider_keys")
+        return redirect(home_for(row.name)[0])
 
 
 class AddedProviderView(KeysPage):
@@ -322,3 +342,51 @@ class DeleteModelView(ConfirmView):
         self.item.delete()
         messages.success(request, f"Removed {label}.")
         return redirect("studio:provider_keys")
+
+
+class SearchProvidersView(ProviderKeysView):
+    """Settings › Search data providers: keys for the Search results step (apps/studio/serp.py)."""
+
+    template_name = "studio/search_providers.html"
+    page_title = "Search data providers"
+    header_icon = "search"
+    search = True
+    home = ("studio:search_providers", "Search data providers")
+
+    FREE_TIERS = {
+        "serper": "Google results by country and language; free starting credits, then paid.",
+        "brave_search": "Brave's own index by country and language; free monthly tier.",
+        "google_cse": (
+            "Google Programmable Search; about 100 free queries a day. Needs a key and a search engine ID."
+        ),
+    }
+
+    def get_context_data(self, **kwargs):
+        from .. import serp
+
+        context = super().get_context_data(**kwargs)
+        for provider in context["providers"]:
+            provider["free_tier"] = self.FREE_TIERS.get(provider["name"], "")
+        ollama = get_providers().get("ollama_cloud")
+        context.update(
+            order=settings.STUDIO_SERP_PROVIDERS,
+            in_use=serp.configured_providers(),
+            ollama_ready=bool(ollama and ollama.is_configured),
+            pages=settings.STUDIO_SERP_PAGES,
+        )
+        return context
+
+    def post(self, request, *args, **kwargs):
+        """Test search: one query through the first provider that answers."""
+        from .. import serp
+
+        try:
+            data = serp.search("safety data sheet requirements", "US", num=5)
+            messages.success(
+                request,
+                f"{data.provider} answered with {len(data.results)} results. "
+                "The Search results step will use it.",
+            )
+        except serp.SerpError as error:
+            messages.error(request, str(error)[:400])
+        return redirect("studio:search_providers")

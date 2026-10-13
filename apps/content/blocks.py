@@ -76,6 +76,21 @@ class FAQBlock(blocks.StructBlock):
         template = "content/blocks/faq.html"
 
 
+class CTABlock(blocks.StructBlock):
+    """The conclusion's button (ehs-seo-blog CTA_STYLE = button): a label that names the action the product
+    makes possible, linking to the product page named in the paragraph before it."""
+
+    label = blocks.CharBlock(
+        max_length=120, help_text="An action, e.g. Start reporting incidents from any device"
+    )
+    url = blocks.URLBlock(help_text="The product page the conclusion names")
+
+    class Meta:
+        icon = "link"
+        label = "CTA button"
+        template = "content/blocks/cta.html"
+
+
 # Labels follow the company CMS (Custom richtext, Table, Custom image, FAQ); Heading and Embed are ours:
 # they keep #anchors and video embeds as their own blocks, so the Markdown dialect maps onto them.
 ARTICLE_BLOCKS = [
@@ -85,6 +100,7 @@ ARTICLE_BLOCKS = [
     ("embed", EmbedBlock(icon="media")),
     ("table", TableBlock(label="Table")),
     ("faq", FAQBlock()),
+    ("cta", CTABlock()),
 ]
 
 

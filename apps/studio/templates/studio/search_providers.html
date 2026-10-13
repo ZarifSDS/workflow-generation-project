@@ -1,0 +1,57 @@
+{% extends "wagtailadmin/generic/base.html" %}
+
+{% block main_content %}
+<div class="studio">
+    {% if not secrets_ready %}
+        <div class="s-callout" role="alert">
+            <strong>Keys can't be stored yet.</strong> Add <code>{{ secrets_env }}</code> to <code>.env</code> and restart the studio (docs/security.md › Provider keys).
+        </div>
+    {% endif %}
+    <p class="s-muted s-m0">The Search results step reads what ranks for each brief's keyword in its region, then the structure of the top {{ pages }} pages. It uses the first provider below that is set up, in this order: {{ order|join:", " }}. Keys are encrypted, never shown again (only their last four characters), and every change is recorded under Reports › Site history.</p>
+
+    <section aria-labelledby="search-head" class="s-keys">
+        <div class="s-row-actions">
+            <h2 class="s-section" id="search-head">Providers</h2>
+            <span class="s-spacer"></span>
+            <form method="post">{% csrf_token %}<button class="button button-small button-secondary" type="submit">Test search</button></form>
+        </div>
+        <div class="s-table-wrap">
+            <table class="s-table">
+                <thead><tr><th scope="col">Provider</th><th scope="col">What you get</th><th scope="col">Key</th><th scope="col"><span class="w-sr-only">Actions</span></th></tr></thead>
+                <tbody>
+                {% for p in providers %}
+                    <tr>
+                        <th scope="row">{{ p.label }}{% if p.name in in_use and p.name == in_use.0 %} <span class="s-tag s-tag--ok">In use</span>{% endif %}<div class="s-muted s-mono s-keys__sub">{{ p.name }}</div></th>
+                        <td class="s-small">{{ p.free_tier }}</td>
+                        <td>
+                            {% if p.source == "studio" %}<span class="s-tag s-tag--ok">Stored here</span> <span class="s-mono">{{ p.hint }}</span>{% if p.account_hint %} <span class="s-muted">· engine ID</span> <span class="s-mono">{{ p.account_hint }}</span>{% endif %}
+                                {% if p.row.updated_by %}<div class="s-muted s-keys__sub">{{ p.row.updated_by.get_username }}, {{ p.row.updated_at|date:"j M Y H:i" }}</div>{% endif %}
+                            {% elif p.source == "env" %}<span class="s-tag s-tag--info">From .env</span> <span class="s-mono">{{ p.hint }}</span>
+                            {% elif p.account_hint %}<span class="s-tag s-tag--warn">Engine ID only</span>
+                            {% else %}<span class="s-tag s-tag--warn">Not set</span>{% endif %}
+                        </td>
+                        <td class="s-keys__actions">
+                            <a class="button button-small button-secondary" href="{% url 'studio:provider_key' p.name %}">{% if p.source == "studio" %}Replace key{% else %}Set key{% endif %}</a>
+                            {% if p.row.api_key_encrypted or p.row.account_id_encrypted %}<a class="button button-small button-secondary no" href="{% url 'studio:provider_key_remove' p.name %}">Remove key</a>{% endif %}
+                        </td>
+                    </tr>
+                {% endfor %}
+                <tr>
+                    <th scope="row">Ollama web search{% if "ollama_web" in in_use and in_use.0 == "ollama_web" %} <span class="s-tag s-tag--ok">In use</span>{% endif %}<div class="s-muted s-mono s-keys__sub">ollama_web</div></th>
+                    <td class="s-small">Uses your Ollama Cloud key; no country setting, so the region is added to the query. The last fallback, if DuckDuckGo blocks automated requests.</td>
+                    <td>{% if ollama_ready %}<span class="s-tag s-tag--ok">Ollama Cloud key set</span>{% else %}<span class="s-tag s-tag--warn">Not set</span>{% endif %}</td>
+                    <td class="s-keys__actions"><a class="button button-small button-secondary" href="{% url 'studio:provider_keys' %}">AI providers</a></td>
+                </tr>
+                <tr>
+                    <th scope="row">DuckDuckGo{% if in_use.0 == "duckduckgo" %} <span class="s-tag s-tag--ok">In use</span>{% endif %}<div class="s-muted s-mono s-keys__sub">duckduckgo</div></th>
+                    <td class="s-small">No key: the default when no keyed provider is set up (tried before Ollama web search, which has no country setting). Uses DuckDuckGo's region setting; best effort, as it may ask for a challenge instead of answering automated requests.</td>
+                    <td><span class="s-tag s-tag--info">No key needed</span></td>
+                    <td></td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+        <p class="s-muted s-small s-m0">Google autocomplete suggestions need no key. Keyword volumes (Semrush-style) aren't included: no free source exists.</p>
+    </section>
+</div>
+{% endblock %}

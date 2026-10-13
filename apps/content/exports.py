@@ -91,6 +91,8 @@ def article_meta(run, content):
         "seo_title": seo_title or title,
         "meta_description": _selected(run, "meta"),
         "slug": slugify(_selected(run, "slug") or seo_title or title)[:80] or "article",
+        "tags": [tag.strip() for tag in (_selected(run, "tags") or "").split(",") if tag.strip()][:8],
+        "excerpt": _selected(run, "excerpt") or "",
     }
 
 

@@ -17,7 +17,18 @@
     </div>
 
     {% if run.status == "rejected" %}
-        <div class="s-callout"><strong>Rejected.</strong> {{ run.reject_reason }}</div>
+        <div class="s-callout"><strong>Rejected.</strong> {{ run.reject_reason }}
+            {% if user_can_act and step %}
+                <form class="s-cluster s-stack--top" method="post">{% csrf_token %}
+                    <input type="hidden" name="step" value="{{ step.key }}">
+                    {% if step.definition.profile %}
+                        <input type="hidden" name="model" value="{{ current_model_key }}">
+                        <button class="button button-small" type="submit" name="action" value="reopen_regenerate">Reopen and regenerate {{ step.label|lower }} with this feedback</button>
+                    {% endif %}
+                    <button class="button button-small button-secondary" type="submit" name="action" value="reopen">Reopen the run</button>
+                </form>
+            {% endif %}
+        </div>
     {% endif %}
 
     <div class="s-workspace">
@@ -27,7 +38,7 @@
                     <li>
                         <a class="s-tl" href="?step={{ s.key }}" {% if step and s.pk == step.pk %}aria-current="step"{% endif %}>
                             <span class="s-dot s-dot--{{ s.status|status_style }}" aria-hidden="true"></span>
-                            <span>{{ s.label }}<small>{{ s.get_status_display }}{% if s.model %} · {% model_label s.provider s.model %}{% endif %}</small></span>
+                            <span>{{ s.label }}<small>{{ s.get_status_display }}{% if s.timer_since %} <span class="s-mono" data-elapsed-since="{{ s.timer_since|date:'c' }}">{{ s.elapsed_seconds|clock }}</span>{% elif s.duration_seconds is not None %} · took {{ s.duration_seconds|took }}{% endif %}{% if s.model %} · {% model_label s.provider s.model %}{% endif %}</small></span>
                         </a>
                     </li>
                 {% endfor %}
@@ -39,7 +50,7 @@
                 {% if step %}
                     <h2 class="s-m0" id="step-head">{{ step.label }}</h2>
                     {% if version and step.status != "running" %}
-                        <p class="s-muted s-m0">Version {{ version.number }} · {{ version.get_source_display }}{% if version.model %} · {% model_label version.provider version.model %}{% endif %} · {{ version.created_at|date:"j M H:i" }}</p>
+                        <p class="s-muted s-m0">Version {{ version.number }} · {{ version.get_source_display }}{% if version.model %} · {% model_label version.provider version.model %}{% endif %} · {{ version.created_at|date:"j M H:i" }}{% if version.metrics.duration_seconds is not None %} · took {{ version.metrics.duration_seconds|took }}{% endif %}</p>
                         {% if version.image %}<img class="s-image" src="{{ version.image.file.url }}" alt="Generated hero image for {{ brief.topic }}">{% endif %}
                         {% if article_page %}
                             <section class="s-box" aria-labelledby="page-head">
@@ -71,7 +82,7 @@
                                 {% if review.grades %}
                                     <div class="s-table-wrap">
                                         <table class="s-table">
-                                            <thead><tr><th scope="col">Section</th><th scope="col">Start</th><th scope="col">After word-level edits</th><th scope="col">Now</th><th scope="col">Target</th></tr></thead>
+                                            <thead><tr><th scope="col">Section</th><th scope="col">Start</th><th scope="col">After deslop and clarity</th><th scope="col">Now</th><th scope="col">Target</th></tr></thead>
                                             <tbody>
                                                 {% for g in review.grades %}
                                                     <tr><td>{{ g.heading }}</td><td class="s-mono">{{ g.start|default:"–" }}</td><td class="s-mono">{{ g.after_words|default:"–" }}</td><td class="s-mono">{% if g.final is not None %}<span class="s-tag s-tag--{{ g.final|fkgl_level:brief.fkgl }}">{{ g.final }}</span>{% else %}–{% endif %}</td><td class="s-mono">{{ brief.fkgl }}</td></tr>
@@ -119,7 +130,8 @@
                     {% if step.status == "running" %}
                         <div class="s-callout s-callout--info" role="status">
                             <strong>Running</strong> with {% model_label step.provider step.model %} ·
-                            <span class="s-mono" data-elapsed-since="{{ step.started_at|date:'c' }}">0:00</span> elapsed{% if typical %} · usually {{ typical|duration }}{% endif %}.
+                            <span class="s-mono" data-elapsed-since="{{ step.started_at|date:'c' }}"{% if typical %} data-typical="{{ typical }}"{% endif %}>{{ step.elapsed_seconds|clock }}</span> elapsed (started {{ step.started_at|date:"H:i" }}){% if typical %} · usually {{ typical|duration }}{% endif %}.
+                            <span data-slow-note{% if not typical or step.elapsed_seconds < typical|add:typical|add:typical %} hidden{% endif %}>It's taking much longer than usual: check that the worker and {% if step.provider == "ollama" %}Ollama are{% else %}the provider is{% endif %} running.</span>
                             You can leave this page; you'll see a message when it's ready for review.
                         </div>
                         {% if user_can_recover %}
@@ -133,13 +145,13 @@
                         {% endif %}
                     {% elif step.status == "queued" or step.status == "pending" %}
                         <div class="s-callout s-callout--info" role="status">
-                            {% if step.status == "queued" %}<strong>Queued</strong> with {% model_label step.provider step.model %}. It starts as soon as the worker is free.{% else %}<strong>Waiting</strong> for the previous step to be approved.{% endif %}
+                            {% if step.status == "queued" %}<strong>Queued</strong> with {% model_label step.provider step.model %}{% if step.queued_at %} for <span class="s-mono" data-elapsed-since="{{ step.queued_at|date:'c' }}">{{ step.elapsed_seconds|clock }}</span>{% endif %}. It starts as soon as a worker is free.{% else %}<strong>Waiting</strong> for the previous step to be approved.{% endif %}
                             {% if not generation_connected %} Step execution is switched off in these settings.{% endif %}
                         </div>
                     {% elif step.status == "skipped" %}
                         <p class="s-muted">This step is switched off for this run.</p>
                     {% elif step.status == "failed" %}
-                        <div class="s-callout" role="alert"><strong>This step failed.</strong> {{ step.error|default:"No details were recorded." }}
+                        <div class="s-callout" role="alert"><strong>This step failed{% if step.duration_seconds is not None %} after {{ step.duration_seconds|took }}{% endif %}.</strong> {{ step.error|default:"No details were recorded." }}
                             {% if user_can_retry %}<form class="s-stack--top" method="post">{% csrf_token %}<input type="hidden" name="step" value="{{ step.key }}"><button class="button button-small" type="submit" name="action" value="retry">Retry with the same model</button>{% if user_can_act %} <span class="s-muted">or choose another model on the right.</span>{% endif %}</form>{% endif %}
                         </div>
                     {% endif %}
@@ -155,10 +167,35 @@
                 <div class="s-actionbar">
                     <form method="post">{% csrf_token %}<input type="hidden" name="step" value="{{ step.key }}">{% if version %}<input type="hidden" name="base_version" value="{{ version.number }}">{% endif %}<button class="button" type="submit" name="action" value="approve">Approve {{ step.label|lower }}</button></form>
                     {% if can_edit %}<button class="button button-secondary" type="button" data-editor-open hidden>Edit</button>{% endif %}
-                    <details class="s-disclosure s-full">
-                        <summary>Reject this run</summary>
+                    <details class="s-disclosure s-full" open>
+                        <summary>Send back with feedback</summary>
                         <form class="s-stack s-stack--top" method="post">{% csrf_token %}
                             <input type="hidden" name="step" value="{{ step.key }}">
+                            <label for="send-back-feedback">What should change?</label>
+                            <textarea id="send-back-feedback" name="feedback" rows="3" required placeholder="e.g. Too technical for the audience: answer the searcher's question first, use simpler words, cut the software section."></textarea>
+                            {% if model_groups %}
+                                <label for="send-back-model">Model for the new version</label>
+                                <select id="send-back-model" name="model">
+                                    {% for group, items in model_groups %}
+                                        <optgroup label="{{ group }}">
+                                            {% for item in items %}<option value="{{ item.key }}" {% if not item.selectable %}disabled{% endif %} {% if item.key == current_model_key %}selected{% endif %}>{{ item.label }}{% if item.typical_seconds %} · {{ item.typical_seconds|duration }}{% endif %}</option>{% endfor %}
+                                        </optgroup>
+                                    {% endfor %}
+                                </select>
+                            {% endif %}
+                            <div class="s-cluster">
+                                {% if model_groups %}<button class="button" type="submit" name="how" value="regenerate">Regenerate with this feedback</button>{% endif %}
+                                {% if can_chat %}<button class="button button-secondary" type="submit" name="how" value="edit">Apply as targeted edits</button>{% endif %}
+                                <input type="hidden" name="action" value="send_back">
+                            </div>
+                            <p class="s-muted s-small s-m0">Regenerate writes the step again from its input, with your feedback and the chosen model. Targeted edits keep this version and change only what you describe (Suggestions chat model). Either way you get a new version to compare.</p>
+                        </form>
+                    </details>
+                    <details class="s-disclosure s-full">
+                        <summary>Reject the whole run</summary>
+                        <form class="s-stack s-stack--top" method="post">{% csrf_token %}
+                            <input type="hidden" name="step" value="{{ step.key }}">
+                            <p class="s-muted s-small s-m0">Stops the run. You can reopen it later from the banner at the top.</p>
                             <label for="reject-reason">Why are you rejecting it?</label>
                             <textarea id="reject-reason" name="reason" rows="2" required></textarea>
                             <div><button class="button no" type="submit" name="action" value="reject">Reject run</button></div>
@@ -167,6 +204,90 @@
                 </div>
             {% elif step and step.status == "ready" and run.status != "rejected" %}
                 <p class="s-callout s-callout--info" role="status">Ready for review by {{ review_role }}. You can read it, but your account can't approve this step.</p>
+            {% endif %}
+
+            {% if markers %}
+                <section class="s-box" aria-labelledby="markers-head">
+                    <h3 class="s-section" id="markers-head">Before publishing</h3>
+                    <p class="s-muted s-m0 s-small">Publishing waits until none of these are left: check each [VERIFY] claim against its source, place or delete each [VISUAL] cue (an image you add is branded with the logo), and strip the [SRC:] markers once the sources are checked.</p>
+                    <ul class="s-markers">
+                        {% for m in markers %}<li><span class="s-tag s-tag--warn">{{ m.kind }}</span> <span class="s-mono s-small">{{ m.text|truncatechars:90 }}</span> <span class="s-muted s-small">in {{ m.section }}</span></li>{% endfor %}
+                    </ul>
+                    {% if has_sources and step.key == "cleanup" and can_review %}
+                        <form method="post">{% csrf_token %}<input type="hidden" name="step" value="{{ step.key }}"><button class="button button-small button-secondary" type="submit" name="action" value="strip_sources">Strip [SRC:] markers (sources checked)</button></form>
+                    {% endif %}
+                </section>
+            {% endif %}
+
+            {% if section_rows and step.status == "ready" %}
+                <section class="s-box s-grades" aria-labelledby="grades-head">
+                    <h3 class="s-section" id="grades-head">Reading grade</h3>
+                    {% if article_metrics %}
+                        <p class="s-m0"><strong>Whole article: FKGL {{ article_metrics.fkgl|default:"–" }}</strong> <span class="s-muted">(estimate; target {{ brief.fkgl }}) · {{ article_metrics.words }} words · {{ article_metrics.sentences }} sentences</span></p>
+                        <p class="s-muted s-m0 s-small">Sentence lengths: {% for band, count in article_metrics.buckets.items %}{{ band }} words: {{ count }}{% if not forloop.last %} · {% endif %}{% endfor %}{% if article_metrics.flat %} · <strong>flat: most sentences are one length, vary the cadence</strong>{% endif %}</p>
+                    {% endif %}
+                    <p class="s-muted s-m0 s-small">By section: FKGL per H2, and per H3 when an H2 section is longer than 300 words; references, tables and notes aren't graded. Sections more than one grade above target are marked. Tune lowers a section by unpacking sentences (never by swapping in shorter words) and saves a new version; a drop of more than 1.5 grades is refused if it leaves the sentences choppy.</p>
+                    <div class="s-table-wrap">
+                        <table class="s-table">
+                            <thead><tr><th scope="col">Section</th><th scope="col">Words</th><th scope="col">Grade</th>{% if can_chat %}<th scope="col">Tune to grade</th>{% endif %}</tr></thead>
+                            <tbody>
+                            {% for row in section_rows %}
+                                <tr>
+                                    <th scope="row" class="{% if row.level == 3 %}s-grades__h3{% endif %}">{% if row.level == 3 %}<span class="s-muted">H3 · </span>{% elif row.level == 2 %}<span class="s-muted">H2 · </span>{% endif %}{{ row.name }}</th>
+                                    <td class="s-mono">{{ row.words }}</td>
+                                    <td>{% if not row.graded %}<span class="s-muted">not graded</span>{% elif row.grade is None %}<span class="s-muted">too short</span>{% else %}<span class="s-tag s-tag--{% if row.over %}warn{% else %}ok{% endif %}">{{ row.grade }}</span>{% endif %}</td>
+                                    {% if can_chat %}
+                                        <td>{% if row.grade is not None %}
+                                            <form method="post" class="s-cluster">{% csrf_token %}
+                                                <input type="hidden" name="step" value="{{ step.key }}"><input type="hidden" name="section" value="{{ row.index }}">
+                                                <label class="w-sr-only" for="tune-{{ row.index }}">Target grade for {{ row.name }}</label>
+                                                <input id="tune-{{ row.index }}" class="s-grades__target" type="number" name="target" min="4" max="16" step="0.5" value="{{ brief.fkgl }}">
+                                                <button class="button button-small{% if not row.over %} button-secondary{% endif %}" type="submit" name="action" value="tune">Tune</button>
+                                            </form>
+                                        {% endif %}</td>
+                                    {% endif %}
+                                </tr>
+                            {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            {% endif %}
+
+            {% if chat or can_chat %}
+                <section class="s-box s-chat" id="chat" aria-labelledby="chat-head">
+                    <h3 class="s-section" id="chat-head">Suggestions</h3>
+                    {% if chat %}
+                        <ol class="s-chat__log">
+                            {% for m in chat %}
+                                <li class="s-chat__msg s-chat__msg--{{ m.role }}{% if m.status == 'failed' %} s-chat__msg--failed{% endif %}">
+                                    <div class="s-muted s-small">{% if m.role == "user" %}{{ m.created_by.get_username|default:"You" }}{% else %}{% if m.model %}{% model_label m.provider m.model %}{% else %}Assistant{% endif %}{% endif %} · {{ m.created_at|date:"j M H:i" }}{% if m.action != "suggest" and m.role == "user" %} · {{ m.get_action_display }}{% endif %}{% if m.duration_seconds is not None %} · took {{ m.duration_seconds|took }}{% endif %}</div>
+                                    {% if m.is_open %}
+                                        <p class="s-m0" role="status">{% if m.status == "pending" %}Waiting for a worker{% else %}Working{% endif %} · <span class="s-mono" data-elapsed-since="{% if m.started_at %}{{ m.started_at|date:'c' }}{% else %}{{ m.created_at|date:'c' }}{% endif %}">0:00</span></p>
+                                    {% elif m.role == "assistant" %}
+                                        <div class="s-output">{{ m.content|render_markdown }}</div>
+                                    {% else %}
+                                        <p class="s-m0 s-chat__text">{{ m.content|linebreaksbr }}</p>
+                                    {% endif %}
+                                </li>
+                            {% endfor %}
+                        </ol>
+                    {% endif %}
+                    {% if can_chat %}
+                        <form method="post" class="s-stack">{% csrf_token %}
+                            <input type="hidden" name="step" value="{{ step.key }}">
+                            <label for="chat-message">Ask for suggestions, or describe a change to apply</label>
+                            <textarea id="chat-message" name="message" rows="3" placeholder="e.g. Make the intro easier for a UK safety manager; which sections need a table?"></textarea>
+                            <div class="s-cluster">
+                                <button class="button button-secondary" type="submit" name="action" value="chat_suggest">Ask for suggestions</button>
+                                <button class="button" type="submit" name="action" value="chat_apply">Apply as new version</button>
+                            </div>
+                            <p class="s-muted s-small s-m0">Suggestions only answer. "Apply" saves the revised text as a new version you can compare and undo. Model: Settings › Default models › Suggestions chat.</p>
+                        </form>
+                    {% elif step.status != "ready" %}
+                        <p class="s-muted s-small s-m0">The chat opens again the next time this step is ready for review.</p>
+                    {% endif %}
+                </section>
             {% endif %}
         </div>
 
@@ -259,7 +380,7 @@
                     <h3 class="s-section" id="versions-head">Versions</h3>
                     {% for v in versions %}
                         <div class="s-kv">
-                            <span>v{{ v.number }} · {% if v.source == "edit" %}your edit{% elif v.number == first_version.number %}first draft{% else %}{% model_label v.provider v.model %}{% endif %}</span>
+                            <span>v{{ v.number }} · {% if v.source == "edit" %}your edit{% elif v.number == first_version.number %}first draft{% else %}{% model_label v.provider v.model %}{% endif %}{% if v.metrics.duration_seconds is not None %} · {{ v.metrics.duration_seconds|took }}{% endif %}</span>
                             {% if v.number == version.number %}<span class="s-tag s-tag--info">Current</span>{% else %}<a class="button button-small button-secondary" href="{% url 'studio:compare' run.pk step.key v.number version.number %}">Compare</a>{% endif %}
                         </div>
                     {% endfor %}
@@ -282,16 +403,31 @@
     {% endif %}
     <script>
     (function () {
-        // Live elapsed time for a running step.
+        // Live timers for running and queued steps. The server renders the current value, so a reload (or
+        // a page without JavaScript) shows the real elapsed time; this keeps it ticking. The clock offset
+        // between the server and this browser is measured once, so a wrong PC clock doesn't skew it.
+        var serverNow = Date.parse("{% now 'c' %}"), offset = isNaN(serverNow) ? 0 : serverNow - Date.now();
+        function clock(s) {
+            var h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), sec = String(s % 60).padStart(2, "0");
+            return h ? h + ":" + String(m).padStart(2, "0") + ":" + sec : m + ":" + sec;
+        }
+        var timers = [];
         document.querySelectorAll("[data-elapsed-since]").forEach(function (el) {
             var since = Date.parse(el.dataset.elapsedSince);
-            if (isNaN(since)) return;
-            function tick() {
-                var s = Math.max(0, Math.round((Date.now() - since) / 1000));
-                el.textContent = Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
-            }
-            tick(); setInterval(tick, 1000);
+            if (!isNaN(since)) timers.push({el: el, since: since, typical: Number(el.dataset.typical) || 0});
         });
+        var slowNote = document.querySelector("[data-slow-note]");
+        function tick() {
+            var now = Date.now() + offset;
+            timers.forEach(function (t) {
+                var s = Math.max(0, Math.round((now - t.since) / 1000));
+                t.el.textContent = clock(s);
+                if (t.typical && slowNote && s > 3 * t.typical) slowNote.hidden = false;
+            });
+        }
+        if (timers.length) { tick(); setInterval(tick, 1000); }
+        // Background tabs throttle timers; catch up as soon as the tab is visible again.
+        document.addEventListener("visibilitychange", function () { if (!document.hidden) tick(); });
         // While steps are queued or running, check every 5 s and reload when something changes.
         var url = "{% url 'studio:run_status' run.pk %}", last = null;
         function poll() {

@@ -223,3 +223,7 @@ a:focus-visible {
     color: var(--muted);
     font-variant-numeric: tabular-nums;
 }
+
+.article__cta {
+    margin: 1.5rem 0;
+}

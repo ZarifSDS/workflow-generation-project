@@ -38,6 +38,9 @@ PROVIDER_LABELS = {
     "groq": "Groq",
     "cloudflare": "Cloudflare",
     "comfyui": "ComfyUI (your PC)",
+    "serper": "Serper (Google results)",
+    "brave_search": "Brave Search",
+    "google_cse": "Google Programmable Search",
 }
 
 CATALOG = [

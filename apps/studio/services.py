@@ -10,6 +10,7 @@ from apps.ai import catalog
 from apps.ai import defaults as ai_defaults
 from apps.ai.evaluation import metrics as text_metrics
 from apps.content.markup import strip_dialect
+from apps.quality import house
 from apps.quality import review as quality_review
 from apps.quality import scans as quality_scans
 
@@ -21,12 +22,24 @@ logger = logging.getLogger(__name__)
 
 def enqueue(step):
     """Hand a queued step to the worker once the surrounding transaction commits."""
+    step.queued_at = timezone.now()
+    StepRun.objects.filter(pk=step.pk).update(queued_at=step.queued_at)
     if not getattr(settings, "STUDIO_EXECUTE_STEPS", False):
         return
     from .tasks import run_step
 
     step_id = step.pk
     transaction.on_commit(lambda: run_step.enqueue(step_id))
+
+
+def enqueue_chat(message):
+    """Hand a pending chat reply to the worker once the surrounding transaction commits."""
+    if not getattr(settings, "STUDIO_EXECUTE_STEPS", False):
+        return
+    from .tasks import run_chat
+
+    message_id = message.pk
+    transaction.on_commit(lambda: run_chat.enqueue(message_id))
 
 
 def default_model_for(step_def):
@@ -131,6 +144,23 @@ def _next_enabled(step):
     return step.run.steps.filter(enabled=True, order__gt=step.order).order_by("order").first()
 
 
+def blocking_step(step):
+    """The first earlier enabled step that isn't approved yet: this step can't run before it is."""
+    return (
+        step.run.steps.filter(enabled=True, order__lt=step.order)
+        .exclude(status=StepRun.Status.APPROVED)
+        .order_by("order")
+        .first()
+    )
+
+
+def _wait_for(step, blocker):
+    """Park a step until `blocker` is approved; queue_next starts it then."""
+    step.status, step.error, step.notified_at = StepRun.Status.PENDING, "", None
+    step.save()
+    return blocker
+
+
 def refresh_run_status(run):
     statuses = set(run.enabled_steps.values_list("status", flat=True))
     if run.status == GenerationRun.Status.REJECTED:
@@ -208,6 +238,13 @@ def approve_step(step, user, edited_content=None, base_version=None):
     latest = step.latest_version
     if edited_content is not None:
         edited_content = _normalise_edit(edited_content)
+    if step.key == "cleanup":
+        markers = house.find_markers(edited_content if edited_content is not None else latest.content)
+        if markers:
+            raise ValueError(
+                f"Resolve the working markers before approving ({house.describe_markers(markers)}). "
+                "Publishing needs a clean article."
+            )
     if edited_content is not None and latest and edited_content.strip() != latest.content.strip():
         add_version(
             step,
@@ -226,7 +263,8 @@ def approve_step(step, user, edited_content=None, base_version=None):
 def queue_next(step):
     """After a step is approved (by you or automatically), queue the next enabled step."""
     following = _next_enabled(step)
-    if following and following.status == StepRun.Status.PENDING:
+    # A failed next step (e.g. one started too early) runs again once its input is approved.
+    if following and following.status in (StepRun.Status.PENDING, StepRun.Status.FAILED):
         following.status = StepRun.Status.QUEUED
         following.save(update_fields=["status"])
         enqueue(following)
@@ -243,13 +281,54 @@ def reject_run(run, user, reason):
 
 
 @transaction.atomic
+def strip_sources(step, user):
+    """Remove the [SRC: url] markers from Final cleanup's text once the sources are checked."""
+    _lock(step)
+    if step.key != "cleanup" or step.status != StepRun.Status.READY:
+        raise ValueError("Source markers are stripped on Final cleanup while it waits for review.")
+    latest = step.latest_version
+    stripped = house.strip_sources(latest.content)
+    if stripped == latest.content:
+        raise ValueError("There are no [SRC:] markers left.")
+    return add_version(
+        step,
+        stripped,
+        source=StepVersion.Source.EDIT,
+        user=user,
+        provider=latest.provider,
+        model=latest.model,
+        note="Stripped the [SRC:] source markers after the sources were checked.",
+    )
+
+
+@transaction.atomic
+def reopen_run(run):
+    """Undo "Reject the whole run": rejected steps wait for review again. Returns the old reason."""
+    if run.status != GenerationRun.Status.REJECTED:
+        raise ValueError("Only a rejected run can be reopened.")
+    reason = run.reject_reason
+    run.steps.filter(status=StepRun.Status.REJECTED).update(status=StepRun.Status.READY)
+    run.status, run.reject_reason = GenerationRun.Status.NEEDS_REVIEW, ""
+    run.save(update_fields=["status", "reject_reason", "updated_at"])
+    refresh_run_status(run)
+    return reason
+
+
+@transaction.atomic
 def request_regenerate(step, model_key, note=""):
-    """Queue the step again with a chosen model. M4's worker picks queued steps up."""
+    """Queue the step again with a chosen model. M4's worker picks queued steps up.
+
+    A step whose earlier steps aren't all approved only keeps the model choice and waits (pending): it
+    starts when the step before it is approved. Running it earlier fails, because its input is missing.
+    """
     choice = catalog.by_key(model_key)
     if choice is None or not choice.selectable:
         raise ValueError("Choose a model that is available.")
     step.provider, step.model = choice.provider, choice.model
     step.regenerate_note = note
+    if step.status in (StepRun.Status.PENDING, StepRun.Status.FAILED) and (blocker := blocking_step(step)):
+        _wait_for(step, blocker)
+        return refresh_run_status(step.run)
     step.status = StepRun.Status.QUEUED
     step.error = ""
     step.notified_at = None
@@ -288,6 +367,9 @@ def retry_step(step):
     """Queue a failed step again with the same model."""
     if step.status != StepRun.Status.FAILED:
         raise ValueError("Only a failed step can be retried.")
+    if blocker := blocking_step(step):
+        _wait_for(step, blocker)
+        return refresh_run_status(step.run)
     step.status, step.error = StepRun.Status.QUEUED, ""
     step.save(update_fields=["status", "error"])
     enqueue(step)

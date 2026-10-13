@@ -29,7 +29,7 @@ def split_metadata(markdown):
     if not match:
         return markdown.strip(), {}
     article, meta = markdown[: match.start()].strip(), markdown[match.end() :]
-    found = {"title": [], "meta": [], "slug": []}
+    found = {"title": [], "meta": [], "slug": [], "tags": [], "excerpt": []}
     section = None
     for line in meta.splitlines():
         stripped = line.strip()
@@ -40,7 +40,13 @@ def split_metadata(markdown):
             section = next(
                 (
                     kind
-                    for kind, word in (("title", "title"), ("meta", "meta"), ("slug", "slug"))
+                    for kind, word in (
+                        ("excerpt", "excerpt"),
+                        ("tags", "tag"),
+                        ("title", "title"),
+                        ("meta", "meta"),
+                        ("slug", "slug"),
+                    )
                     if word in heading
                 ),
                 None,

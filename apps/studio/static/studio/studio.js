@@ -45,6 +45,24 @@
     applyType();
   }
 
+  // A region's audience profile fills audience and reading grade, unless you've changed them yourself.
+  const audiences = JSON.parse(document.getElementById("studio-audiences")?.textContent || "{}");
+  const regionSelect = form.elements.namedItem("region");
+  let lastRegion = regionSelect ? regionSelect.value : "";
+  function applyAudience() {
+    const previous = audiences[lastRegion] || {};
+    const next = audiences[regionSelect.value];
+    lastRegion = regionSelect.value;
+    if (!next) return;
+    [["audience", "audience"], ["fkgl", "fkgl"]].forEach(([field, key]) => {
+      const input = form.elements.namedItem(field);
+      if (input && (!input.value || input.value === previous[key] || Number(input.value) === Number(previous[key]))) {
+        input.value = next[key];
+      }
+    });
+  }
+  if (regionSelect && regionSelect.tagName === "SELECT") regionSelect.addEventListener("change", applyAudience);
+
   typeInputs.forEach((input) => input.addEventListener("change", applyType));
   if (presetSelect) presetSelect.addEventListener("change", applyPreset);
   applyType();

@@ -18,6 +18,11 @@ class StepDef:
 
 
 STEPS = {
+    # Reads what ranks for the keyword in the brief's locale (apps/studio/serp.py); no model, continues
+    # on its own so research starts with it.
+    "search_results": StepDef(
+        "search_results", "Search results", None, kind="none", gate=False, optional=True
+    ),
     "site_crawl": StepDef("site_crawl", "Site crawl", "fast"),
     "research": StepDef("research", "Research", "fast"),
     "outline": StepDef("outline", "Outline", "quality"),
@@ -29,12 +34,23 @@ STEPS = {
     "publish": StepDef("publish", "Publish", None, kind="none"),
 }
 
-_ARTICLE = ["research", "outline", "draft", "review_edit", "cleanup", "hero_image", "localise", "publish"]
+_ARTICLE = [
+    "search_results",
+    "research",
+    "outline",
+    "draft",
+    "review_edit",
+    "cleanup",
+    "hero_image",
+    "localise",
+    "publish",
+]
 
 PIPELINES = {
     "seo_blog": _ARTICLE,
     "whitepaper": _ARTICLE,
     "outbound": [
+        "search_results",
         "site_crawl",
         "research",
         "outline",
@@ -44,7 +60,16 @@ PIPELINES = {
         "hero_image",
         "publish",
     ],
-    "lead_magnet": ["research", "outline", "draft", "review_edit", "cleanup", "hero_image", "publish"],
+    "lead_magnet": [
+        "search_results",
+        "research",
+        "outline",
+        "draft",
+        "review_edit",
+        "cleanup",
+        "hero_image",
+        "publish",
+    ],
 }
 
 
@@ -67,6 +92,18 @@ class ModelTask:
 MODEL_TASKS = [
     *[ModelTask(s.key, s.label, s.profile, s.kind) for s in STEPS.values() if s.profile],
     ModelTask("hero_prompt", "Hero image prompt", "fast", help="Writes the photo prompt for the hero image."),
+    ModelTask(
+        "chat",
+        "Suggestions chat",
+        "fast",
+        help="Answers in the chat beside each step and applies the changes you ask for.",
+    ),
+    ModelTask(
+        "section_tune",
+        "Section tuning",
+        "edit",
+        help="Rewrites one section towards its reading grade (the Tune buttons).",
+    ),
     ModelTask(
         "vision",
         "Hero image check",

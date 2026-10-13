@@ -2,16 +2,43 @@
 // Uploads go through apps/studio/views/editor_api.py, so Wagtail's type and size limits apply.
 
 import { checkImageFile } from "./wagtail.js";
-import { checkField, el, formDialog, textField } from "./ui.js";
+import { checkField, el, formDialog, selectField, textField } from "./ui.js";
+
+const LOGO_CORNERS = [
+  ["auto", "Automatic (the corner that clashes least)"],
+  ["tl", "Top left"],
+  ["tr", "Top right"],
+  ["bl", "Bottom left"],
+  ["br", "Bottom right"],
+];
 
 const ALT_HINT = "Describe what the image shows, for people who can't see it.";
 
 /** Asks for alt text (required unless decorative) and a caption. Resolves with the values, or null. */
-export function askImageDetails({ title, previewUrl, alt = "", decorative = false, caption = "", submitLabel = "Insert" }) {
+export function askImageDetails({
+  title,
+  previewUrl,
+  alt = "",
+  decorative = false,
+  caption = "",
+  submitLabel = "Insert",
+  brandable = false,
+}) {
   return new Promise((resolve) => {
     const altField = textField("Alt text", { value: alt, hint: ALT_HINT });
     const decorativeField = checkField("Decorative image (no alt text)", decorative);
     const captionField = textField("Caption (optional)", { value: caption });
+    // In-article images carry the SDS Manager logo (sds-hero-stock house style); the server picks the
+    // corner and the regular or negative logo that clash least with the image.
+    const brandField = brandable ? checkField("Add the SDS Manager logo (house style for article images)", true) : null;
+    const cornerField = brandable ? selectField("Logo position", LOGO_CORNERS, "auto") : null;
+    if (brandField) {
+      const syncCorner = () => {
+        cornerField.input.disabled = !brandField.input.checked;
+      };
+      brandField.input.addEventListener("change", syncCorner);
+      syncCorner();
+    }
     const preview = previewUrl ? el("img", { class: "se-dialog__preview", src: previewUrl, alt: "" }) : null;
     const sync = () => {
       altField.input.disabled = decorativeField.input.checked;
@@ -19,7 +46,7 @@ export function askImageDetails({ title, previewUrl, alt = "", decorative = fals
     decorativeField.input.addEventListener("change", sync);
     sync();
     let result = null;
-    formDialog(title, [preview, altField, decorativeField, captionField].filter(Boolean), {
+    formDialog(title, [preview, altField, decorativeField, captionField, brandField, cornerField].filter(Boolean), {
       submitLabel,
       onClose: () => resolve(result),
       onApply: (event, d) => {
@@ -33,6 +60,7 @@ export function askImageDetails({ title, previewUrl, alt = "", decorative = fals
           alt: decorativeField.input.checked ? "" : altField.input.value.trim(),
           decorative: decorativeField.input.checked,
           caption: captionField.input.value.trim(),
+          ...(brandField ? { brand: brandField.input.checked, logoCorner: cornerField.input.value } : {}),
         };
       },
     });
@@ -41,7 +69,8 @@ export function askImageDetails({ title, previewUrl, alt = "", decorative = fals
 
 function insertImage(ctx, image, details, pos) {
   ctx.refs.images = { ...(ctx.refs.images || {}), [image.id]: { url: image.url, width: image.width, height: image.height } };
-  const node = { type: "wagtailImage", attrs: { id: String(image.id), ...details } };
+  const { brand, logoCorner, ...attrs } = details; // upload options, not part of the image node
+  const node = { type: "wagtailImage", attrs: { id: String(image.id), ...attrs } };
   const chain = ctx.editor.chain().focus();
   (pos === undefined ? chain.insertContent(node) : chain.insertContentAt(pos, node)).run();
 }
@@ -94,14 +123,19 @@ export async function uploadFiles(ctx, files, pos) {
       continue;
     }
     const localUrl = URL.createObjectURL(file);
-    const details = await askImageDetails({ title: `Upload ${file.name}`, previewUrl: localUrl, submitLabel: "Upload and insert" });
+    const details = await askImageDetails({
+      title: `Upload ${file.name}`,
+      previewUrl: localUrl,
+      submitLabel: "Upload and insert",
+      brandable: true,
+    });
     URL.revokeObjectURL(localUrl);
     if (!details) continue;
     ctx.notify(`Uploading ${file.name}…`);
     try {
       const image = await ctx.api.upload(file, details);
       insertImage(ctx, image, details, pos);
-      ctx.notify(`Uploaded ${file.name} to the image library.`);
+      ctx.notify(`Uploaded ${file.name} to the image library.${image.branding ? ` ${image.branding}` : ""}`);
     } catch (error) {
       ctx.notify(`${file.name} wasn't uploaded: ${error.message}`);
     }

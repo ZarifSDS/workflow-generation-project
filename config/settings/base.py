@@ -230,6 +230,20 @@ AI_PROVIDERS = {
         "api_key_env": "GROQ_API_KEY",
     },
     "comfyui": {"adapter": "comfyui", "base_url": COMFYUI_BASE_URL},
+    # Search results step (apps/studio/serp.py): free search APIs, keys set like the model keys.
+    "serper": {"adapter": "search", "base_url": "https://google.serper.dev", "api_key_env": "SERPER_API_KEY"},
+    "brave_search": {
+        "adapter": "search",
+        "base_url": "https://api.search.brave.com/res/v1",
+        "api_key_env": "BRAVE_SEARCH_API_KEY",
+    },
+    "google_cse": {
+        "adapter": "search",
+        "base_url": "https://www.googleapis.com/customsearch/v1",
+        "api_key_env": "GOOGLE_CSE_API_KEY",
+        "account_env": "GOOGLE_CSE_CX",
+        "account_label": "Search engine ID (cx)",
+    },
     "cloudflare": {
         "adapter": "cloudflare_images",
         "base_url": "https://api.cloudflare.com/client/v4",
@@ -284,6 +298,15 @@ AI_PROFILES_INTERIM = True  # flips to False once docs/model-eval.md records the
 
 # Content Studio pipeline execution (the worker container runs queued steps).
 STUDIO_EXECUTE_STEPS = True
+# Search results step: providers tried in this order (the first one set up is used), and how many of the
+# top results are read for their structure.
+# duckduckgo needs no key and is the default when no keyed provider is set up; ollama_web (Ollama Cloud
+# key, no locale) is the last fallback when DuckDuckGo blocks automated requests.
+STUDIO_SERP_PROVIDERS = ["serper", "brave_search", "google_cse", "duckduckgo", "ollama_web"]
+STUDIO_SERP_PAGES = 10  # the skill analyses the top 10 (10-15 when competitive)
+# Marked "(yours)" in the search results so you can see where your own pages rank.
+STUDIO_OWN_DOMAIN = os.environ.get("STUDIO_OWN_DOMAIN", "sdsmanager.com")
+STUDIO_SERP_PACE_SECONDS = 2
 STUDIO_CRAWL_MAX_PAGES = 8
 STUDIO_CRAWL_PACE_SECONDS = 5
 # Optional: the Publish step POSTs the saved draft here (e.g. an n8n Webhook node; docs/workflow.md).

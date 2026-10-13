@@ -5,7 +5,7 @@ from django.urls import reverse
 
 from .. import permissions, services
 from ..forms import BriefForm, parse_step_config, preset_from_brief, step_rows
-from ..models import BriefPreset, ContentBrief, ContentType, Region
+from ..models import AudienceProfile, BriefPreset, ContentBrief, ContentType, Region
 from .common import StudioPage
 
 
@@ -49,6 +49,8 @@ class BriefWizardView(StudioPage):
         initial = {}
         if not self.brief and self.request.GET.get("type") in ContentType.values:
             initial["content_type"] = self.request.GET["type"]
+        if not self.brief and (profile := AudienceProfile.objects.filter(region=Region.US).first()):
+            initial.update(audience=profile.audience, fkgl=profile.reading_grade)
         form = form or BriefForm(instance=self.brief, initial=initial)
         content_type = form["content_type"].value() or ContentType.SEO_BLOG
         context.update(
@@ -56,6 +58,10 @@ class BriefWizardView(StudioPage):
             brief=self.brief,
             rows=step_rows(content_type),
             presets=_preset_payload(),
+            audience_profiles={
+                p.region: {"audience": p.audience, "fkgl": str(p.reading_grade)}
+                for p in AudienceProfile.objects.all()
+            },
             type_help={
                 "seo_blog": "For sdsmanager.com",
                 "outbound": "Third-party site",

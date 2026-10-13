@@ -19,5 +19,6 @@ class HomePage(Page):
         from apps.content.models import ArticlePage, listing_order
 
         context = super().get_context(request, *args, **kwargs)
-        context["articles"] = listing_order(ArticlePage.objects.live().public().specific())[:20]
+        pages = ArticlePage.objects.live().public().descendant_of(self).specific()
+        context["articles"] = listing_order(pages, request)[:20]
         return context

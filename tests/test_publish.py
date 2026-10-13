@@ -24,7 +24,7 @@ pytestmark = pytest.mark.django_db
 
 ARTICLE = """# SDS Retention Requirements: How Long to Keep SDSs
 
-OSHA treats safety data sheets as **exposure records**. Keep them for *30 years* [VERIFY].
+OSHA treats safety data sheets as **exposure records**. Keep them for *30 years*.
 See [OSHA 1910.1020](https://www.osha.gov/laws-regs/regulations/standardnumber/1910/1910.1020).
 
 ## What the rule says
@@ -123,7 +123,7 @@ def test_split_h1_and_verify_markers():
     h1, body = markup.split_h1(ARTICLE)
     assert h1 == "SDS Retention Requirements: How Long to Keep SDSs"
     assert not body.startswith("#")
-    assert markup.verify_markers(ARTICLE) == 1
+    assert markup.verify_markers(ARTICLE + "\nOne more claim [VERIFY].") == 1
 
 
 # ---- Publish step ----
@@ -148,7 +148,6 @@ def test_publish_creates_draft_page_in_moderation(run):
     assert set(draft.tags.names()) == {"SDS retention requirements", "how long to keep safety data sheets"}
     version = step.latest_version
     assert "Moderators approval" in version.content
-    assert "still marked [VERIFY]" in version.note
     assert version.metrics["publish"]["page_id"] == page.pk
 
 

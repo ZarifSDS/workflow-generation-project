@@ -63,6 +63,9 @@ def upload_image(request):
         return _denied("Add alt text, or mark the image as decorative.", 400)
     title = request.POST.get("title", "").strip() or upload.name.rsplit(".", 1)[0].replace("-", " ")[:255]
     collection = Collection.get_first_root_node()
+    branding = ""
+    if request.POST.get("brand", "0") == "1":
+        upload, branding = _brand(upload, request.POST.get("logo_corner", "auto"))
     form_class = get_image_form(get_image_model())
     data = {"title": title, "collection": collection.pk, "description": alt}
     form = form_class(data, {"file": upload}, user=user)
@@ -72,7 +75,24 @@ def upload_image(request):
     image = form.save(commit=False)
     image.uploaded_by_user = user
     image.save()
-    return JsonResponse(_image_json(image), status=201)
+    return JsonResponse({**_image_json(image), "branding": branding}, status=201)
+
+
+def _brand(upload, corner="auto"):
+    """The upload with the SDS Manager logo (sds-hero-stock's inner-image rules), and what happened."""
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    from apps.quality import hero
+
+    try:
+        data, report = hero.brand_inner(upload.read(), upload.name, corner)
+    except hero.BrandingError as error:
+        upload.seek(0)
+        return upload, f"Logo not added: {error}."
+    branded = SimpleUploadedFile(upload.name, data, content_type=upload.content_type)
+    corner = (report.get("corner") or "").replace("-", " ")
+    version = report.get("version") or ""
+    return branded, f"Added the {version} logo{f' ({corner})' if corner else ''}.".replace("  ", " ")
 
 
 def reference_data(image_ids=(), page_ids=(), document_ids=()):

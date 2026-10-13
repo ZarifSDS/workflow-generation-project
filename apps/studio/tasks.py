@@ -19,6 +19,14 @@ def run_step(step_id):
     execute_step(step_id)
 
 
+@task()
+def run_chat(message_id):
+    """Answer one suggestions-chat message or Tune request (apps/studio/assistant.py)."""
+    from . import assistant
+
+    assistant.answer(message_id)
+
+
 def execute_step(step_id):
     """Run one queued step. Safe to call twice: only a QUEUED step is picked up."""
     from . import executors, services
@@ -54,7 +62,10 @@ def execute_step(step_id):
             model=output.model,
             note=output.note,
             image=output.image,
-            extra_metrics=output.extra_metrics,
+            extra_metrics={
+                **(output.extra_metrics or {}),
+                "duration_seconds": round((timezone.now() - step.started_at).total_seconds()),
+            },
         )
     except Exception as error:  # noqa: BLE001 - saving must never leave a step stuck in "running"
         logger.exception("Step %s (%s): saving the output failed", step.pk, step.key)
@@ -62,7 +73,7 @@ def execute_step(step_id):
         return
     step.refresh_from_db()
     step.finished_at, step.regenerate_note = timezone.now(), ""
-    if step.gate:
+    if step.gate or output.hold:
         step.status = StepRun.Status.READY
         step.save(update_fields=["status", "finished_at", "regenerate_note"])
         services.refresh_run_status(step.run)

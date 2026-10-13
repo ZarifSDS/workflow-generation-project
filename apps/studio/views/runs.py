@@ -7,9 +7,10 @@ from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 
 from apps.ai import catalog
+from apps.quality import house, review
 
-from .. import diffing, permissions, services
-from ..models import GenerationRun, StepRun
+from .. import assistant, diffing, permissions, services
+from ..models import ChatMessage, GenerationRun, StepRun
 from . import editor_api
 from .common import StudioPage
 
@@ -177,8 +178,19 @@ class RunWorkspaceView(StudioPage):
             ),
             run_active=self.run.steps.filter(
                 status__in=[StepRun.Status.QUEUED, StepRun.Status.RUNNING]
-            ).exists(),
+            ).exists()
+            or _open_chat(self.run).exists(),
+            chat=list(step.chat.select_related("created_by")) if step else [],
+            can_chat=bool(step and assistant.can_chat(step) and permissions.can_review(user, step)),
         )
+        if version and kind == "text" and step.key in assistant.ARTICLE_STEPS:
+            markers = house.find_markers(version.content)
+            context.update(
+                section_rows=review.unit_rows(version.content, self.run.brief.fkgl),
+                article_metrics=review.article_metrics(version.content),
+                markers=markers,
+                has_sources=any(m["kind"] == "SRC" for m in markers),
+            )
         return context
 
     def post(self, request, *args, **kwargs):
@@ -221,16 +233,62 @@ class RunWorkspaceView(StudioPage):
                     messages.info(request, "Nothing changed, so no new version was saved.")
             elif action == "regenerate":
                 services.request_regenerate(step, request.POST.get("model", ""), request.POST.get("note", ""))
-                messages.success(request, f"{step.label} is queued with the chosen model.")
+                messages.success(request, _queued_message(step, "is queued with the chosen model."))
+            elif action in ("chat_suggest", "chat_apply"):
+                kind = ChatMessage.Action.APPLY if action == "chat_apply" else ChatMessage.Action.SUGGEST
+                assistant.ask(step, request.user, request.POST.get("message", ""), kind)
+                messages.success(request, "Sent. The reply appears below the text when it's ready.")
+                return redirect(f"{url}#chat")
+            elif action == "tune":
+                try:
+                    index, target = (
+                        int(request.POST.get("section", "")),
+                        float(request.POST.get("target", "")),
+                    )
+                except ValueError:
+                    raise ValueError("Choose a section and a reading grade between 4 and 16.") from None
+                if not 4 <= target <= 16:
+                    raise ValueError("Choose a reading grade between 4 and 16.")
+                assistant.tune_request(step, request.user, index, target)
+                messages.success(request, "Tuning the section. The result appears in the chat below.")
+                return redirect(f"{url}#chat")
             elif action == "accept_splits":
                 services.accept_splits(step, request.user, request.POST.getlist("split"))
                 messages.success(request, "Applied the chosen splits as a new version.")
             elif action == "retry":
                 services.retry_step(step)
-                messages.success(request, f"{step.label} is queued again.")
+                messages.success(request, _queued_message(step, "is queued again."))
             elif action == "rerun":
                 services.rerun_step(step)
                 messages.success(request, f"{step.label} is queued again.")
+            elif action == "strip_sources":
+                saved = services.strip_sources(step, request.user)
+                messages.success(request, f"Stripped the source markers as version {saved.number}.")
+            elif action == "send_back":
+                feedback = request.POST.get("feedback", "").strip()
+                if not feedback:
+                    raise ValueError("Say what should change, so the model can act on it.")
+                if request.POST.get("how") == "edit":
+                    assistant.ask(step, request.user, feedback, ChatMessage.Action.APPLY)
+                    messages.success(
+                        request, "Applying your feedback as targeted edits; the new version appears here."
+                    )
+                    return redirect(f"{url}#chat")
+                services.request_regenerate(step, request.POST.get("model", ""), feedback)
+                messages.success(request, _queued_message(step, "is being regenerated with your feedback."))
+            elif action in ("reopen", "reopen_regenerate"):
+                reason = services.reopen_run(self.run)
+                step.refresh_from_db()
+                if action == "reopen_regenerate" and step.definition.profile:
+                    services.request_regenerate(step, request.POST.get("model", ""), reason)
+                    queued = _queued_message(
+                        step, "is being regenerated with the rejection reason as feedback."
+                    )
+                    messages.success(request, f"Reopened the run. {queued}")
+                else:
+                    messages.success(
+                        request, "Reopened the run. Rejected steps are waiting for review again."
+                    )
             elif action == "reject":
                 reason = request.POST.get("reason", "").strip()
                 if not reason:
@@ -243,6 +301,20 @@ class RunWorkspaceView(StudioPage):
         except ValueError as error:
             messages.error(request, str(error))
         return redirect(url)
+
+
+def _open_chat(run):
+    return ChatMessage.objects.filter(
+        step__run=run, status__in=[ChatMessage.Status.PENDING, ChatMessage.Status.RUNNING]
+    )
+
+
+def _queued_message(step, queued_text):
+    if step.status == StepRun.Status.PENDING:
+        blocker = services.blocking_step(step)
+        waiting_for = f"{blocker.label.lower()} is approved" if blocker else "the step before it is approved"
+        return f"Saved. {step.label} starts with this model once {waiting_for}."
+    return f"{step.label} {queued_text}"
 
 
 class VersionCompareView(StudioPage):
@@ -293,10 +365,15 @@ def run_status(request, pk):
         {"key": s.key, "status": s.status, "started_at": s.started_at.isoformat() if s.started_at else None}
         for s in run.steps.all()
     ]
+    open_chat = list(_open_chat(run).values_list("pk", flat=True))
     signature = hashlib.sha1(
-        "|".join(f"{s['key']}:{s['status']}" for s in steps).encode() + run.status.encode()
+        "|".join(f"{s['key']}:{s['status']}" for s in steps).encode()
+        + run.status.encode()
+        + f"chat:{open_chat}".encode()
     ).hexdigest()
-    active = any(s["status"] in (StepRun.Status.QUEUED, StepRun.Status.RUNNING) for s in steps)
+    active = bool(open_chat) or any(
+        s["status"] in (StepRun.Status.QUEUED, StepRun.Status.RUNNING) for s in steps
+    )
     return JsonResponse({"run": run.status, "steps": steps, "signature": signature, "active": active})
 
 

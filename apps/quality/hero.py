@@ -275,3 +275,36 @@ def brand(photo, markup, vision=None):
             metrics=metrics,
             flags=flags,
         )
+
+
+# ---- In-article ("inner") images ----
+
+INNER_ASSETS = ("sds-manager-logo.png", "sds-manager-logo-negative.png")
+INNER_FORMATS = {".png", ".jpg", ".jpeg", ".webp"}
+
+
+def brand_inner(data, filename, corner="auto"):
+    """Put the SDS Manager logo on an in-article image with the skill's inner_logo.py, which picks the
+    corner and the regular or negative logo that clash least with the image. Returns (bytes, report);
+    raises BrandingError when the image can't or shouldn't be branded (vector, animation, no assets).
+    `corner` is "auto" (the skill's clash scoring) or tl, tr, bl, br to place the logo yourself."""
+    suffix = Path(filename).suffix.lower()
+    if suffix not in INNER_FORMATS:
+        raise BrandingError(f"{suffix or 'This'} images aren't branded (vector or animated).")
+    if missing := [name for name in INNER_ASSETS if not (VENDOR_DIR / "assets" / name).is_file()]:
+        raise BrandingError(f"the logo files aren't installed ({', '.join(missing)}; docs/setup.md step 5)")
+    with tempfile.TemporaryDirectory() as tmp:
+        source = Path(tmp) / f"image{suffix}"
+        source.write_bytes(data)
+        out = Path(tmp) / "out"
+        out.mkdir()
+        corner = corner if corner in ("tl", "tr", "bl", "br") else "auto"
+        result = _run("inner_logo.py", source, "--out-dir", out, "--corner", corner, timeout=120)
+        if result.returncode != 0:
+            _fail(result, "inner_logo.py")
+        lines = [line for line in result.stdout.splitlines() if line.strip().startswith("{")]
+        report = json.loads(lines[-1]) if lines else {}
+        branded = out / source.name
+        if not branded.is_file():
+            raise BrandingError(report.get("skipped") or "the image already carries the SDS Manager logo")
+        return branded.read_bytes(), report

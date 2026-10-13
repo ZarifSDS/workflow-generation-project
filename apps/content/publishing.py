@@ -93,7 +93,9 @@ def save_draft(run, user=None):
     page.slug = _unique_slug(index, meta["slug"], None if created else page)
     article = markup.build_article(body)
     page.body = article.blocks
-    page.intro = page.intro or article.intro  # an intro an editor wrote in Wagtail is kept
+    # The chosen excerpt fills the page's Intro (the CMS excerpt block); an intro an editor wrote in
+    # Wagtail is kept.
+    page.intro = page.intro or meta.get("excerpt") or article.intro
     page.hero_image = content.hero
     page.region = run.brief.region
     page.primary_keyword = run.brief.pkeyword
@@ -108,7 +110,8 @@ def save_draft(run, user=None):
     if created:
         index.add_child(instance=page)
     if not page.tags.exists():
-        page.tags.add(*[tag for tag in [run.brief.pkeyword, *(run.brief.skeywords or [])] if tag][:6])
+        chosen = meta.get("tags") or [run.brief.pkeyword, *(run.brief.skeywords or [])]
+        page.tags.add(*[tag for tag in chosen if tag][:8])
     page.save_revision(user=user, log_action=True)
 
     result = PublishResult(page=page, created=created, warnings=warnings)

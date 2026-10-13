@@ -72,3 +72,27 @@ def fkgl_level(value, target):
 @register.filter
 def get_item(mapping, key):
     return (mapping or {}).get(key)
+
+
+@register.filter
+def clock(seconds):
+    """A stopwatch reading: 4:05, or 1:02:09 past an hour. The live timer in the run workspace uses it too."""
+    if seconds is None:
+        return ""
+    seconds = max(0, int(seconds))
+    hours, rest = divmod(seconds, 3600)
+    minutes, secs = divmod(rest, 60)
+    return f"{hours}:{minutes:02d}:{secs:02d}" if hours else f"{minutes}:{secs:02d}"
+
+
+@register.filter
+def took(seconds):
+    """How long something took, in words: 9 s, 4 min 05 s, 1 h 02 min."""
+    if seconds is None or seconds == "":
+        return ""
+    seconds = max(0, int(seconds))
+    if seconds < 60:
+        return f"{seconds} s"
+    hours, rest = divmod(seconds, 3600)
+    minutes, secs = divmod(rest, 60)
+    return f"{hours} h {minutes:02d} min" if hours else f"{minutes} min {secs:02d} s"

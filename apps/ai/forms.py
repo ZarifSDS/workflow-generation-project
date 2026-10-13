@@ -39,11 +39,11 @@ class KeyForm(forms.Form):
 
     api_key = _key_field("API key", required=False)
 
-    def __init__(self, *args, needs_account=False, required=False, **kwargs):
+    def __init__(self, *args, needs_account=False, required=False, account_label="Account ID", **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["api_key"].required = required
         if needs_account:
-            self.fields["account_id"] = _key_field("Account ID", required=False)
+            self.fields["account_id"] = _key_field(account_label, required=False)
 
     def clean_api_key(self):
         return _clean_secret(self.cleaned_data.get("api_key", ""), "key")

@@ -14,10 +14,10 @@ from django.core.files.images import ImageFile
 from apps.ai import catalog
 from apps.ai.service import generate, generate_image
 from apps.ai.types import ProviderError
-from apps.quality import hero, review
+from apps.quality import hero, house, review
 from apps.quality import scripts as quality_scripts
 
-from . import prompting, textclean, webfetch
+from . import prompting, serp, textclean, webfetch
 from .models import MetadataOption, StepVersion
 from .pipeline import profile_for
 
@@ -45,6 +45,7 @@ class StepOutput:
     image: object = None
     stats: dict = field(default_factory=dict)
     extra_metrics: dict = field(default_factory=dict)
+    hold: bool = False  # wait for review even when the step doesn't normally (e.g. markers left)
 
 
 def _profile(step):
@@ -157,6 +158,57 @@ def site_crawl(step):
     return _text_output(step, result, content=f"{result.text.strip()}\n\n{pages_table}\n")
 
 
+def search_results(step):
+    """What ranks for the keyword in the brief's locale, and how those pages are built (serp.py)."""
+    brief = step.run.brief
+    keyword = (brief.pkeyword or brief.topic).strip()
+    notes, serp_data = [], None
+    try:
+        serp_data = serp.search(keyword, brief.region)
+    except serp.SerpError as error:
+        notes.append(str(error))
+    suggestions = serp.autocomplete(keyword, brief.region)
+    if not suggestions:
+        notes.append("Google autocomplete returned nothing (it may be rate-limiting this address).")
+    pages = []
+    if serp_data:
+        pages = serp.read_pages(
+            serp_data.results,
+            settings.STUDIO_SERP_PAGES,
+            pace=settings.STUDIO_SERP_PACE_SECONDS,
+            grade=quality_scripts.fkgl,
+        )
+    summary = serp.analyse(pages, keyword)
+    if not serp_data and not suggestions:
+        raise StepError(" ".join(notes) or "No search data could be collected.")
+    content = serp.report(
+        serp_data, suggestions, pages, summary, keyword, brief.region, settings.STUDIO_OWN_DOMAIN
+    )
+    return StepOutput(
+        content=content,
+        provider=serp_data.provider if serp_data else "",
+        note="\n\n".join(notes),
+        extra_metrics={
+            "serp": {
+                "provider": serp_data.provider if serp_data else "",
+                "results": len(serp_data.results) if serp_data else 0,
+                "summary": summary,
+                "outlines": [
+                    {
+                        "position": p.position,
+                        "url": p.url,
+                        "outline": p.outline,
+                        "words": p.words,
+                        "grade": p.grade,
+                    }
+                    for p in pages
+                    if p.status == "read"
+                ],
+            }
+        },
+    )
+
+
 def research(step):
     return _text_output(step, _call_text(step, prompting.render("research", prompting.context_for(step))))
 
@@ -177,7 +229,7 @@ def draft(step):
     for kind, items in options.items():
         for index, text in enumerate(items):
             MetadataOption.objects.create(
-                run=run, kind=kind, text=text[:300], selected=index == 0 and kind not in has_selected
+                run=run, kind=kind, text=text[:500], selected=index == 0 and kind not in has_selected
             )
     note = (
         ""
@@ -188,6 +240,7 @@ def draft(step):
 
 
 def review_edit(step):
+    """Scan the approved draft, then the /deslop and /clarity-review rewrites, then grade tuning."""
     source = prompting.approved_output(step.run, "draft")
     _require(source, "Approve the draft before review and edit.")
     brief = step.run.brief
@@ -195,19 +248,30 @@ def review_edit(step):
 
     def call(prompt_name, context):
         messages = prompting.render(prompt_name, {**prompting.context_for(step), **context})
-        result = _call_text(step, messages, max_tokens=4000 if prompt_name == "review_splits" else 16000)
+        result = _call_text(step, messages, max_tokens=8000 if prompt_name == "review_wordlevel" else 16000)
         used.append(result)
         return result.text
 
     outcome = review.run_sequence(
         source,
-        {"fkgl": float(brief.fkgl), "region": brief.get_region_display(), "pkeyword": brief.pkeyword},
+        {
+            "fkgl": float(brief.fkgl),
+            "region": brief.get_region_display(),
+            "pkeyword": brief.pkeyword,
+            "skeywords": brief.skeywords or [],
+        },
         call,
     )
     last = used[-1] if used else None
     fallbacks = [r.stats["fallback_from"] for r in used if r.stats.get("fallback_from")]
     lines = [f"{s['number']}. **{s['name']}**: {s['summary']}" for s in outcome.substeps]
     note = "## Review sequence\n\n" + "\n".join(lines)
+    if outcome.clarity_edits:
+        note += "\n\n## Clarity edits\n\n" + "\n".join(f"- {item}" for item in outcome.clarity_edits)
+    if outcome.questions:
+        note += "\n\n## Questions for the author (substantive, not rewritten)\n\n" + "\n".join(
+            f"- {item}" for item in outcome.questions
+        )
     if fallbacks:
         note = f"Used the fallback model for some sub-steps because {fallbacks[0]} failed.\n\n{note}"
     return StepOutput(
@@ -216,7 +280,14 @@ def review_edit(step):
         model=last.model if last else "",
         note=note,
         extra_metrics={
-            "review": {"substeps": outcome.substeps, "grades": outcome.grades, "proposals": outcome.proposals}
+            "review": {
+                "substeps": outcome.substeps,
+                "grades": outcome.grades,
+                "proposals": outcome.proposals,
+                "metrics": outcome.metrics,
+                "questions": outcome.questions,
+                "clarity_edits": outcome.clarity_edits,
+            }
         },
     )
 
@@ -236,7 +307,26 @@ def cleanup(step):
             f"Removed {report['invisible_removed']} hidden characters and normalised "
             f"{report['spaces_normalised']} unusual spaces (built-in cleaner)."
         )
-    return StepOutput(content=cleaned, note=note)
+    cleaned, fixes = house.mechanical_fix(cleaned)
+    if fixes:
+        note += " House style: " + ", ".join(f"{n} {name}" for name, n in fixes.items()) + " fixed."
+    try:
+        sweep = quality_scripts.run_json("sweep", cleaned, "--no-gate")
+    except (quality_scripts.ScriptError, OSError):
+        sweep = {}
+    markers = house.find_markers(cleaned)
+    other = (sweep.get("blocking_count") or 0) - len(markers)
+    if markers:
+        note += (
+            f"\n\nPublishing is blocked until these are resolved ({house.describe_markers(markers)}). "
+            "Check each [VERIFY] claim, place or delete each [VISUAL] cue in the editor, and strip the "
+            "[SRC:] markers once the sources are checked."
+        )
+    if other > 0:
+        note += f"\n\nThe mechanical sweep still reports {other} other blocking item(s); see Checks."
+    return StepOutput(
+        content=cleaned, note=note.strip(), hold=bool(markers), extra_metrics={"markers": markers}
+    )
 
 
 VISION_KEYS = ("subject", "person_at_left_edge", "facing", "readable_text", "safety_issues", "scene")
@@ -485,6 +575,15 @@ def publish(step):
     from apps.content import publishing
 
     run = step.run
+    from apps.content import exports
+
+    markers = house.find_markers(exports.article_content(run).text)
+    if markers:
+        raise StepError(
+            f"Resolve the working markers before publishing ({house.describe_markers(markers)}). "
+            "Edit Final cleanup: check each [VERIFY] claim, place or delete each [VISUAL] cue, and strip "
+            "the [SRC:] markers once the sources are checked."
+        )
     try:
         result = publishing.publish(run, run.created_by)
     except publishing.PublishError as error:
@@ -521,6 +620,7 @@ def publish(step):
 
 
 EXECUTORS = {
+    "search_results": search_results,
     "site_crawl": site_crawl,
     "research": research,
     "outline": outline,

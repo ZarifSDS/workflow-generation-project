@@ -30,7 +30,7 @@
                     <form method="post" class="s-addown s-bare">{% csrf_token %}
                         <input type="hidden" name="kind" value="{{ group.kind }}">
                         <label class="s-full" for="own_{{ group.kind }}">{{ group.label }} <span class="s-muted">(limit {{ group.limit }} characters)</span></label>
-                        <input type="text" id="own_{{ group.kind }}" name="own_{{ group.kind }}" maxlength="300">
+                        <input type="text" id="own_{{ group.kind }}" name="own_{{ group.kind }}" maxlength="{{ group.limit }}">
                         <button class="button button-small button-secondary" type="submit" name="action" value="add">Add to list</button>
                     </form>{% endif %}
                 {% endfor %}

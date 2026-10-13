@@ -11,7 +11,7 @@ from wagtail.admin.viewsets.model import ModelViewSet
 
 from . import permissions
 from . import urls as studio_urls
-from .models import BriefPreset, GenerationRun, StepRun
+from .models import AudienceProfile, BriefPreset, GenerationRun, StepRun
 from .services import review_count
 
 # Other studio features register their menu items on this hook, so the "Content Studio"
@@ -49,9 +49,23 @@ class PresetViewSet(ModelViewSet):
 preset_viewset = PresetViewSet("studio_presets")
 
 
+class AudienceProfileViewSet(ModelViewSet):
+    """Settings › Audience profiles: who we write for per region; feeds every prompt and the chat."""
+
+    model = AudienceProfile
+    icon = "group"
+    menu_label = "Audience profiles"
+    add_to_settings_menu = True
+    menu_order = 902
+    url_prefix = "studio/audiences"
+    url_namespace = "studio_audiences"
+    list_display = ["region", "audience", "reading_grade"]
+    form_fields = ["region", "audience", "reading_grade", "style", "ranking_notes"]
+
+
 @hooks.register("register_admin_viewset")
 def register_preset_viewset():
-    return preset_viewset
+    return [preset_viewset, AudienceProfileViewSet("studio_audiences")]
 
 
 @hooks.register("register_admin_urls")
@@ -144,6 +158,18 @@ def register_task_defaults_menu():
     """Settings › Default models: the default model and fallback per task. Superusers only."""
     return SuperuserMenuItem(
         "Default models", reverse("studio:task_defaults"), icon_name="cogs", name="ai-defaults", order=901
+    )
+
+
+@hooks.register("register_settings_menu_item")
+def register_search_providers_menu():
+    """Settings › Search data providers: keys for the Search results step. Superusers only."""
+    return SuperuserMenuItem(
+        "Search data providers",
+        reverse("studio:search_providers"),
+        icon_name="search",
+        name="search-providers",
+        order=903,
     )
 
 

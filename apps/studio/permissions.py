@@ -21,7 +21,7 @@ PERMISSIONS = [
     ("operate_studio", "Can manage models, providers and presets, and recover stuck steps"),
 ]
 
-WRITING_STEPS = {"site_crawl", "research", "outline", "draft"}
+WRITING_STEPS = {"search_results", "site_crawl", "research", "outline", "draft"}
 
 
 def step_permission(step_key):

@@ -1,19 +1,57 @@
-# Handoff: Content Workflow Studio (state on 2026-10-14: M1–M9 built, provider keys in the admin)
+# Handoff: Content Workflow Studio (state on 2026-10-14 night: pipeline aligned with the ehs-seo-blog-optimized skill)
 
 Read this first in a new session. Then `docs/development.md` (code map, how-tos, process) and `docs/tools-and-processes.md`. Also see `docs/roadmap.md`, `docs/workflow.md`, `docs/ui-ux-plan.md`, `docs/security.md`, `docs/providers.md`, `docs/model-eval.md` and `AGENTS.md`.
 
 ## Where we are
 
-**Uncommitted work on top of 12d43c6 (2026-10-14, tests 253 passed, ruff clean); waiting for the user's OK to commit.** Share mode is running, rebuilt with it (`--build`, 2 web + 2 worker). No step is queued or running.
+**Everything is committed and pushed** (see `git log`; the last commits are fa78bbe "Company CMS page types and default models per task" and the "Skill-aligned pipeline" commit after it). Tests: 303 passed; frontend 40 passed; ruff clean. Share mode is running, rebuilt with the latest code (`--build`, 2 web + 2 worker). No step is queued or running.
 
-- **Company CMS page types** (`apps/content/models.py`, migration `content.0003_company_cms_page_types`): Root and Home offer exactly Article and News Page, Content category, Home page, Webinar, replicated field for field from cms.sdsmanager.com (Wagtail 6.3), checked live through Claude in Chrome: labels, help texts, locale/language lists in their order, Custom image width/height, FAQ section title, priority score = page ID + priority (shown in the help text), admin titles like "Article Title (en)" / "Webinar: Title (en)", webinar type/start/duration/capacity/topic, private Zoom link, YouTube, slides PDF ≤10 MB, host, learn points, agenda. Admin menu: Article, News, Content categories, Webinars, Author profiles. Deliberate differences are commented at the fields (intro textarea, go_live_at as the scheduled date, webinar time in TIME_ZONE not UTC, our Heading/Embed blocks kept).
-- **Settings › Default models** (superusers; `apps/ai/defaults.py`, `TaskDefault`, `apps/studio/views/task_defaults.py`): default model and fallback per task (each step with a model, plus hero prompt and hero vision check) over `AI_PROFILES`; used by new runs, the wizard and the executors (`pipeline.profile_for`).
-- Settings › AI providers already existed (a097fa2); the user didn't see it because share mode ran a stale image. Always `--build` share mode after code changes.
-- Not replicated (unknown models): "Content Library Posts", "Website rebuilds" (their webhook dispatch), webinar registrations/confirmation emails.
+The user's direction:
+- A fast, functional, visually better version of the current Wagtail CMS with better UX. No rebranding.
+- The page types replicate the company CMS (https://cms.sdsmanager.com/admin/, Wagtail 6.3, headless) 1:1, improved where we judge it better. Inspect it through Claude in Chrome in the user's Brave (logged in; read only, never save there) instead of asking for screenshots. JavaScript that returns hrefs/query strings is blocked there; use get_page_text and find.
+- The pipeline follows the user's `ehs-seo-blog-optimized` skill (`~/.claude/skills/ehs-seo-blog-optimized/`) for research, outline and draft. Its Step 3 is NOT used: Review and edit = scan, then a /deslop rewrite, then a /clarity-review rewrite, then grade tuning.
+- Final goal: once tuned, one-shot generation of the whole pipeline. For now, smooth the step-by-step workflow.
+- The user asks before each commit and push.
 
-The user's direction: a fast, functional, visually better version of the current Wagtail CMS with better UX. No rebranding (the "Content Studio" logo/titles were reverted). The Article and News Page (and the other three types) must replicate the company CMS 1:1, improved where we judge it better; inspect cms.sdsmanager.com/admin/ through Claude in Chrome (read only, never save there) instead of asking for screenshots. The user asks before each commit and push.
+### The pipeline now (what each step does)
 
-**There is no planned next milestone.** Ask the user what to do; the open items are under **Start here** below. The most important one is still theirs: blind scores for the outline evaluation.
+| Step | What happens | Code |
+|---|---|---|
+| Search results (first, optional, automatic) | Top 10 results for the brief's locale from the first configured provider (Serper, Brave, Google Programmable Search, then keyless **DuckDuckGo** as the default, then Ollama web search with the Ollama Cloud key); Google autocomplete (keyless); reads the top pages politely and measures H1–H3 outline, title tag, date, words, FKGL, FAQ, tables, video, forms, question H2s | `apps/studio/serp.py`, keys under **Settings › Search data providers** |
+| Research | Skill Step 1: Search Intent, What Ranks, **Must Include**, **Missing Opportunity** (no "Do better", by the user's choice), Keyword Table, Questions, Sources by tier, Claims with status, Misconceptions, **Cannibalization** against the vendored internal article index | `prompts/research.md`, `apps/studio/houseref.py` |
+| Outline | H1 options, format + length vs the ranking median, H2s as real queries, H3 necessity test, ~30% rule, per-section words, capsules, Intro/Conclusion/FAQ plans (product from the vendored registry), claim table, structure decisions with alternatives, headings-only outline (Key Takeaways first, FAQ last). Article headings are written as `H2:` lines so the plan isn't graded as an article | `prompts/outline.md` |
+| Draft | Skill Step 2 + component specs: sees the research; intro with the literal "this article" scope sentence, Key Takeaways, core in the first H2, capsules, `[SRC: url]`, `[VISUAL: …]`, verb-first CTA conclusion with one registry product (+ button label when CTA style is button), FAQ (`:::faq`), References; house style (no dashes, straight quotes, Title Case); metadata with 3 options each for Meta Title, Meta Description, Slug, **Tags**, **Excerpt** | `prompts/draft.md`, `prompts/_rules.md`, `textclean.split_metadata` |
+| Review and edit | Scan (deslop lexical with the skill's banned-word TSV and Title Case allowed, structure, redundancy; clarity frame scan with the keywords as terms; whole-article metrics) → **deslop rewrite** → **clarity-review rewrite** → **grade tuning** per H2 (H3s in sections over 300 words), more than 1 above target, hardest first, max 10, by syntactic unpacking → re-scan + report (slop index, FKGL before/after, clarity edits, substantive questions for the author) | `apps/quality/review.py`, `prompts/review_{deslop,clarity,wordlevel}.md` |
+| Final cleanup | clean-user-facing-text, then house-style mechanics (dashes, curly quotes, emoji, thematic breaks, escaped punctuation, spacing, `[HERO:]` cues), then the mechanical sweep. If `[VERIFY]`, `[SRC:]` or `[VISUAL:]` remain it **holds for review** and can't be approved; "Strip [SRC:] markers" helper | `apps/quality/house.py`, `executors.cleanup`, `services.strip_sources` |
+| Publish | Refuses while markers remain. Excerpt → page Intro, chosen Tags → page tags; a quoted button label after the product link becomes a **CTA button block** | `executors.publish`, `apps/content/publishing.py`, `markup.build_article` |
+
+Every rewrite (edit step, chat apply, Tune) passes `review.accept_rewrite`: headings kept, most words kept, **protected spans** (numbers with their unit, section/regulation refs, URLs, acronyms, markers) unchanged and **no negation lost** (unfolding "not X but Y" is allowed). Tune also refuses a drop over 1.5 grades that leaves sentences flat (≥ 70% in one length band, judged on ≥ 4 sentences).
+
+### Also built this session
+
+- Company CMS page types (fa78bbe), Settings › Default models per task, AI providers page.
+- Steps can't start before their input is approved (model choice/Retry on a waiting step keeps it pending; approving the previous step starts it or restarts a failed next step).
+- Timers: server-rendered elapsed (right on reload), live times in the step list, time in queue, "took" per step/version, slow-step warning.
+- Audience profiles per region (Settings › Audience profiles; seeded B2B SaaS EHS, grade 8), fed to every prompt and the chat; the wizard pre-fills per region.
+- Reading grade only on article steps (draft, review and edit, cleanup, localise): whole-article FKGL + sentence-length spread, then per-section rows (references, tables, notes not graded).
+- Suggestions chat + Tune buttons on steps waiting for review (`apps/studio/assistant.py`, worker task `run_chat`); models in Settings › Default models (Suggestions chat, Section tuning).
+- Send back with feedback (regenerate with a chosen model, or targeted edits through the chat); Reject the whole run; Reopen a rejected run (optionally regenerating with the reason).
+- Logo on in-article images: editor uploads get the SDS Manager logo by `sds-hero-stock`'s `inner_logo.py` (corner and regular/negative version chosen to avoid clashes), with a **Logo position** choice (Automatic, top/bottom left/right) and an opt-out. Images chosen from the library aren't re-branded.
+- Site-mapping eval (`tests/test_site_mapping.py`): a skill-style article renders every component; pages created directly under Root (as in the headless company CMS) have no public URL here, so listings and language links now skip them instead of printing `href="None"`.
+
+### Things a new session must know
+
+- Develop while share mode runs with one-off dev containers: `docker compose run --rm --no-deps -T web …` (bind-mounted code); share mode bakes the image, so `--build` it after changes.
+- **Never write Python with backslashes through Bash heredocs** in this environment: `\n` turns into a real newline (it broke files several times on 2026-10-14). Write scripts with the Write tool into the scratchpad and run them with `python -I`.
+- Tests switch the Search results step off by default (`tests/conftest.py`); mark a test `search_step` to keep it.
+- Vendored skill files are byte-identical copies, except `internal-article-links.md`, which keeps only published rows (`apps/quality/vendor/README.md`); added on 2026-10-14: `ehs_seo_blog/data/{banned-words.tsv,internal-article-links.md,product-link-registry.json}` (lead-magnet-links.md is deliberately not vendored: it lists unreleased items from an internal tracker and the repo is public).
+- `STUDIO_SECRETS_KEY` is in `.env`; back up `.env` separately.
+
+### Ideas the user raised, not built yet
+
+- Turn the combined workflow knowledge into an agent with an SOP that adapts to whichever model is used (a single model-agnostic SOP document behind every step), as the path to one-shot generation.
+- Sectional drafting (approve one H2 at a time), link_check / editorial_flow_check scripts from the skill, re-branding images chosen from the library.
+- Run 12 ("management of change safety") is rejected; it can be reopened from its banner.
 
 ## What was built on 2026-10-13/14 (after M8)
 

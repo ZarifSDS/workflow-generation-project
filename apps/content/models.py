@@ -87,9 +87,15 @@ def score(page):
     return (page.pk or 0) + (getattr(page, "priority", 0) or 0)
 
 
-def listing_order(pages):
-    """Highest score first. Works on mixed page types (articles and webinars)."""
-    return sorted(pages, key=score, reverse=True)
+def listing_order(pages, request=None):
+    """Highest score first, only pages with a public URL. Works on mixed page types (articles and
+    webinars). Pages created directly under Root (as in the headless company CMS) have no URL on this
+    site, so they're left out of listings instead of producing broken links."""
+    return sorted((p for p in pages if p.get_url(request)), key=score, reverse=True)
+
+
+def linked_translations(page, request=None):
+    return [p for p in page.translations.live().public().order_by("title") if p.get_url(request)]
 
 
 class ListedPageForm(WagtailAdminPageForm):
@@ -176,7 +182,7 @@ class ArticleIndexPage(Page):
 
     def get_context(self, request, *args, **kwargs):
         context = super().get_context(request, *args, **kwargs)
-        context["articles"] = listing_order(self.get_children().live().public().specific())
+        context["articles"] = listing_order(self.get_children().live().public().specific(), request)
         return context
 
 
@@ -265,7 +271,7 @@ class ArticlePage(Page):
 
     def get_context(self, request, *args, **kwargs):
         context = super().get_context(request, *args, **kwargs)
-        context["translations"] = self.translations.live().public().order_by("title")
+        context["translations"] = linked_translations(self, request)
         return context
 
 
@@ -414,5 +420,5 @@ class WebinarPage(Page):
 
     def get_context(self, request, *args, **kwargs):
         context = super().get_context(request, *args, **kwargs)
-        context["translations"] = self.translations.live().public().order_by("title")
+        context["translations"] = linked_translations(self, request)
         return context

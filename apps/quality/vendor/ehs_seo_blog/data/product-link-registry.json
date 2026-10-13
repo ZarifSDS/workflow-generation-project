@@ -1,0 +1,56 @@
+{
+  "_comment": "Single source for SDS Manager EHS product pages (platform page plus seven modules, synced 2026-10-06; Compliance Reporting, Document Control and Assets & Maintenance are listed on the platform page without their own URLs, so they are not here) used as internal-link and CTA candidates. Consumed by the model (to pick link/CTA targets during drafting) and scripts/link_check.py (to identify product links and enforce the deepest-page-wins rule). The selection rule, anchor rules, and prohibited-target rules stay in voice-and-style.md; only this enumerated page table lives here. Chemical/SDS-focused topics keep the existing sdsmanager.com/us/ and product sub-pages; this registry adds the EHS suite alongside them, it does not replace them.",
+  "region_slug_note": "URLs shown for /us/. Swap the region slug (/uk/, /ca/, /au/, /nz/) per REGION.",
+  "display_name_note": "In blog/article copy, refer to the EHS platform by its canonical name 'EHS Solution by SDS Manager'. Live product pages may render it 'SDS Manager EHS'; blog copy uses 'EHS Solution by SDS Manager'. Keep it distinct from the separate 'SDS Manager' SDS/chemical-management product it integrates with.",
+  "selection_rule": "Deepest relevant page wins: link the module page when the article sits squarely in one module's territory; link the landing page only when the topic is platform-level or spans multiple modules. Do not link both the landing page and a module page for the same purpose in one article.",
+  "pages": [
+    {
+      "name": "EHS platform (landing)",
+      "url": "https://sdsmanager.com/us/ehs-software/",
+      "level": "platform",
+      "covers": "EHS software generally, safety management systems, digitizing safety programs, or topics spanning 2+ modules below"
+    },
+    {
+      "name": "Incident Management",
+      "url": "https://sdsmanager.com/us/ehs-software/incident-management-software/",
+      "level": "module",
+      "covers": "Incident/near-miss/hazard reporting, incident investigation, root-cause analysis, CAPA from incidents, reporting participation/anonymous reporting, incident trends and dashboards"
+    },
+    {
+      "name": "Risk Management",
+      "url": "https://sdsmanager.com/us/ehs-software/risk-management-software/",
+      "level": "module",
+      "covers": "Hazard identification, risk assessment/matrices, inherent vs. residual risk, heat maps, control libraries and hierarchies of control, JHA/JSA-adjacent topics"
+    },
+    {
+      "name": "Audit & Inspection",
+      "url": "https://sdsmanager.com/us/ehs-software/audit-inspection-software/",
+      "level": "module",
+      "covers": "Safety audits, inspections and checklists, audit scheduling/programs, photo evidence, findings-to-CAPA workflows, ISO 45001/ISO 14001/OSHA audit readiness"
+    },
+    {
+      "name": "Incident Investigation",
+      "url": "https://sdsmanager.com/us/ehs-software/incident-investigation-software/",
+      "level": "module",
+      "covers": "Guided incident investigations (5 Whys, fishbone, decision tree), evidence handling, root-cause analysis"
+    },
+    {
+      "name": "CAPA Management",
+      "url": "https://sdsmanager.com/us/ehs-software/capa-management-software/",
+      "level": "module",
+      "covers": "Corrective and preventive actions with owners, due dates and independent sign-off, linked back to the finding that raised them"
+    },
+    {
+      "name": "Safety Training",
+      "url": "https://sdsmanager.com/us/ehs-software/safety-training-software/",
+      "level": "module",
+      "covers": "Training assignment by role and site, certification expiry surfaced before it lapses, getting procedures and safe-work knowledge to the people who do the work"
+    },
+    {
+      "name": "Contractor Management",
+      "url": "https://sdsmanager.com/us/ehs-software/contractor-management-software/",
+      "level": "module",
+      "covers": "Contractor approval before work starts, documents that carry expiry dates, one register of every contractor company"
+    }
+  ]
+}

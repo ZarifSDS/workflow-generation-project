@@ -56,7 +56,7 @@ class FakeLLM:
                     "scene": "chemical store",
                 }
             )
-        elif "Write the full piece" in user:
+        elif "Write the full article" in user:
             text = DRAFT_TEXT
         elif "image prompt" in user.lower():
             text = "A clean records room with binders, soft daylight, no text."
@@ -110,7 +110,7 @@ def test_outline_receives_approved_research(brief, fake_llm, admin_user):
     approve(run.steps.get(key="research"), admin_user)
     execute_step(run.steps.get(key="outline").pk)
     outline_prompt = fake_llm.calls[-1][2][-1]["content"]
-    assert "Approved research notes" in outline_prompt and "Output from" in outline_prompt
+    assert "Approved research" in outline_prompt and "Output from" in outline_prompt
 
 
 def test_draft_creates_title_meta_and_slug_options(brief, fake_llm, admin_user):
@@ -127,7 +127,7 @@ def test_draft_creates_title_meta_and_slug_options(brief, fake_llm, admin_user):
     assert run.metadata_options.get(kind="slug").text == "sds-retention-requirements"
 
 
-def test_ungated_cleanup_continues_automatically(brief, fake_llm, admin_user):
+def test_cleanup_holds_for_review_while_markers_remain(brief, fake_llm, admin_user):
     run = services.create_run(brief, {})
     for key in ("research", "outline", "draft", "review_edit"):
         execute_step(run.steps.get(key=key).pk)
@@ -137,6 +137,14 @@ def test_ungated_cleanup_continues_automatically(brief, fake_llm, admin_user):
     cleanup = run.steps.get(key="cleanup")
     assert cleanup.status == StepRun.Status.QUEUED
     execute_step(cleanup.pk)
+    cleanup.refresh_from_db()
+    # The draft carries a [VERIFY] marker, so the normally automatic step waits and Publish can't run.
+    assert cleanup.status == StepRun.Status.READY
+    assert "Publishing is blocked" in cleanup.latest_version.note
+    with pytest.raises(ValueError, match="Resolve the working markers"):
+        services.approve_step(cleanup, admin_user)
+    resolved = cleanup.latest_version.content.replace(" [VERIFY]", "")
+    services.approve_step(cleanup, admin_user, edited_content=resolved)
     cleanup.refresh_from_db()
     assert cleanup.status == StepRun.Status.APPROVED
     assert run.steps.get(key="hero_image").status == StepRun.Status.QUEUED
@@ -341,7 +349,7 @@ def test_ready_step_is_announced_once(admin_client, brief, fake_llm):
 def test_status_endpoint_reports_activity(admin_client, brief):
     run = services.create_run(brief, {})
     data = admin_client.get(reverse("studio:run_status", args=[run.pk])).json()
-    assert data["active"] is True and data["steps"][0] == {
+    assert data["active"] is True and data["steps"][1] == {
         "key": "research",
         "status": "queued",
         "started_at": None,

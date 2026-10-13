@@ -5,7 +5,8 @@ from pathlib import Path
 
 import yaml
 
-from .models import StepRun
+from . import houseref
+from .models import AudienceProfile, StepRun
 
 PROMPTS_DIR = Path(__file__).parent / "prompts"
 
@@ -54,6 +55,28 @@ def brief_table(brief):
     return "\n".join(lines)
 
 
+def audience_block(brief):
+    """The region's audience profile (Settings › Audience profiles); the brief's own audience wins."""
+    profile = AudienceProfile.objects.filter(region=brief.region).first()
+    if not profile:
+        return ""
+    block = profile.prompt_block()
+    if brief.audience:
+        block += f"\nThis brief narrows the audience to: {brief.audience}."
+    return f"\n{block}\n"
+
+
+def _serp_block(report):
+    if not report:
+        return ""
+    return (
+        "\nWhat currently ranks for the primary keyword in this region (live search results and the "
+        "structure of the top pages). Cover what searchers clearly expect, match the depth of the ranking "
+        "pages, and beat them on clarity and accuracy; don't copy their wording:\n\n"
+        f"{report}\n"
+    )
+
+
 def context_for(step, extra=None):
     run, brief = step.run, step.run.brief
     site_profile = approved_output(run, "site_crawl")
@@ -74,8 +97,12 @@ def context_for(step, extra=None):
         if site_profile
         else "",
         "research": approved_output(run, "research") or "(no research step in this run)",
+        "serp_block": _serp_block(approved_output(run, "search_results")),
+        "audience_block": audience_block(brief),
         "outline": approved_output(run, "outline"),
         "draft": approved_output(run, "review_edit") or approved_output(run, "draft"),
+        "related_articles": houseref.related_articles_block(brief),
+        "product_pages": houseref.product_pages_block(brief.region),
         "regenerate_block": f"\nInstruction from the editor for this attempt: {note}\n" if note else "",
     }
     context.update(extra or {})

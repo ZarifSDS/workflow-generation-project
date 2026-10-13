@@ -1,0 +1,66 @@
+# Banned words. Generated from data/banned-words.json -- edit the JSON, then run scripts/build_banned_words.py.
+# class A = direct substitute; class B = recast or cut (replacement REWRITE or a parenthetical instruction means there is no drop-in word).
+# Apply 'condition' before treating an occurrence as a violation; some bans are context-specific.
+# 'Key' as an adjective: max 2 per article. Replacements are not free passes; where a sentence survives without the intensifier, cut it.
+term	class	replacement	condition	note
+seldom	A	rarely
+jurisdictions	A	countries, states, regions	when meaning 'countries/states'	use the concrete unit
+regimes	A	regulations, rules	when meaning 'regulations'
+scrutiny	A	review, inspection
+purpose-built	A	built
+consolidating	A	combining
+capture	A	record, log, collect	as a verb, when meaning 'record' or 'collect'	context-dependent; keep 'capture' only in its literal/technical sense (capturing an image, a system capturing data automatically), swap it where it stands in for a plainer verb
+utilize	A	use
+leverage	A	use, apply, take advantage of	as a verb
+multifaceted	B	REWRITE		rewrite
+paramount	B	REWRITE		rewrite
+in today's world	A	"Right now," "In [year]," "Across regulated industries"	also 'in today's fast-paced'
+it's important to note	A	"Worth keeping in mind," "Keep in mind"
+remember	B	REWRITE		rewrite as a direct instruction
+crucial	B	REWRITE		rewrite; vary: central, decisive, required, or restructure
+ensure	B	REWRITE		rewrite - usually cuts cleanly
+essential	A	required, necessary, mandatory
+pivotal	A	central, decisive
+furthermore	B	REWRITE		start a new sentence or use 'Beyond that,'
+moreover	B	REWRITE		start a new sentence
+navigating	B	REWRITE		rewrite
+landscape	B	REWRITE		rewrite
+realm	B	REWRITE		rewrite
+foster	B	REWRITE		rewrite
+facilitate	B	REWRITE		rewrite
+delve	A	look at, dig into, explore
+cutting-edge	A	modern, current, advanced
+game-changer	A	significant shift, major improvement
+unlock	B	REWRITE		rewrite
+comprehensive	B	REWRITE		rewrite - usually just cuts
+robust	A	strong, solid, reliable
+streamline	B	REWRITE		rewrite
+holistic	B	REWRITE		rewrite
+notably	B	REWRITE		start the next point directly
+consequently	B	REWRITE		rewrite with a natural bridge
+additionally	B	REWRITE		start the next point directly
+revolutionize	A	change, transform, reshape
+seamlessly	B	REWRITE		remove or rewrite the sentence
+harness the power of	A	use, apply, put [X] to work
+in conclusion	B	REWRITE		just write the closing; or 'To sum up,'
+testament	B	REWRITE	figurative	rewrite as the concrete fact
+underscore	B	(state the point directly)	as a verb; incl. 'underscores'
+highlight	A	show, point to, or restructure	figurative verb
+showcase	A	show, demonstrate	incl. 'showcasing'
+emphasize	B	(state the point; or 'stress' when a source literally stresses something)	figurative; incl. 'emphasizing'
+boasts	A	has	meaning 'has'
+vital	A	required, necessary
+interplay	A	relationship, interaction
+intricate	A	detailed, complex	incl. 'intricacies' -> details
+meticulous	A	careful, exact	incl. 'meticulously' -> carefully
+garner	A	gain, earn, attract
+bolster	A	strengthen, support	incl. 'bolstered'
+tapestry	B	REWRITE	figurative	rewrite
+align with	A	match, meet, follow, comply with	incl. 'aligns with'
+enduring	A	lasting, long-standing
+evolving	A	changing	as a filler modifier	or cut
+stands as	A	is	incl. 'serves as'
+plays a key/vital/pivotal/crucial role	B	REWRITE		state what it actually does
+vibrant	B	REWRITE		rewrite
+enhance	A	improve, raise		or rewrite
+valuable insights	B	REWRITE		name the specific finding

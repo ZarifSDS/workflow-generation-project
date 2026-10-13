@@ -177,6 +177,7 @@ class GenerationRun(models.Model):
         steps = list(self.enabled_steps)
         for status in (
             StepRun.Status.READY,
+            StepRun.Status.REJECTED,
             StepRun.Status.FAILED,
             StepRun.Status.RUNNING,
             StepRun.Status.QUEUED,
@@ -209,6 +210,7 @@ class StepRun(models.Model):
     error = models.TextField(blank=True)
     regenerate_note = models.TextField(blank=True)
     notified_at = models.DateTimeField(null=True, blank=True)  # "ready for review" message shown
+    queued_at = models.DateTimeField(null=True, blank=True)  # handed to the worker (services.enqueue)
     started_at = models.DateTimeField(null=True, blank=True)
     finished_at = models.DateTimeField(null=True, blank=True)
     approved_by = models.ForeignKey(
@@ -234,6 +236,28 @@ class StepRun(models.Model):
     @property
     def latest_version(self):
         return self.versions.order_by("-number").first()
+
+    @property
+    def timer_since(self):
+        """When the live timer starts: the start of a running step, or when a queued step was queued."""
+        if self.status == self.Status.RUNNING:
+            return self.started_at
+        if self.status == self.Status.QUEUED:
+            return self.queued_at
+        return None
+
+    @property
+    def elapsed_seconds(self):
+        since = self.timer_since
+        return max(0, round((timezone.now() - since).total_seconds())) if since else None
+
+    @property
+    def duration_seconds(self):
+        """How long the last run of the step took (finished, failed or waiting for review)."""
+        finished = (self.Status.READY, self.Status.APPROVED, self.Status.FAILED, self.Status.REJECTED)
+        if self.status not in finished or not (self.started_at and self.finished_at):
+            return None
+        return max(0, round((self.finished_at - self.started_at).total_seconds()))
 
 
 class StepVersion(models.Model):
@@ -270,12 +294,15 @@ class MetadataOption(models.Model):
         TITLE = "title", "Title"
         META = "meta", "Meta description"
         SLUG = "slug", "URL slug"
+        TAGS = "tags", "Tags"
+        EXCERPT = "excerpt", "Excerpt"
 
-    LIMITS = {"title": 60, "meta": 155, "slug": 75}
+    # Character limits shown in the editor (the skill: meta titles 40-60, descriptions 150-160).
+    LIMITS = {"title": 60, "meta": 160, "slug": 75, "tags": 300, "excerpt": 400}
 
     run = models.ForeignKey(GenerationRun, on_delete=models.CASCADE, related_name="metadata_options")
     kind = models.CharField(max_length=10, choices=Kind.choices)
-    text = models.CharField(max_length=300)
+    text = models.CharField(max_length=500)
     source = models.CharField(
         max_length=10, choices=StepVersion.Source.choices, default=StepVersion.Source.AI
     )
@@ -295,3 +322,106 @@ class MetadataOption(models.Model):
     @property
     def too_long(self):
         return len(self.text) > self.limit
+
+
+class AudienceProfile(models.Model):
+    """Who we write for in one region (Settings › Audience profiles). Every prompt and the suggestions chat
+    get it; new briefs take their audience and reading grade from it."""
+
+    region = models.CharField(max_length=4, choices=Region.choices, unique=True)
+    audience = models.CharField(
+        max_length=255,
+        help_text=(
+            "Who reads the articles, e.g. EHS managers at mid-sized UK manufacturers evaluating software."
+        ),
+    )
+    reading_grade = models.DecimalField(
+        "target reading grade (FKGL)",
+        max_digits=4,
+        decimal_places=1,
+        default=8,
+        help_text="Applied per section (H2, and H3 in long sections) in Review and edit.",
+    )
+    style = models.TextField(
+        blank=True,
+        help_text="How to write for them: tone, spelling, terms to use or avoid, what they care about.",
+    )
+    ranking_notes = models.TextField(
+        blank=True,
+        help_text=(
+            "What tends to rank for this market, e.g. 'answer first, short how-to steps, an FAQ, UK sources'."
+        ),
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["region"]
+
+    def __str__(self):
+        return f"{self.get_region_display()}: {self.audience}"
+
+    def prompt_block(self):
+        lines = [
+            f"Audience for {self.get_region_display()}: {self.audience}.",
+            f"Target reading grade: FKGL {self.reading_grade:g} in every section.",
+        ]
+        if self.style.strip():
+            lines.append(f"How to write for them: {' '.join(self.style.split())}")
+        if self.ranking_notes.strip():
+            lines.append(f"What ranks in this market: {' '.join(self.ranking_notes.split())}")
+        return "\n".join(lines)
+
+
+class ChatMessage(models.Model):
+    """The suggestions chat on a step (apps/studio/assistant.py): your requests and the model's replies.
+
+    An assistant message is created pending and filled in by the worker. "apply" and "tune" replies save a
+    new version of the step's output; "suggest" replies only answer.
+    """
+
+    class Role(models.TextChoices):
+        USER = "user", "You"
+        ASSISTANT = "assistant", "Assistant"
+
+    class Action(models.TextChoices):
+        SUGGEST = "suggest", "Suggestions"
+        APPLY = "apply", "Apply as new version"
+        TUNE = "tune", "Tune a section's reading grade"
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Waiting"
+        RUNNING = "running", "Working"
+        DONE = "done", "Done"
+        FAILED = "failed", "Failed"
+
+    step = models.ForeignKey(StepRun, on_delete=models.CASCADE, related_name="chat")
+    role = models.CharField(max_length=10, choices=Role.choices)
+    action = models.CharField(max_length=10, choices=Action.choices, default=Action.SUGGEST)
+    content = models.TextField(blank=True)
+    payload = models.JSONField(default=dict, blank=True)  # tune: {"index", "target", "name"}; base version
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.DONE)
+    version_number = models.PositiveIntegerField(null=True, blank=True)  # version an apply/tune saved
+    provider = models.CharField(max_length=30, blank=True)
+    model = models.CharField(max_length=200, blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["created_at", "pk"]
+
+    def __str__(self):
+        return f"{self.get_role_display()}: {self.content[:40]}"
+
+    @property
+    def is_open(self):
+        return self.status in (self.Status.PENDING, self.Status.RUNNING)
+
+    @property
+    def duration_seconds(self):
+        if self.started_at and self.finished_at:
+            return max(0, round((self.finished_at - self.started_at).total_seconds()))
+        return None

@@ -25,3 +25,4 @@ known-first-party = ["apps", "config"]
 addopts = "--ds=config.settings.test"
 python_files = ["test_*.py"]
 testpaths = ["tests"]
+markers = ["search_step: keep the Search results step on (other tests start runs at Research)"]

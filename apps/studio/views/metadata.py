@@ -68,7 +68,7 @@ class MetadataView(StudioPage):
                     messages.error(request, str(error))
         else:
             ids = {int(value) for value in request.POST.getlist("selected") if value.isdigit()}
-            for kind in ("meta", "slug"):  # single choice per kind
+            for kind in ("meta", "slug", "tags", "excerpt"):  # single choice per kind
                 value = request.POST.get(f"choice_{kind}")
                 if value and value.isdigit():
                     ids.add(int(value))

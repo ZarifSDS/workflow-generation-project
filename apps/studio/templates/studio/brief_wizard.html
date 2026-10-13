@@ -5,6 +5,7 @@
 <form method="post" class="studio" novalidate data-studio-wizard>
     {% csrf_token %}
     {{ presets|json_script:"studio-presets" }}
+    {{ audience_profiles|json_script:"studio-audiences" }}
 
     <fieldset class="s-step">
         <legend><span class="s-step-num" aria-hidden="true">1</span>Content type</legend>
@@ -50,7 +51,7 @@
                             {% if row.def.optional %}
                                 <label><input type="checkbox" name="step_{{ row.def.key }}_enabled" {% if row.def.default_on %}checked{% endif %}> {{ row.def.label }}</label>
                             {% else %}{{ row.def.label }}{% endif %}
-                            {% if row.def.key == "site_crawl" %}<div class="s-muted s-small s-normal">Guest posts only. Reads public pages of the target site.</div>{% endif %}
+                            {% if row.def.key == "search_results" %}<div class="s-muted s-small s-normal">Reads the top search results in the brief's region and how those pages are built. Needs a free search key under Settings › AI providers.</div>{% endif %}{% if row.def.key == "site_crawl" %}<div class="s-muted s-small s-normal">Guest posts only. Reads public pages of the target site.</div>{% endif %}
                         </th>
                         <td>
                             {% if row.groups %}

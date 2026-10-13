@@ -77,7 +77,8 @@ def test_sidebar_badge_counts_steps_waiting_for_review(admin_client, brief):
 def test_create_run_uses_pipeline_and_profile_defaults(brief, settings):
     run = services.create_run(brief, {"localise": {"enabled": False}})
     keys = list(run.steps.values_list("key", flat=True))
-    assert keys[0] == "research" and "site_crawl" not in keys
+    assert keys[:2] == ["search_results", "research"] and "site_crawl" not in keys
+    assert run.steps.get(key="search_results").status == StepRun.Status.SKIPPED  # off in these tests
     first = run.steps.get(key="research")
     assert first.status == StepRun.Status.QUEUED
     assert first.model == settings.AI_PROFILES["fast"]["model"]
@@ -88,7 +89,10 @@ def test_guest_posts_start_with_site_crawl(brief):
     brief.content_type = "outbound"
     brief.save()
     run = services.create_run(brief, {})
-    assert run.steps.order_by("order").first().key == "site_crawl"
+    assert list(run.steps.order_by("order").values_list("key", flat=True)[:2]) == [
+        "search_results",
+        "site_crawl",
+    ]
 
 
 def test_approve_queues_next_step_and_edit_creates_version(brief, admin_user):

@@ -1,11 +1,11 @@
-"""M5: vendored skill scripts and the review-and-edit sequence."""
+"""Vendored skill scripts and the review-and-edit sequence: scan, /deslop, /clarity-review, grade tuning."""
 
 import json
 
 import pytest
 from django.core.management import call_command
 
-from apps.quality import review, scans, scripts
+from apps.quality import house, review, scans, scripts
 from apps.studio import services
 from apps.studio.models import ContentBrief, StepRun
 
@@ -31,17 +31,15 @@ In this article we will explore SDS retention requirements for employers. Keep t
 
 Keep the current SDS available on every shift. Archive old versions in one place.
 """
-BRIEF = {"fkgl": 9, "region": "US", "pkeyword": "SDS retention requirements"}
+BRIEF = {"fkgl": 9, "region": "US", "pkeyword": "SDS retention requirements", "skeywords": []}
 
 
 class FakeEditor:
-    def __init__(self, break_headings=False):
-        self.calls, self.break_headings = [], break_headings
+    def __init__(self, break_headings=False, change_fact=False):
+        self.calls, self.break_headings, self.change_fact = [], break_headings, change_fact
 
     def __call__(self, name, context):
         self.calls.append(name)
-        if name == "review_splits":
-            return json.dumps([{"n": 1, "split": SPLIT}])
         if name == "review_wordlevel":
             return context["section"].replace(
                 "encompass comprehensive organisational accountability considerations",
@@ -49,14 +47,26 @@ class FakeEditor:
             )
         if self.break_headings:
             return "Just one paragraph with no headings at all, which drops structure."
-        return context["article"].replace(
-            "In this article we will explore SDS retention requirements for employers. ", ""
-        )
+        text = context["article"]
+        if name == "review_deslop":
+            text = text.replace(
+                "In this article we will explore SDS retention requirements for employers. ", ""
+            )
+            if self.change_fact:
+                text = text.replace("thirty years", "ten years")
+            return text + "\n\n## Deslop notes\n- Practical policy: no specific fact a reader could act on."
+        if name == "review_clarity":
+            return text.replace(
+                "Keep the current sheet on site.", "Keep the current safety data sheet on site."
+            ) + ("\n\n## Clarity edits\n- Unresolved referent: intro, “the current sheet” now names the SDS.")
+        return text
 
 
 def test_vendored_metrics_and_scanners_run():
     assert scripts.fkgl(ARTICLE) is not None
-    lexical = scripts.run_json("lexical", ARTICLE)
+    lexical = scripts.run_json(
+        "lexical", ARTICLE, "--allow-title-case", "--wordlist", str(review.BANNED_WORDS_TSV)
+    )
     assert "slop_index" in lexical
     summary = scans.summary(ARTICLE)
     assert {"slop_index", "unclear_references", "sweep_blocking"} <= set(summary)
@@ -67,27 +77,72 @@ def test_clean_text_script_removes_hidden_characters():
     assert "​" not in cleaned and "Safetext" in cleaned
 
 
-def test_sequence_runs_all_seven_substeps_and_only_proposes_splits():
+def test_sequence_is_scan_deslop_clarity_tune_rescan():
     editor = FakeEditor()
     outcome = review.run_sequence(ARTICLE, BRIEF, editor)
-    assert [s["number"] for s in outcome.substeps] == [1, 2, 3, 4, 5, 6, 7]
-    assert "In this article" not in outcome.text
-    assert "encompass comprehensive" not in outcome.text  # word-level edit applied (section above grade 13)
-    assert LONG_SENTENCE in outcome.text  # the split is NOT applied automatically
-    assert outcome.proposals and outcome.proposals[0]["before"] - outcome.proposals[0]["after"] >= 1.0
-    applied = review.apply_splits(outcome.text, outcome.proposals, {outcome.proposals[0]["id"]})
-    assert SPLIT in applied and LONG_SENTENCE not in applied
+    assert [s["name"] for s in outcome.substeps] == [
+        "Scan",
+        "Deslop rewrite",
+        "Clarity-review rewrite",
+        "Reading grade by section (syntactic unpacking)",
+        "Re-scan",
+    ]
+    assert editor.calls[:2] == ["review_deslop", "review_clarity"]
+    assert "In this article" not in outcome.text  # deslop
+    assert "the current safety data sheet" in outcome.text  # clarity
+    assert "encompass comprehensive" not in outcome.text  # tuned: the section was above target
+    assert "## Deslop notes" not in outcome.text and "## Clarity edits" not in outcome.text
+    assert outcome.questions == ["Practical policy: no specific fact a reader could act on."]
+    assert outcome.clarity_edits and outcome.metrics["before"]["fkgl"] and outcome.metrics["after"]["fkgl"]
+    assert outcome.proposals == []  # split proposals are retired
 
 
 def test_rewrite_that_drops_headings_is_not_used():
     outcome = review.run_sequence(ARTICLE, BRIEF, FakeEditor(break_headings=True))
     assert "## Practical policy" in outcome.text
-    meta = next(s for s in outcome.substeps if s["number"] == 4)
-    assert meta["changed"] is False and "not used" in meta["summary"]
+    deslop = next(s for s in outcome.substeps if s["number"] == 2)
+    assert deslop["changed"] is False and "not used" in deslop["summary"]
+
+
+def test_rewrite_that_changes_a_fact_is_not_used():
+    ok, reason = review.protected_ok(
+        "Keep it for 30 years under 1910.1020(d).", "Keep it for 10 years under 1910.1020(d)."
+    )
+    assert not ok and "30 years" in reason
+
+
+def test_negations_must_survive_but_negative_parallelism_may_unfold():
+    assert not review.protected_ok("Employers must not discard it.", "Employers must discard it.")[0]
+    assert review.protected_ok("It's not just a form, but a record.", "It's a record.")[0]
+
+
+def test_grades_skip_references_tables_and_markers():
+    text = (
+        "# T\n\n## Body\n\n"
+        + "Plain words help people read. " * 12
+        + "[SRC: https://osha.gov/x]\n\n## References\n\n1. OSHA.\n"
+    )
+    rows = review.unit_rows(text, 9)
+    refs = next(r for r in rows if r["name"] == "References")
+    assert refs["graded"] is False and refs["grade"] is None
+    assert review.article_metrics(text)["words"] < 80
+
+
+def test_house_mechanics_and_markers():
+    fixed, counts = house.mechanical_fix(
+        "A rule — with “quotes” , ranges 10–20.\n\n---\n\n[HERO: drums]\nEnd\\.\n"
+    )
+    assert "—" not in fixed and '"quotes"' in fixed and "10-20" in fixed and "---" not in fixed
+    assert "[HERO" not in fixed and "End." in fixed and counts["dashes"] == 2
+    markers = house.find_markers(
+        "# T\n\nA fact [VERIFY] [SRC: https://x.y].\n\n## B\n\n[VISUAL: chart, rates]\n"
+    )
+    assert [m["kind"] for m in markers] == ["VERIFY", "SRC", "VISUAL"] and markers[2]["section"] == "B"
+    assert "[SRC" not in house.strip_sources("A fact [SRC: https://x.y].")
 
 
 @pytest.mark.django_db
-def test_accept_splits_creates_your_edit_version(admin_user):
+def test_legacy_split_proposals_can_still_be_accepted(admin_user):
     brief = ContentBrief.objects.create(
         topic="t",
         pkeyword="SDS retention requirements",
@@ -97,17 +152,20 @@ def test_accept_splits_creates_your_edit_version(admin_user):
     )
     run = services.create_run(brief, {})
     step = run.steps.get(key="review_edit")
-    outcome = review.run_sequence(ARTICLE, BRIEF, FakeEditor())
+    proposal = {
+        "id": "abc12345",
+        "section": "How long",
+        "original": LONG_SENTENCE,
+        "split": SPLIT,
+        "before": 20,
+        "after": 12,
+    }
     services.add_version(
-        step,
-        outcome.text,
-        extra_metrics={
-            "review": {"substeps": outcome.substeps, "grades": outcome.grades, "proposals": outcome.proposals}
-        },
+        step, ARTICLE, extra_metrics={"review": {"substeps": [], "grades": [], "proposals": [proposal]}}
     )
     step.status = StepRun.Status.READY
     step.save()
-    version = services.accept_splits(step, admin_user, [outcome.proposals[0]["id"]])
+    version = services.accept_splits(step, admin_user, ["abc12345"])
     assert version.source == "edit" and SPLIT in version.content
     assert version.metrics["review"]["proposals"] == [] and len(version.metrics["review"]["accepted"]) == 1
 

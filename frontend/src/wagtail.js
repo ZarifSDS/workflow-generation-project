@@ -39,11 +39,13 @@ export function createApi(form) {
       return json(await fetch(`${data.apiRefs}?${params}`, { headers, credentials: "same-origin" }));
     },
 
-    async upload(file, { alt = "", decorative = false } = {}) {
+    async upload(file, { alt = "", decorative = false, brand = true, logoCorner = "auto" } = {}) {
       const body = new FormData();
       body.append("file", file);
       body.append("alt", alt);
       body.append("decorative", decorative ? "1" : "0");
+      body.append("brand", brand ? "1" : "0");
+      body.append("logo_corner", logoCorner);
       return json(await fetch(data.apiUpload, { method: "POST", body, headers, credentials: "same-origin" }));
     },
 

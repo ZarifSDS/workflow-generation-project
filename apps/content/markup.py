@@ -291,6 +291,10 @@ def _faq_block(element, warnings):
     return {"type": "faq", "value": {"items": items}} if items else None
 
 
+# A paragraph that is only a short quoted phrase, e.g. "Start reporting incidents from any device".
+CTA_LABEL = re.compile(r'^["\u201c]([^"\u201d]{3,80})["\u201d]$')
+
+
 @dataclass
 class ArticleBody:
     blocks: list
@@ -318,6 +322,7 @@ def build_article(text, take_intro=True):
         intro = elements.pop(0).text_content().strip()
 
     blocks, buffer = [], []
+    last_link = ""  # the most recent link, for a CTA button label that follows it
 
     def flush():
         if buffer:
@@ -330,7 +335,12 @@ def build_article(text, take_intro=True):
 
     for element in elements:
         block = None
-        if element.tag in ("h2", "h3"):
+        cta = CTA_LABEL.match(element.text_content().strip()) if element.tag == "p" else None
+        links = [a.get("href") for a in element.iter("a") if a.get("href")]
+        if cta and last_link and not links:
+            block = {"type": "cta", "value": {"label": cta.group(1).strip(), "url": last_link}}
+            last_link = ""
+        elif element.tag in ("h2", "h3"):
             block = {
                 "type": "heading",
                 "value": {
@@ -346,6 +356,8 @@ def build_article(text, take_intro=True):
         elif element.tag == "section" and element.get("data-block") == "faq":
             block = _faq_block(element, warnings)
         else:
+            if links and links[-1].startswith("http"):
+                last_link = links[-1]
             buffer.append(element)
             continue
         flush()

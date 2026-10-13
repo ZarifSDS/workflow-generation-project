@@ -12,6 +12,7 @@ from .views.provider_keys import (
     ProviderKeysView,
     ProviderKeyView,
     RemoveKeyView,
+    SearchProvidersView,
 )
 from .views.providers import ProvidersView
 from .views.runs import RunListView, RunWorkspaceView, VersionCompareView, run_export, run_status
@@ -42,6 +43,7 @@ urlpatterns = [
     # Settings › AI providers (superusers): keys, added providers and models (ADR 0008)
     path("ai-providers/", ProviderKeysView.as_view(), name="provider_keys"),
     path("ai-defaults/", TaskDefaultsView.as_view(), name="task_defaults"),
+    path("search-providers/", SearchProvidersView.as_view(), name="search_providers"),
     path("ai-providers/add/", AddedProviderView.as_view(), name="provider_add"),
     path("ai-providers/models/add/", AddedModelView.as_view(), name="provider_model_add"),
     path("ai-providers/models/<int:pk>/remove/", DeleteModelView.as_view(), name="provider_model_remove"),
