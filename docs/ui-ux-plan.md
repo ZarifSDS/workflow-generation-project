@@ -27,6 +27,8 @@ A **fast, functional, visually better version of the current Wagtail CMS with be
 | 5 Wagtail integrations | Planned | see below |
 | 6 Polish | Planned | see below |
 
+Also done after phase 3: upload limits of **10 MB per image and 25 MB per document (PDF)** (settings + `tests/test_security.py::test_upload_size_limits`; Caddy request cap 30 MB).
+
 Deferred from phase 3 into phase 4 (the run workspace template is rewritten there anyway): move the studio templates' inline `style=` attributes into `studio.css` classes, add hover/active/focus and loading/empty/error states per the redesign-skill audit, sentence-case copy, `tabular-nums` on metrics.
 
 ## Phase 4 — toolchain and core editor
@@ -41,7 +43,7 @@ Deferred from phase 3 into phase 4 (the run workspace template is rewritten ther
 ## Phase 5 — Wagtail integrations
 
 - `apps/studio/views/editor_api.py` under `studio/editor/` (JSON, `permissions.ACCESS` + Wagtail permission policies, CSRF from `wagtailConfig.CSRF_TOKEN`):
-  - `POST images/` (file, alt, decorative) through Wagtail's image form (size/type limits), `description=alt`; returns `{id, ref, preview_url, width, height}`.
+  - `POST images/` (file, alt, decorative) through Wagtail's image form, so the limits apply (**10 MB per image**, `WAGTAILIMAGES_MAX_UPLOAD_SIZE`; documents/PDFs **25 MB**, `WAGTAILDOCS_MAX_UPLOAD_SIZE`; Caddy allows 30 MB per request for form overhead). Show the limit in the drop zone and a clear error when a file is too big. `description=alt`; returns `{id, ref, preview_url, width, height}`.
   - `GET refs/?image=..&page=..&document=..` batched titles/previews (reuse `markup.WagtailResolver`).
   - `GET embed/?url=` via `wagtail.embeds.get_embed` (title + thumbnail); restrict `WAGTAILEMBEDS_FINDERS` to oEmbed YouTube/Vimeo.
 - Editor: link popover types URL / page / document / #anchor (from the document's headings) / mailto / tel; image drag/paste/upload with alt-text dialog (required unless decorative) and caption, plus "choose existing"; embed and FAQ nodes; `/` slash menu; shortcuts.

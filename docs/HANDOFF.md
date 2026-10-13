@@ -7,6 +7,8 @@ Read this first in a new session. Then `docs/development.md` (code map, how-tos,
 
 **Read [`docs/ui-ux-plan.md`](ui-ux-plan.md) first.** It holds the approved plan, decisions, per-phase status and the exact next steps. Phases 1-3 (Markdown dialect, richer article pages and exports, admin theme) are pushed in eb5778d; **start with phase 4 (Tiptap editor + frontend build)**, then 5 (Wagtail choosers, image upload, embeds) and 6 (polish, docs).
 
+Session 2026-10-13 ended here on purpose: the user will test and polish in a new chat. Last changes after eb5778d: the handoff/plan doc and upload limits (10 MB per image, 25 MB per document/PDF). Everything is committed and pushed; the dev stack is running.
+
 The user's direction: a fast, functional, visually better version of the current Wagtail CMS with better UX. No rebranding (the "Content Studio" logo/titles were reverted).
 
 ## Restarting after the PC was off

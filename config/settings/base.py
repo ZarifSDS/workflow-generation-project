@@ -181,7 +181,10 @@ WAGTAIL_SITE_NAME = "Content Workflow Studio"
 WAGTAILSEARCH_BACKENDS = {"default": {"BACKEND": "wagtail.search.backends.database"}}
 WAGTAILADMIN_BASE_URL = os.environ.get("WAGTAILADMIN_BASE_URL", "http://localhost:8000")
 WAGTAILDOCS_EXTENSIONS = ["csv", "docx", "key", "odt", "pdf", "pptx", "rtf", "txt", "xlsx", "zip"]
-WAGTAILDOCS_MAX_UPLOAD_SIZE = 10 * 1024 * 1024  # 10MB
+# Upload limits (user decision 2026-10-13): 10 MB per image, 25 MB per document (sized for PDFs).
+# Wagtail has one limit for all document types. The proxies allow a little more for form overhead.
+WAGTAILIMAGES_MAX_UPLOAD_SIZE = 10 * 1024 * 1024
+WAGTAILDOCS_MAX_UPLOAD_SIZE = 25 * 1024 * 1024
 
 
 # AI providers: base URLs only. API keys are read from the environment by the

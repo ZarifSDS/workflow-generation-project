@@ -51,6 +51,8 @@ Secrets live only in `.env` (never in git, the database or logs). After changing
 | `NGROK_CONFIG_FILE` or `NGROK_AUTHTOKEN`, `NGROK_DOMAIN`, `STUDIO_PUBLIC_URL`, `GUNICORN_WORKERS` | Share mode ([deployment.md](deployment.md)) |
 | `STUDIO_DOMAIN`, `ACME_EMAIL` | Production mode on your own server ([deployment.md](deployment.md#production-on-your-own-server)) |
 | `BACKUP_DIR`, `BACKUP_INTERVAL_HOURS`, `BACKUP_KEEP_DAYS` | Automated backups |
+
+Upload limits are settings, not environment variables: 10 MB per image (`WAGTAILIMAGES_MAX_UPLOAD_SIZE`) and 25 MB per document, sized for PDFs (`WAGTAILDOCS_MAX_UPLOAD_SIZE`), in `config/settings/base.py`. Caddy accepts up to 30 MB per request to leave room for form overhead.
 | `NVIDIA_API_KEY`, `MISTRAL_API_KEY`, `OPENROUTER_API_KEY` | Listed for completeness; not usable in this deployment |
 
 ## Providers and models

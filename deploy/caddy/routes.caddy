@@ -1,9 +1,9 @@
 # Shared by deploy/Caddyfile (share mode) and deploy/Caddyfile.prod (production).
 encode zstd gzip
 
-# Wagtail image uploads
+# Uploads: images up to 10 MB, documents (PDFs) up to 25 MB, plus form overhead (Django enforces the limits)
 request_body {
-	max_size 25MB
+	max_size 30MB
 }
 
 handle_path /media/* {

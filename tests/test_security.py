@@ -69,3 +69,21 @@ def test_passwords_need_twelve_characters():
     with pytest.raises(ValidationError):
         validate_password("Short-pw-11")
     validate_password("long-enough-pass-phrase")
+
+
+@pytest.mark.django_db
+def test_upload_size_limits(admin_client):
+    from django.conf import settings
+    from django.core.files.uploadedfile import SimpleUploadedFile
+    from wagtail.documents.forms import get_document_form
+    from wagtail.documents.models import Document
+    from wagtail.images.fields import WagtailImageField
+
+    assert settings.WAGTAILIMAGES_MAX_UPLOAD_SIZE == 10 * 1024 * 1024
+    assert settings.WAGTAILDOCS_MAX_UPLOAD_SIZE == 25 * 1024 * 1024
+    assert WagtailImageField().max_upload_size == 10 * 1024 * 1024
+
+    form_class = get_document_form(Document)
+    big_pdf = SimpleUploadedFile("big.pdf", b"%PDF-1.7\n" + b"0" * (25 * 1024 * 1024 + 1), "application/pdf")
+    form = form_class({"title": "Big"}, {"file": big_pdf}, user=None)
+    assert not form.is_valid() and "file" in form.errors

@@ -128,6 +128,10 @@ Before approving a page:
 - The hero has no safety contradictions or garbled text.
 - Links work and point where they should.
 
+## Uploads
+
+Images can be up to 10 MB each and documents (PDFs) up to 25 MB. Larger files are refused with a message; compress or resize them first.
+
 ## 6. Exports
 
 The Publish step offers downloads of the approved article:
