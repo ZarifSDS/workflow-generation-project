@@ -175,7 +175,15 @@ def test_workspace_offers_the_editor_on_text_steps(run, admin_client):
     assert html.count('name="base_version" value="2"') == 2  # approve and edit forms
     assert 'value="save_version"' in html and 'value="edit_approve"' in html
     assert "data-editor-open" in html
-    assert f'"{image.pk}": {{"url": "/media/images/panel' in html  # preview data for the editor
+    # Preview data for the editor (the same shape as the editor's refs endpoint)
+    import json
+    import re
+
+    refs = json.loads(
+        re.search(r'id="editor-refs" type="application/json">(.*?)</script>', html, re.S).group(1)
+    )
+    assert refs["images"][str(image.pk)]["url"].startswith("/media/images/panel")
+    assert refs["images"][str(image.pk)]["ref"] == f"wagtail://image?id={image.pk}"
 
 
 def _has_editor(client, run, key):

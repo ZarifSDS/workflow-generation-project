@@ -11,6 +11,7 @@ from apps.ai import catalog
 
 from .. import permissions, services
 from ..models import GenerationRun, StepRun
+from . import editor_api
 from .common import StudioPage
 
 
@@ -82,21 +83,15 @@ def _export_links(run):
 
 
 def _editor_refs(version):
-    """Previews for the images the version references, for the visual editor ({"images": {id: ...}})."""
+    """Previews and titles for what the version references, for the visual editor (editor_api shape)."""
     from apps.content import dialect, markup
 
-    ids = set()
+    ids = {"image": set(), "page": set(), "document": set()}
     for url in markup.REF_DESTINATION.findall(version.content if version else ""):
         kind, params = dialect.parse_ref(url) or (None, {})
-        if kind == "image" and params.get("id", "").isdigit():
-            ids.add(int(params["id"]))
-    found = markup.WagtailResolver(rendition="max-800x600").images(ids) if ids else {}
-    return {
-        "images": {
-            str(pk): {"url": image.url, "width": image.width, "height": image.height}
-            for pk, image in found.items()
-        }
-    }
+        if kind in ids and params.get("id", "").isdigit():
+            ids[kind].add(int(params["id"]))
+    return editor_api.reference_data(ids["image"], ids["page"], ids["document"])
 
 
 def _hero(version):
@@ -166,6 +161,7 @@ class RunWorkspaceView(StudioPage):
             # Text output (the model steps and Final cleanup) can be edited; the hero and Publish can't.
             can_edit=can_review and kind != "image" and step.key != "publish",
             editor_refs=_editor_refs(version) if can_review and kind != "image" else None,
+            upload_limits=editor_api.upload_limits(),
             user_can_act=bool(step and permissions.can_review(user, step)),
             user_can_retry=bool(step and permissions.can_act(user, step, "retry")),
             user_can_recover=bool(

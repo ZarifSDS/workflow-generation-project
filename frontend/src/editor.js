@@ -1,4 +1,4 @@
-// Rich-text editing of step output in the run workspace (M9 phase 4, docs/ui-ux-plan.md).
+// Rich-text editing of step output in the run workspace (M9 phases 4-5, docs/ui-ux-plan.md).
 //
 // Progressive enhancement: the page works without this bundle (a Markdown textarea in a disclosure).
 // Markdown in the textarea stays the source of truth. The visual editor writes back to it only when you
@@ -8,26 +8,17 @@ import "./editor.css";
 
 import { Editor } from "@tiptap/core";
 import BubbleMenu from "@tiptap/extension-bubble-menu";
+import FileHandler from "@tiptap/extension-file-handler";
 
-import { buildExtensions, isAllowedHref } from "./schema.js";
+import { openLinkDialog } from "./links.js";
+import { editImageDetails, openEmbedDialog, openImageDialog, uploadFiles } from "./media.js";
+import { buildExtensions } from "./schema.js";
+import { SlashCommands } from "./slash.js";
+import { el } from "./ui.js";
+import { createApi } from "./wagtail.js";
 
 const AUTOSAVE_MS = 800;
 const PREFIX = "studio:draft:";
-
-// ---- small helpers ----
-
-function el(tag, attrs = {}, children = []) {
-  const node = document.createElement(tag);
-  for (const [key, value] of Object.entries(attrs)) {
-    if (value === undefined || value === null || value === false) continue;
-    if (key === "class") node.className = value;
-    else if (key === "text") node.textContent = value;
-    else if (key.startsWith("on")) node.addEventListener(key.slice(2), value);
-    else node.setAttribute(key, value === true ? "" : value);
-  }
-  for (const child of [].concat(children)) if (child) node.append(child);
-  return node;
-}
 
 const storage = {
   get(key) {
@@ -73,123 +64,6 @@ function readRefs(id) {
   }
 }
 
-// ---- dialogs (native <dialog>, so focus handling and Esc come from the browser) ----
-
-function formDialog(title, fields, { submitLabel = "Apply", extraButton } = {}) {
-  const error = el("p", { class: "se-dialog__error", role: "alert", hidden: true });
-  const body = el("div", { class: "se-dialog__fields" }, fields.map((field) => field.row));
-  const footer = el("div", { class: "se-dialog__actions" }, [
-    el("button", { type: "submit", class: "button button-small", text: submitLabel, value: "apply" }),
-    extraButton,
-    el("button", { type: "submit", class: "button button-small button-secondary", text: "Cancel", value: "cancel", formnovalidate: true }),
-  ]);
-  const form = el("form", { method: "dialog" }, [el("h2", { class: "se-dialog__title", text: title }), body, error, footer]);
-  const dialog = el("dialog", { class: "se-dialog", "aria-label": title }, form);
-  document.body.append(dialog);
-  return {
-    dialog,
-    form,
-    showError(message) {
-      error.textContent = message;
-      error.hidden = !message;
-    },
-  };
-}
-
-function textField(label, { value = "", hint = "", type = "text", required = false } = {}) {
-  const id = `se-f-${Math.random().toString(36).slice(2, 9)}`;
-  const input = el("input", { id, type, value, required, "aria-describedby": hint ? `${id}-hint` : null });
-  input.value = value;
-  const row = el("div", { class: "se-field" }, [
-    el("label", { for: id, text: label }),
-    input,
-    hint ? el("p", { id: `${id}-hint`, class: "se-field__hint", text: hint }) : null,
-  ]);
-  return { row, input };
-}
-
-function checkField(label, checked) {
-  const id = `se-f-${Math.random().toString(36).slice(2, 9)}`;
-  const input = el("input", { id, type: "checkbox" });
-  input.checked = Boolean(checked);
-  return { row: el("div", { class: "se-field se-field--check" }, [input, el("label", { for: id, text: label })]), input };
-}
-
-function openLinkDialog(editor) {
-  const current = editor.getAttributes("link").href || "";
-  const href = textField("Link to", {
-    value: current,
-    hint: "A web address (https://…), mailto:, tel:, or #anchor for a heading in this text.",
-  });
-  const remove = current
-    ? el("button", { type: "submit", class: "button button-small button-secondary", text: "Remove link", value: "remove" })
-    : null;
-  const { dialog, form, showError } = formDialog(current ? "Edit link" : "Add link", [href], { extraButton: remove });
-  form.addEventListener("submit", (event) => {
-    const action = event.submitter?.value;
-    if (action === "apply") {
-      const value = href.input.value.trim();
-      if (!isAllowedHref(value)) {
-        event.preventDefault();
-        showError("Use https://, mailto:, tel: or #anchor.");
-        return;
-      }
-      const chain = editor.chain().focus();
-      if (editor.state.selection.empty && !editor.isActive("link")) {
-        chain.insertContent({ type: "text", text: value, marks: [{ type: "link", attrs: { href: value } }] }).run();
-      } else {
-        chain.extendMarkRange("link").setLink({ href: value }).run();
-      }
-    } else if (action === "remove") {
-      editor.chain().focus().extendMarkRange("link").unsetLink().run();
-    }
-  });
-  dialog.addEventListener("close", () => dialog.remove());
-  dialog.showModal();
-}
-
-function openImageDialog(editor) {
-  const { selection } = editor.state;
-  const node = selection.node;
-  if (!node || node.type.name !== "wagtailImage") return;
-  const pos = selection.from;
-  const alt = textField("Alt text", {
-    value: node.attrs.alt,
-    hint: "Describe what the image shows for people who can't see it.",
-  });
-  const decorative = checkField("Decorative image (no alt text)", node.attrs.decorative);
-  const caption = textField("Caption (optional)", { value: node.attrs.caption });
-  const sync = () => {
-    alt.input.disabled = decorative.input.checked;
-  };
-  decorative.input.addEventListener("change", sync);
-  sync();
-  const { dialog, form, showError } = formDialog("Image details", [alt, decorative, caption]);
-  form.addEventListener("submit", (event) => {
-    if (event.submitter?.value !== "apply") return;
-    if (!decorative.input.checked && !alt.input.value.trim()) {
-      event.preventDefault();
-      showError("Add alt text, or mark the image as decorative.");
-      return;
-    }
-    editor
-      .chain()
-      .focus()
-      .command(({ tr }) => {
-        tr.setNodeMarkup(pos, undefined, {
-          ...node.attrs,
-          alt: decorative.input.checked ? "" : alt.input.value.trim(),
-          decorative: decorative.input.checked,
-          caption: caption.input.value.trim(),
-        });
-        return true;
-      })
-      .run();
-  });
-  dialog.addEventListener("close", () => dialog.remove());
-  dialog.showModal();
-}
-
 // ---- toolbar ----
 
 function toolbarButton(label, icon, run, { isActive, isEnabled, shortcut } = {}) {
@@ -217,11 +91,13 @@ const ICONS = {
   faq: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.2 9a2.8 2.8 0 1 1 3.8 2.6c-.6.3-1 .8-1 1.5v.4M12 17h.01"/><rect x="3.5" y="3.5" width="17" height="17" rx="2"/></svg>',
   rule: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h16"/></svg>',
   image: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="1.5"/><circle cx="9" cy="10" r="1.5"/><path d="m4 17 5-4 4 3 3-2 4 3"/></svg>',
+  video: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="6" width="12" height="12" rx="1.5"/><path d="m15.5 10.5 5-3v9l-5-3"/></svg>',
   undo: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5M4 9h10a6 6 0 0 1 0 12h-3"/></svg>',
   redo: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 14 5-5-5-5M20 9H10a6 6 0 0 0 0 12h3"/></svg>',
 };
 
-function buildToolbar(editor) {
+function buildToolbar(ctx) {
+  const { editor } = ctx;
   const block = el("select", { class: "se-block", "aria-label": "Text style" }, [
     el("option", { value: "p", text: "Paragraph" }),
     el("option", { value: "2", text: "Heading 2" }),
@@ -241,7 +117,7 @@ function buildToolbar(editor) {
       toolbarButton("Italic", ICONS.italic, () => editor.chain().focus().toggleItalic().run(), { isActive: () => editor.isActive("italic"), shortcut: "Ctrl+I" }),
       toolbarButton("Underline", ICONS.underline, () => editor.chain().focus().toggleUnderline().run(), { isActive: () => editor.isActive("underline"), shortcut: "Ctrl+U" }),
       toolbarButton("Strikethrough", ICONS.strike, () => editor.chain().focus().toggleStrike().run(), { isActive: () => editor.isActive("strike"), shortcut: "Ctrl+Shift+S" }),
-      toolbarButton("Link", ICONS.link, () => openLinkDialog(editor), { isActive: () => editor.isActive("link"), shortcut: "Ctrl+K" }),
+      toolbarButton("Link", ICONS.link, () => openLinkDialog(ctx), { isActive: () => editor.isActive("link"), shortcut: "Ctrl+K" }),
     ],
     [
       toolbarButton("Bulleted list", ICONS.bullet, () => editor.chain().focus().toggleBulletList().run(), { isActive: () => editor.isActive("bulletList") }),
@@ -252,7 +128,8 @@ function buildToolbar(editor) {
       toolbarButton("Insert table", ICONS.table, () => editor.chain().focus().insertTable({ rows: 3, cols: 2, withHeaderRow: true }).run(), { isEnabled: () => can().insertTable({ rows: 3, cols: 2 }).run() }),
       toolbarButton("Insert FAQ", ICONS.faq, () => editor.chain().focus().insertFaq().run(), { isEnabled: () => !editor.isActive("faq") }),
       toolbarButton("Divider", ICONS.rule, () => editor.chain().focus().setHorizontalRule().run()),
-      toolbarButton("Image details", ICONS.image, () => openImageDialog(editor), { isEnabled: () => editor.isActive("wagtailImage") }),
+      toolbarButton("Image", ICONS.image, () => openImageDialog(ctx), { isActive: () => editor.isActive("wagtailImage") }),
+      toolbarButton("Video", ICONS.video, () => openEmbedDialog(ctx)),
     ],
     [
       toolbarButton("Undo", ICONS.undo, () => editor.chain().focus().undo().run(), { isEnabled: () => can().undo().run(), shortcut: "Ctrl+Z" }),
@@ -301,12 +178,13 @@ function buildToolbar(editor) {
 }
 
 // Built before the editor (BubbleMenu needs its element up front), so it reaches the editor lazily.
-function buildBubble(getEditor) {
+function buildBubble(getCtx) {
+  const getEditor = () => getCtx().editor;
   const items = [
     ["Bold", ICONS.bold, () => getEditor().chain().focus().toggleBold().run(), "bold"],
     ["Italic", ICONS.italic, () => getEditor().chain().focus().toggleItalic().run(), "italic"],
     ["Underline", ICONS.underline, () => getEditor().chain().focus().toggleUnderline().run(), "underline"],
-    ["Link", ICONS.link, () => openLinkDialog(getEditor()), "link"],
+    ["Link", ICONS.link, () => openLinkDialog(getCtx()), "link"],
   ].map(([label, icon, run, mark]) => ({ ...toolbarButton(label, icon, run), mark }));
   const menu = el("div", { class: "se-bubble", role: "toolbar", "aria-label": "Selected text" }, items.map((i) => i.button));
   const refresh = () =>
@@ -338,10 +216,22 @@ function mount(form) {
   const modeVisual = el("button", { type: "button", class: "se-mode", "aria-pressed": "true", text: "Visual" });
   const modeMarkdown = el("button", { type: "button", class: "se-mode", "aria-pressed": "false", text: "Markdown" });
   const status = el("p", { class: "se-status", "aria-live": "polite" });
+  // Results of uploads, choosers and embeds; kept apart from the autosave line so neither hides the other.
+  const notice = el("p", { class: "se-status se-notice", role: "status" });
 
-  let editor = null;
-  const bubble = buildBubble(() => editor);
-  editor = new Editor({
+  // Shared with the dialogs: the editor, the server API, reference data and a status line.
+  const ctx = {
+    editor: null,
+    api: createApi(form),
+    refs,
+    notify: (message) => {
+      notice.textContent = message;
+    },
+    openImage: () => openImageDialog(ctx),
+    openEmbed: () => openEmbedDialog(ctx),
+  };
+  const bubble = buildBubble(() => ctx);
+  const editor = new Editor({
     element: surface,
     extensions: [
       ...buildExtensions({
@@ -354,6 +244,13 @@ function mount(form) {
         shouldShow: ({ editor: e, state }) =>
           !state.selection.empty && !state.selection.node && (e.isActive("paragraph") || e.isActive("heading")),
       }),
+      // Images dropped or pasted into the text are uploaded to the library (with alt text).
+      FileHandler.configure({
+        allowedMimeTypes: ctx.api.uploadTypes.map((t) => (t === "svg" ? "image/svg+xml" : `image/${t === "jpg" ? "jpeg" : t}`)),
+        onDrop: (_editor, files, pos) => uploadFiles(ctx, files, pos),
+        onPaste: (_editor, files) => uploadFiles(ctx, files),
+      }),
+      SlashCommands.configure({ ctx }),
     ],
     editorProps: { attributes: { class: "se-prose s-output", "aria-label": "Edit the text", role: "textbox", "aria-multiline": "true" } },
     onUpdate: () => {
@@ -365,8 +262,9 @@ function mount(form) {
     onSelectionUpdate: () => refreshAll(),
   });
 
+  ctx.editor = editor;
   form.studioEditor = editor; // for debugging in the browser console
-  const toolbar = buildToolbar(editor);
+  const toolbar = buildToolbar(ctx);
   function refreshAll() {
     toolbar.refresh();
     bubble.refresh();
@@ -386,18 +284,18 @@ function mount(form) {
   measureHeader();
   window.addEventListener("resize", measureHeader);
   textarea.classList.add("se-markdown");
-  textarea.after(status);
+  textarea.after(notice, status);
   bubble.menu.hidden = false;
 
   // Keyboard: Ctrl+K for links, double-click an image for its details.
   surface.addEventListener("keydown", (event) => {
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
       event.preventDefault();
-      openLinkDialog(editor);
+      openLinkDialog(ctx);
     }
   });
   surface.addEventListener("dblclick", (event) => {
-    if (event.target.closest(".se-figure")) openImageDialog(editor);
+    if (event.target.closest(".se-figure")) editImageDetails(ctx);
   });
 
   // ---- Markdown <-> visual ----
@@ -520,6 +418,12 @@ function mount(form) {
   form.addEventListener("submit", () => {
     syncToTextarea();
     submitting = true;
+    // Keep exactly what is sent: if the server saves it, the next page sees a match and drops it;
+    // if the save is refused (a newer version), the latest text is what's offered back.
+    clearTimeout(timer);
+    if (key && !same(textarea.value, original)) {
+      storage.set(key, { content: textarea.value, savedAt: new Date().toISOString() });
+    }
   });
   window.addEventListener("beforeunload", (event) => {
     if (submitting || details?.open === false || !isDirty()) return;

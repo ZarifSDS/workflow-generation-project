@@ -9,8 +9,6 @@ import StarterKit from "@tiptap/starter-kit";
 import { AnchoredHeading, Embed, Faq, RawInline, Verify, WagtailImage } from "./nodes.js";
 
 // Links the dialect allows (ADR 0007): web, mail, phone, in-page anchors and Wagtail references.
-export const LINK_PROTOCOLS = ["http", "https", "mailto", "tel", "wagtail"];
-
 export function isAllowedHref(href) {
   const value = String(href || "").trim();
   if (value.startsWith("#")) return /^#[A-Za-z0-9][A-Za-z0-9_-]*$/.test(value);
@@ -48,7 +46,7 @@ export function buildExtensions({ resolveImage = () => undefined, placeholder = 
       link: {
         openOnClick: false,
         autolink: true,
-        protocols: LINK_PROTOCOLS,
+        // isAllowedUri decides; registering protocols with linkify only warns on every new editor.
         isAllowedUri: (url) => isAllowedHref(url),
       },
     }),

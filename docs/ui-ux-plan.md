@@ -1,6 +1,6 @@
 # UI/UX overhaul plan (M9) — status and next steps
 
-Approved 2026-10-13. Phases 1–3 are built and pushed (eb5778d); **phase 4 is built** (see below); **phases 5–6 are next**. A fresh session should read this file, then `docs/HANDOFF.md`.
+Approved 2026-10-13. Phases 1–3 are built and pushed (eb5778d); **phases 4–5 are built** (see below); **phase 6 is next**. A fresh session should read this file, then `docs/HANDOFF.md`.
 
 ## Goal (user's words, condensed)
 
@@ -24,8 +24,8 @@ A **fast, functional, visually better version of the current Wagtail CMS with be
 | 2 Page model, publishing, exports | **Done** | `apps/content/blocks.py`, `models.py` (Author, ArticlePageTag), migration `content/0002`, `apps/content/wagtail_hooks.py` (underline + sanitiser rules), `markup.build_article`, `publishing.py`, `exports.py`, templates `content/blocks/*`, `tests/test_publish.py` |
 | 3 Admin theme | **Done** (branding reverted) | `apps/brand/` (theme.css, font, hook), dashboard panels in `apps/studio/wagtail_hooks.py` + `studio/home/*.html`, `tests/test_theme.py` |
 | 4 Toolchain + core editor | **Done** | `frontend/` (`src/schema.js`, `nodes.js`, `editor.js`, `editor.css`, `test/roundtrip.test.js`), Dockerfile `frontend` stage, dev service `frontend`, CI job `frontend`, `services.save_edit`, `run_workspace.html`, `tests/test_editing.py` |
-| 5 Wagtail integrations | **Next** | see below |
-| 6 Polish | Planned | see below |
+| 5 Wagtail integrations | **Done** | `apps/studio/views/editor_api.py` (upload, refs, embed), `frontend/src/{links,media,slash,wagtail,ui}.js`, migration `studio/0005`, `WAGTAILEMBEDS_FINDERS`, `tests/test_editor_api.py`, `frontend/test/phase5.test.js` |
+| 6 Polish | **Next** | see below |
 
 Also done after phase 3: upload limits of **10 MB per image and 25 MB per document (PDF)** (settings + `tests/test_security.py::test_upload_size_limits`; Caddy request cap 30 MB). **SVG and WebP images** (user spec 2026-10-13): WebP is a Wagtail default; SVG added to `WAGTAILIMAGES_EXTENSIONS`, sandboxed by a CSP header on media, rasterised for DOCX (`tests/test_image_formats.py`).
 
@@ -46,6 +46,15 @@ The original plan:
 
 ## Phase 5 — Wagtail integrations
 
+Built on 2026-10-14 and verified in the browser on a throwaway run: page link through Wagtail's page chooser, image from the library chooser with alt text and caption, pasted image uploaded with required alt text, `/` menu, YouTube embed checked through oEmbed, saved version rendered by the server. Notes:
+
+- Wagtail's chooser modals can't sit on top of a modal `<dialog>`, so the link and image dialogs close before the chooser opens and the choice is applied when it returns.
+- Choosing an image prefills alt text from the image's description in the library; uploads store the alt text as the description.
+- Writers got add and choose rights for images and documents on the root collection (Wagtail lets owners change their own uploads, not other people's). Editors already had them.
+- Not built: link previews on hover and a keyboard-shortcut help; both move to phase 6.
+
+The original plan:
+
 - `apps/studio/views/editor_api.py` under `studio/editor/` (JSON, `permissions.ACCESS` + Wagtail permission policies, CSRF from `wagtailConfig.CSRF_TOKEN`):
   - `POST images/` (file, alt, decorative) through Wagtail's image form, so the limits apply (**10 MB per image**, `WAGTAILIMAGES_MAX_UPLOAD_SIZE`; documents/PDFs **25 MB**, `WAGTAILDOCS_MAX_UPLOAD_SIZE`; Caddy allows 30 MB per request for form overhead). Accept AVIF, GIF, JPEG, PNG, WebP and SVG (`accept=` on the file input from `WAGTAILIMAGES_EXTENSIONS`); SVG previews use the original (no raster rendition). Show the limit and the types in the drop zone and a clear error when a file is too big. `description=alt`; returns `{id, ref, preview_url, width, height}`.
   - `GET refs/?image=..&page=..&document=..` batched titles/previews (reuse `markup.WagtailResolver`).
@@ -55,6 +64,9 @@ The original plan:
 - Tests: endpoint 403s per role, upload validation, JSON shape.
 
 ## Phase 6 — polish
+
+Also in scope since 2026-10-14: link titles on hover in the editor, a shortcut list, and moving the remaining inline `style=` attributes in the studio templates into `studio.css`.
+
 
 Word-level and rendered diff in `VersionCompareView`; keyboard-shortcut help; update `docs/user-guide.md` (editing), `docs/development.md` (frontend build), `docs/workflow.md` (dialect vs the skills, per CLAUDE.md), the handbook artifact.
 

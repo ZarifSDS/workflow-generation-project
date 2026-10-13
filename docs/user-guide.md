@@ -94,7 +94,10 @@ Steps run in the background. A local model can take 20 minutes on a draft; the p
 
 - **Visual / Markdown** switches between the editor and the Markdown underneath. Both edit the same text; nothing is lost when you switch.
 - Claims to check show as a **VERIFY** chip. Images from the library show with their alt text and caption: double-click one (or use the image button) to change the alt text, mark it decorative, or edit the caption. Alt text is required unless the image is decorative.
-- Links can go to a web address, `mailto:`, `tel:` or a heading in the same text (`#anchor`). Headings with a fixed anchor show it as a small `#name` tag.
+- **Links** (Ctrl+K or the link button) can go to a web address, a **page on this site** or a **document** (picked in Wagtail's own chooser), a **heading in the same text**, an email address or a phone number. Headings with a fixed anchor show it as a small `#name` tag.
+- **Images**: the image button inserts one from the image library (Wagtail's chooser, with its search and upload tabs) or uploads one from your computer. You can also **drag images into the text or paste them**. Each new image asks for alt text (required unless decorative) and an optional caption; uploads land in the image library. JPEG, PNG, WebP, SVG, AVIF and GIF, up to 10 MB each.
+- **Videos**: the video button embeds a YouTube or Vimeo link; the studio checks the link and shows the video's title before inserting it.
+- **Type `/`** at the start of an empty line for a menu of blocks (headings, lists, quote, table, FAQ, image, video, divider). Arrow keys and Enter pick one; Esc closes it.
 - The text is only rewritten if you change something in the visual editor, so opening it and saving without changes doesn't touch the formatting.
 - **Your edit is kept in this browser** while you type. If the page closes before you save, you're offered **Restore my edit** next time you open the step. If someone else saved a newer version in the meantime, saving is refused with a message, so you don't overwrite their work; restore your edit and compare before saving it again.
 - **Cancel** discards your changes (after asking).

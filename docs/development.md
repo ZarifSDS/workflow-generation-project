@@ -104,6 +104,16 @@ The editor bundle is built three ways: the Dockerfile's `frontend` stage (images
 - Wagtail's `core.css` gets in the way in places (`:focus-visible` outline with `!important`, `form li { list-style: none }`); `editor.css` overrides those explicitly.
 - CI job `frontend`: `npm test`, `npm run build`, and a 250 KB gzip budget for `editor.js` (about 170 KB now).
 
+### Editor endpoints and choosers (phase 5)
+
+- `apps/studio/views/editor_api.py`: `POST studio/editor/images/` (through Wagtail's image form, so types and the 10 MB limit apply; needs studio access and Wagtail's add-image permission), `GET studio/editor/refs/?image=&page=&document=` (previews and titles, also embedded in the page as `editor-refs`), `GET studio/editor/embed/?url=` (`wagtail.embeds`, limited to YouTube and Vimeo by `WAGTAILEMBEDS_FINDERS`). The editor sends the form's CSRF token.
+- The workspace loads Wagtail's `page-chooser-modal.js`, `image-chooser-modal.js` and `document-chooser-modal.js`; `frontend/src/wagtail.js` opens them with `new XChooserModal(url).open(options, callback)` (the page chooser needs `modelNames`).
+- In the built-in browser pane, `<dialog>` close events and animation frames don't fire; `formDialog` finishes on submit, cancel or `close()` itself, so the flows work there and in real browsers.
+
+### Provider keys (ADR 0008)
+
+`apps/ai/secrets.py` (Fernet under `STUDIO_SECRETS_KEY`), `apps/ai/models.py` (`ProviderConfig`, `AddedModel`), `apps/ai/providers.py` (stored key over `.env`), `apps/ai/catalog.py` (`all_models()` merges added models; use it, not `CATALOG`, wherever models are listed), views in `apps/studio/views/provider_keys.py`. Registry tests need the database (`pytestmark = pytest.mark.django_db`).
+
 ### Change the article page
 
 Blocks live in `apps/content/models.py` (`ARTICLE_BLOCKS`); the Markdown conversion that fills them is `apps/content/markup.py::to_stream`. Change both together, run `makemigrations`, and update `tests/test_publish.py`.

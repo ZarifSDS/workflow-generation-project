@@ -102,7 +102,7 @@
                         {% if can_edit %}
                             <details class="s-disclosure s-edit">
                                 <summary>Edit this text</summary>
-                                <form method="post" class="s-edit__form" data-editor-form data-autosave-key="studio:draft:{{ run.pk }}:{{ step.key }}:{{ version.number }}" data-refs-id="editor-refs">{% csrf_token %}
+                                <form method="post" class="s-edit__form" data-editor-form data-autosave-key="studio:draft:{{ run.pk }}:{{ step.key }}:{{ version.number }}" data-refs-id="editor-refs" data-api-upload="{% url 'studio:editor_upload_image' %}" data-api-refs="{% url 'studio:editor_refs' %}" data-api-embed="{% url 'studio:editor_embed' %}" data-chooser-page="{% url 'wagtailadmin_choose_page' %}" data-chooser-image="{% url 'wagtailimages_chooser:choose' %}" data-chooser-document="{% url 'wagtaildocs_chooser:choose' %}" data-upload-max="{{ upload_limits.max_bytes }}" data-upload-types="{{ upload_limits.extensions|join:',' }}">{% csrf_token %}
                                     <input type="hidden" name="step" value="{{ step.key }}">
                                     <input type="hidden" name="base_version" value="{{ version.number }}">
                                     <label for="edit-content" class="w-sr-only">{{ step.label }}: text in Markdown</label>
@@ -273,7 +273,13 @@
 
 {% block extra_js %}
     {{ block.super }}
-    {% if can_edit %}<script src="{% static 'studio/editor/editor.js' %}" defer></script>{% endif %}
+    {% if can_edit %}
+        {# Wagtail's chooser modals (page, image, document) for links and images in the editor #}
+        <script src="{% static 'wagtailadmin/js/page-chooser-modal.js' %}"></script>
+        <script src="{% static 'wagtailimages/js/image-chooser-modal.js' %}"></script>
+        <script src="{% static 'wagtaildocs/js/document-chooser-modal.js' %}"></script>
+        <script src="{% static 'studio/editor/editor.js' %}" defer></script>
+    {% endif %}
     <script>
     (function () {
         // Live elapsed time for a running step.

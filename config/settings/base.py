@@ -10,6 +10,7 @@ from datetime import timedelta
 from pathlib import Path
 
 import dj_database_url
+from wagtail.embeds import oembed_providers
 
 PROJECT_DIR = Path(__file__).resolve().parent.parent
 BASE_DIR = PROJECT_DIR.parent
@@ -189,6 +190,13 @@ WAGTAILDOCS_EXTENSIONS = ["csv", "docx", "key", "odt", "pdf", "pptx", "rtf", "tx
 # Upload limits (user decision 2026-10-13): 10 MB per image, 25 MB per document (sized for PDFs).
 # Wagtail has one limit for all document types. The proxies allow a little more for form overhead.
 WAGTAILIMAGES_MAX_UPLOAD_SIZE = 10 * 1024 * 1024
+# Embeds (editor and EmbedBlock): YouTube and Vimeo only, through their oEmbed endpoints.
+WAGTAILEMBEDS_FINDERS = [
+    {
+        "class": "wagtail.embeds.finders.oembed",
+        "providers": [oembed_providers.youtube, oembed_providers.vimeo],
+    }
+]
 WAGTAILDOCS_MAX_UPLOAD_SIZE = 25 * 1024 * 1024
 
 

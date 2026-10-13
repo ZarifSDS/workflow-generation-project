@@ -1,5 +1,6 @@
 from django.urls import path
 
+from .views import editor_api
 from .views.briefs import BriefListView, BriefWizardView
 from .views.dashboard import DashboardView
 from .views.metadata import MetadataView
@@ -33,6 +34,10 @@ urlpatterns = [
         name="compare",
     ),
     path("models/", ProvidersView.as_view(), name="providers"),
+    # JSON for the step-output editor (M9 phase 5)
+    path("editor/images/", editor_api.upload_image, name="editor_upload_image"),
+    path("editor/refs/", editor_api.references, name="editor_refs"),
+    path("editor/embed/", editor_api.embed_preview, name="editor_embed"),
     # Settings › AI providers (superusers): keys, added providers and models (ADR 0008)
     path("ai-providers/", ProviderKeysView.as_view(), name="provider_keys"),
     path("ai-providers/add/", AddedProviderView.as_view(), name="provider_add"),
