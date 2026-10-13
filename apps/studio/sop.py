@@ -582,13 +582,26 @@ def base_related(step):
 
 
 def _guard(step_key, before, after):
-    if step_key in ARTICLE_STEPS:
+    """Whether a revision may replace the text. An edited or localised article keeps every protected span
+    (the skill's rule for rewriting approved prose). A draft is still being written, so its revision only has
+    to keep the sections, most of the words, every link and every negation."""
+    if step_key in ("review_edit", "localise"):
         return quality_review.accept_rewrite(before, after)
     after = (after or "").strip()
     if not after:
         return False, "empty output"
     if len(after.split()) < 0.6 * len(before.split()):
         return False, "too much text was removed"
+    if step_key == "draft":
+        urls = set(re.findall(r"(?:https?|wagtail)://[^\s)\]]+", before))
+        if lost_urls := sorted(urls - set(re.findall(r"(?:https?|wagtail)://[^\s)\]]+", after))):
+            return False, "it dropped the link(s) " + ", ".join(lost_urls[:3])
+        lost = len(quality_review.NEGATION.findall(before)) - len(quality_review.NEGATION.findall(after))
+        unfolded = len(quality_review.UNFOLDABLE_NEGATION.findall(before)) - len(
+            quality_review.UNFOLDABLE_NEGATION.findall(after)
+        )
+        if lost > max(unfolded, 0):
+            return False, "it dropped a negation (no, not, never…), which can reverse a claim"
     kept = {_norm(name) for name, _ in _sections(after)}
     lost = [name for name, _ in _sections(before) if name and _norm(name) not in kept]
     if lost:

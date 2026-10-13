@@ -49,6 +49,8 @@ def mechanical_fix(text):
     text = count("missing space after comma", r",(?=[A-Za-z])", ", ", text)
     text = count("double spaces", r"(?<=\S)  +(?=\S)", " ", text)
     text = count("hero cues", HERO_LINE, "", text)
+    # Models sometimes bold a link as **[text]**(url), which Markdown doesn't read as a link at all.
+    text = count("broken bold links", r"\*\*\[([^\]\n]+)\]\*\*\(", r"[**\1**](", text)
     text = re.sub(r"\n{3,}", "\n\n", text).strip() + "\n"
     return text, counts
 

@@ -53,7 +53,8 @@
 - Conclusion under a verb-first CTA heading naming the reader's task and outcome: the delivery gap, one action for this week, then the one product page (never an article or a lead magnet), linked in its sentence and described only by what the page supports; a button label on its own line when the brief's CTA style is button. Never "Conclusion".
 - FAQ: three to seven questions in a `:::faq` block, each answer mirroring the question's subject in its first sentence (no bare Yes/No), two or three sentences, no links, varied landings.
 - References listed with URLs; house mechanics (no dashes, straight quotes, Title Case headings, no emoji, no horizontal rules).
-- Metadata options: three each for Meta Title (40-60 characters, keyword near the front, not a question, unlike the H1), Meta Description (150-160 characters, complete sentences, keyword), Slug, Tags (4-6), Excerpt (30-55 words, not the meta description).
+- Metadata options (Meta Title, Meta Description, Slug, Tags, Excerpt) are stored separately by the studio and are not part of the article text you see: never report them missing and never ask for a metadata block in the article. The deterministic checks count them.
+- `[SRC: …]` markers may carry a document and section instead of a URL where the research gave no URL; that is not a defect. A missing marker on a sourced figure is.
 
 ## review_edit
 

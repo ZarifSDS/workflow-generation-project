@@ -596,3 +596,22 @@ def test_two_refused_revisions_in_a_row_stop_the_loop(brief, monkeypatch):
     log = research.latest_version.metrics["sop"]
     assert len(log["rounds"]) == 2 and "stopped after two refused" in log["rounds"][1]["revision"]
     assert research.status == StepRun.Status.READY
+
+
+def test_draft_guard_keeps_links_and_negations_but_allows_rewording():
+    reworded = GOOD_DRAFT.replace(
+        "You keep a record for 30 years", "Employers keep the record for three decades"
+    )
+    assert sop._guard("draft", GOOD_DRAFT, reworded)[0]
+    no_link = GOOD_DRAFT.replace("(https://sdsmanager.com/us/ehs-software/)", "(https://example.com/)")
+    ok, reason = sop._guard("draft", GOOD_DRAFT, no_link)
+    assert not ok and "dropped the link" in reason
+    flipped = GOOD_DRAFT.replace("Safety data sheets don't expire", "Safety data sheets expire")
+    assert not sop._guard("draft", GOOD_DRAFT, flipped)[0]
+
+
+def test_broken_bold_links_are_repaired():
+    from apps.quality import house
+
+    fixed, counts = house.mechanical_fix("See **[our guide]**(https://sdsmanager.com/us/x/) now.\n")
+    assert counts["broken bold links"] == 1 and "[**our guide**](https://sdsmanager.com/us/x/)" in fixed
