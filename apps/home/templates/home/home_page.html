@@ -1,21 +1,31 @@
 {% extends "base.html" %}
-{% load static %}
+{% load wagtailcore_tags %}
 
 {% block body_class %}template-homepage{% endblock %}
 
-{% block extra_css %}
-
-{% comment %}
-Delete the line below if you're just getting started and want to remove the welcome screen!
-{% endcomment %}
-<link rel="stylesheet" href="{% static 'css/welcome_page.css' %}">
-{% endblock extra_css %}
-
 {% block content %}
+    <main class="site">
+        <header class="site__intro">
+            <p class="site__eyebrow">Content Workflow Studio</p>
+            <h1>EHS content, drafted by AI, approved by people</h1>
+            <p class="site__lede">Briefs go through research, outline, draft, editing and a branded hero image, with an editor's approval at every step, before a moderator publishes the article here.</p>
+            <a class="site__button" href="{% url 'wagtailadmin_home' %}">Sign in to Content Studio</a>
+        </header>
 
-{% comment %}
-Delete the line below if you're just getting started and want to remove the welcome screen!
-{% endcomment %}
-{% include 'home/welcome_page.html' %}
-
-{% endblock content %}
+        <section class="site__articles" aria-labelledby="articles-head">
+            <h2 id="articles-head">Published articles</h2>
+            {% if articles %}
+                <ul class="article-list">
+                    {% for article in articles %}
+                        <li>
+                            <a href="{% pageurl article %}">{{ article.title }}</a>
+                            {% if article.search_description %}<p>{{ article.search_description }}</p>{% endif %}
+                        </li>
+                    {% endfor %}
+                </ul>
+            {% else %}
+                <p class="site__empty">Nothing is published yet. Articles appear here once a moderator approves them in Wagtail.</p>
+            {% endif %}
+        </section>
+    </main>
+{% endblock %}

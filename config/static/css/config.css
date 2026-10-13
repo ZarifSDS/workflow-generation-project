@@ -1,0 +1,126 @@
+/* Public site: the front page, the article index and article pages. The studio itself is the Wagtail admin. */
+:root {
+    --bg: #fbfbf9;
+    --fg: #1d2026;
+    --muted: #5b6170;
+    --line: #dcdde3;
+    --accent: #4b55d6;
+    --accent-fg: #ffffff;
+    color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --bg: #15171c;
+        --fg: #e6e7ec;
+        --muted: #a2a7b5;
+        --line: #343844;
+        --accent: #9aa1ff;
+        --accent-fg: #15171c;
+        color-scheme: dark;
+    }
+}
+
+body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font: 17px/1.65 "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+
+main,
+.article {
+    max-width: 44rem;
+    margin: 0 auto;
+    padding: 3rem 1rem 4rem;
+}
+
+h1,
+h2,
+h3 {
+    line-height: 1.25;
+    text-wrap: balance;
+}
+
+h1 {
+    font-size: 2.2rem;
+    margin: 0 0 1rem;
+}
+
+a {
+    color: var(--accent);
+}
+
+.site__eyebrow {
+    margin: 0 0 0.5rem;
+    color: var(--muted);
+    font-size: 0.8rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.site__lede {
+    color: var(--muted);
+    font-size: 1.1rem;
+}
+
+.site__button {
+    display: inline-block;
+    margin-top: 0.5rem;
+    padding: 0.6rem 1.2rem;
+    border-radius: 6px;
+    background: var(--accent);
+    color: var(--accent-fg);
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.site__button:focus-visible,
+a:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+.site__articles {
+    margin-top: 3rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--line);
+}
+
+.article-list {
+    list-style: none;
+    padding: 0;
+    display: grid;
+    gap: 1.25rem;
+}
+
+.article-list a {
+    font-weight: 600;
+}
+
+.article-list p,
+.site__empty {
+    margin: 0.25rem 0 0;
+    color: var(--muted);
+}
+
+.article__hero {
+    width: 100%;
+    height: auto;
+    border-radius: 6px;
+    margin-bottom: 1.5rem;
+}
+
+.article table {
+    border-collapse: collapse;
+    width: 100%;
+    display: block;
+    overflow-x: auto;
+}
+
+.article th,
+.article td {
+    border: 1px solid var(--line);
+    padding: 0.4rem 0.7rem;
+    text-align: left;
+}
