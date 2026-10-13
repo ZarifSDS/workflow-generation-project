@@ -1,0 +1,3 @@
+# Findings reviewed and accepted (gitleaks fingerprints). Only add made-up test values here, never real keys.
+# A fake API key in tests/test_security.py, replaced in the next commit.
+40d5ce6527c9440bacfeccfbed571317480cf90f:tests/test_security.py:generic-api-key:13

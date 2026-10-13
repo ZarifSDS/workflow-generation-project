@@ -10,7 +10,7 @@ from apps.ai.redact import REDACTED, RedactingFilter, redact
 from apps.ai.types import ProviderError
 from apps.studio import executors
 
-KEY = "gsk_test_0123456789abcdefghijklmnopqrstuv"
+KEY = "fake-test-key-not-a-secret-0123456789"  # gitleaks:allow (made-up value for redaction tests)
 ACCOUNT = "acct0123456789abcdef"
 
 
