@@ -49,6 +49,7 @@ Full instructions, including host setup for Ollama and ComfyUI, are in [docs/set
 - [Architecture](docs/architecture.md)
 - [Setup](docs/setup.md)
 - [Content workflow](docs/workflow.md)
+- [Content Studio UX](docs/ux.md)
 - [AI providers](docs/providers.md)
 - [Model evaluation](docs/model-eval.md)
 - [Roadmap](docs/roadmap.md)
