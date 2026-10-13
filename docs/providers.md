@@ -25,12 +25,29 @@ Each key was checked with a list-models call from inside the `web` container.
 | Provider | Status | Notable models available |
 |---|---|---|
 | Ollama (local) | Active | Qwen3.8 27B, glm-4.7-flash, 35B-A3B MoE, qwen3-vl 30B-A3B, gemma4:e4b, nemotron-cascade-2 |
-| Ollama Cloud | Active | kimi-k3, deepseek-v4-pro, glm-5.3, mistral-large-4, gemma4:31b, gpt-oss:120b, nemotron-3-super |
+| Ollama Cloud (free plan) | Active | **Free:** nemotron-3-ultra, nemotron-3-super, gpt-oss:120b, gemma4:31b, nemotron-3-nano:30b, gpt-oss:20b. Paid only (HTTP 402): kimi-k3/k2.x, deepseek-v4-*, glm-5.x, minimax-m*, mistral-large-3. mistral-large-4 is still rolling out (403). |
 | Gemini | Active | gemini-2.5-pro, gemini-2.5-flash, gemini-3-flash-preview, gemma-4-31b-it |
 | Groq | Active | qwen/qwen3.8-27b, openai/gpt-oss-120b, openai/gpt-oss-20b |
 | Cloudflare Workers AI | Active (images) | flux-2-klein-4b, flux-1-schnell (see the licence note below) |
 | NVIDIA NIM | Not used | Account verification isn't available in the operator's country |
 | Mistral, OpenRouter | Not used | No usable free access for this deployment |
+
+Ollama Cloud free-plan access was checked by sending each listed model a 3-token request. Free usage has hourly and weekly caps; current usage is shown at https://ollama.com/settings.
+
+### Cloudflare image models on the free allowance
+
+The Workers AI free plan gives **10,000 neurons per day** (reset 00:00 UTC). Requests beyond that fail; nothing is billed. Approximate cost per 1024×1024 image (4 tiles of 512×512), from Cloudflare's pricing page (2026-10-13):
+
+| Model | Neurons per image | Images per day (approx.) | Licence |
+|---|---|---|---|
+| `flux-1-schnell` | ~58 (4 tiles × 4.8 + 4 steps × 9.6) | ~170 | Apache-2.0 |
+| `flux-2-klein-4b` | ~104 (4 output tiles × 26.05) | ~95 | Apache-2.0 |
+| `flux-2-klein-9b` | ~1,364 | ~7 | Non-commercial (open weights) |
+| `flux-2-dev` | ~3,000 at 20 steps | ~3 | Non-commercial (open weights) |
+| `leonardo/phoenix-1.0` | ~2,370 at 25 steps | ~4 | Leonardo terms |
+| `leonardo/lucid-origin` | ~2,840 at 25 steps | ~3 | Leonardo terms |
+
+SDXL base/lightning and DreamShaper aren't on the pricing page; test before relying on them. **Defaults: `flux-2-klein-4b` for quality, `flux-1-schnell` for drafts and variations.**
 
 **Groq:** its edge rejects requests with Python's default `urllib` user agent (HTTP 403). The `openai` SDK sends its own user agent; any raw HTTP call must set one explicitly.
 
