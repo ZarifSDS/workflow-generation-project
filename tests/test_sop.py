@@ -584,3 +584,15 @@ def test_fixed_component_headings_are_normalised():
     )
     assert n == 1 and "\n## Key Takeaways\n" in article
     assert sop.normalise_fixed_headings(GOOD_DRAFT)[1] == 0
+
+
+def test_two_refused_revisions_in_a_row_stop_the_loop(brief, monkeypatch):
+    fake = SopLLM(verdicts=("REVISE",) * 6, revision="## Short\n\nnothing")
+    monkeypatch.setattr(executors, "generate", fake)
+    run = _autopilot_run(brief)
+    research = run.steps.get(key="research")
+    execute_step(research.pk)
+    research.refresh_from_db()
+    log = research.latest_version.metrics["sop"]
+    assert len(log["rounds"]) == 2 and "stopped after two refused" in log["rounds"][1]["revision"]
+    assert research.status == StepRun.Status.READY

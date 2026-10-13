@@ -688,7 +688,12 @@ def run_loop(step, text, call, max_rounds=None):
         ok, reason = _guard(step.key, result.text, revised)
         if not ok:
             # The next round reviews the unchanged text and tells the model why its revision was refused.
-            current.revision, rejection = f"not used ({reason})", reason
+            current.revision = f"not used ({reason})"
+            if rejection:
+                # Two refused revisions in a row: this model won't fix it; stop spending calls and hold.
+                current.revision += "; stopped after two refused revisions"
+                break
+            rejection = reason
             continue
         current.revision, rejection = "applied", ""
         result.text = revised.strip() + "\n"
