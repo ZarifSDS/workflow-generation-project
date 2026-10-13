@@ -45,8 +45,7 @@ Verified free models: local Ollama (Qwen3.8 27B ~19 min/outline at 4.5 tok/s; gl
 
 - How the hero step works: `docs/workflow.md#hero-image-step-m6`. Code: `apps/studio/executors.py` (`hero_image`), `apps/quality/hero.py`, `apps/ai/images/comfyui.py`.
 - Brand assets are git-ignored (ADR 0004). A fresh clone needs `docs/setup.md` step 5, or heroes come out unbranded with a note.
-- No generative fill in the container (LaMa needs PyTorch). Photos whose subject starts left of 62% are branded as they are if it starts at 50% or more; below that the step generates one more photo with a firmer placement, then asks you to regenerate. FLUX tends to centre the subject (48–57% in the live runs).
-- Possible next step (needs your OK, since the skill only allows a copied fill when you accept it): the left edge of the 2026-10-11 veil is fully opaque, so a mirrored fill of a narrow strip (under about 15% of the width) would be invisible. Allowing `--fill mirror` for small strips would brand more photos at the standard 62%.
+- No generative fill in the container (LaMa needs PyTorch). Strips up to 15% of the width get the skill's mirror fill (you accepted it on 2026-10-13; the veil is fully opaque there). Beyond that, a subject starting at 50% or more is branded as it is; further left, one more photo is generated, then you're asked to regenerate. FLUX tends to centre the subject (48–57% in the live runs).
 - A `Headline:` regenerate note re-brands the same photo (no new image); used live to fix a too-wide subject box.
 - Gemini 3.7 Flash returned HTTP 500 for several image requests; the Qwen3-VL 8B fallback worked but boxes subjects less tightly (it included furniture until the prompt excluded it).
 - gpt-oss spends its token budget on reasoning: the hero prompt step needed `max_tokens` 3000 (600 returned empty text, and an empty prompt now fails the step).

@@ -289,3 +289,14 @@ def test_right_facing_subject_on_the_right_is_not_flipped(vendor):
     assert result.branded
     assert result.metrics["reframe"]["flipped"] is False
     assert any("faces right" in flag for flag in result.flags)
+
+
+def test_narrow_fill_strip_is_mirrored_under_the_opaque_veil(vendor):
+    vision = {**VISION, "subject": [0.55, 0.15, 0.8, 1.0]}
+    result = hero.brand(_png(1440, 810, (0.55, 0.8)), "**SDS:** | Basics", vision)
+    assert result.branded, result.flags
+    assert result.metrics["reframe"]["fill"] == "mirror"
+    assert result.metrics["reframe"]["fill_share"] <= hero.MIRROR_MAX_FILL
+    assert 0.6 < result.metrics["subject_left"] < 0.64
+    assert any("mirrored fill" in flag for flag in result.flags)
+    assert not any("branded as it is" in flag for flag in result.flags)

@@ -26,6 +26,9 @@ TARGET_SUBJECT_LEFT = 0.62
 # Without generative fill the subject can't be moved right; from here on the veil still fits
 # (overlay.subject_fade keeps it within 50-70% of the width).
 MIN_SUBJECT_LEFT = 0.50
+# The veil is 1 - (x / end) ** 5 with end at 50-70% of the width, so it is at least 99.7% opaque over
+# the left 15% even at its narrowest: a mirrored strip that narrow doesn't show.
+MIRROR_MAX_FILL = 0.15
 FIT_RE = re.compile(
     r"headline: (\d+) lines at ([\d.]+)px \((\d+)% of template\), "
     r"widest line ends at x=(\d+) of 720, text limit x=(\d+)"
@@ -130,16 +133,29 @@ def _reframe(source, tmp, vision, flags, metrics):
             "them facing left (flipping would move them to the left side or mirror text)."
         )
     out = tmp / "photo.png"
-    args = [source, out, "--subject", ",".join(f"{v:.3f}" for v in subject), "--fill", "auto"]
+    args = [source, out, "--subject", ",".join(f"{v:.3f}" for v in subject)]
     args += ["--scene", vision.get("scene") or "the same setting"]
     if flip:
         args.append("--flip")
-    result = _run("reframe.py", *args)
+    result = _run("reframe.py", *args, "--fill", "auto")
+    mirrored = None
+    if result.returncode == 2:
+        # A narrow strip sits under the fully opaque edge of the veil, so a copied fill can't show
+        # there. The user accepted the skill's mirror fill for that case (2026-10-13).
+        fill_share = _dict_in(result.stdout).get("fill_share", 1)
+        if fill_share <= MIRROR_MAX_FILL:
+            result = _run("reframe.py", *args, "--fill", "mirror")
+            mirrored = fill_share
     if result.returncode == 0:
         info = _dict_in(result.stdout)
-        metrics["reframe"] = {**info, "flipped": flip}
+        metrics["reframe"] = {**info, "flipped": flip, "fill": "mirror" if mirrored else "none"}
         if flip:
             flags.append("Flipped the photo so the subject faces left (it has no readable text).")
+        if mirrored:
+            flags.append(
+                f"The left {mirrored:.0%} of the frame is a mirrored fill, under the opaque part of the "
+                "veil. Check the left edge for repeated shapes."
+            )
         if "WARNING: upscaled" in result.stdout:
             flags.append(
                 f"The reframed crop is upscaled {info.get('upscale')}x and may look soft. "
