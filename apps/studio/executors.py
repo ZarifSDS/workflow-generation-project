@@ -238,6 +238,7 @@ def draft(step):
     has_selected = set(run.metadata_options.filter(selected=True).values_list("kind", flat=True))
     for kind, items in options.items():
         for index, text in enumerate(items):
+            text = " ".join(house.mechanical_fix(text)[0].split())  # no dashes or curly quotes in titles
             MetadataOption.objects.create(
                 run=run, kind=kind, text=text[:500], selected=index == 0 and kind not in has_selected
             )
@@ -562,7 +563,14 @@ def hero_image(step):
         note=fallback_note + _hero_note(hero_metrics, image_prompt),
         image=branded or photo,
         extra_metrics={"hero": hero_metrics},
+        # Even with the gate off (autopilot), a person looks at a hero with readable text, a safety problem
+        # or no branding before it reaches a page.
+        hold=hero_needs_a_look(flags, bool(branded)),
     )
+
+
+def hero_needs_a_look(flags, branded):
+    return not branded or any(f.startswith(("Safety:", "Readable text", "Branding failed")) for f in flags)
 
 
 def localise(step):

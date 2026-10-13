@@ -38,6 +38,8 @@ def mechanical_fix(text):
     # parentheses or a new sentence; a comma is the safe mechanical choice).
     text = count("dashes", r"(\d)\s*[–—]\s*(\d)", r"\1-\2", text)
     text = count("dashes", r"\s*[–—]\s*", ", ", text)
+    # Typographic hyphens (U+2010, the non-breaking U+2011 some models use in "5‑minute") become plain ones.
+    text = count("typographic hyphens", "[‐‑]", "-", text)
     before = text
     text = text.translate(QUOTES)
     if text != before:

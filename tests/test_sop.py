@@ -655,7 +655,7 @@ def test_an_edit_revision_may_drop_an_invented_url():
         "(https://sdsmanager.com/library) explains the categories.",
     )
     cleaned = invented.replace(
-        "Our [SDS management guide](https://sdsmanager.com/library) explains the categories.", ""
+        "[SDS management guide](https://sdsmanager.com/library) explains the categories.", ""
     )
     assert not sop._guard("review_edit", invented, cleaned)[0]
     assert sop._guard("review_edit", invented, cleaned, droppable=["https://sdsmanager.com/library"])[0]
@@ -665,3 +665,17 @@ def test_an_edit_revision_may_drop_an_invented_url():
         ).group(1)
         == "https://sdsmanager.com/library"
     )
+
+
+def test_hero_holds_in_autopilot_when_a_person_must_look():
+    assert executors.hero_needs_a_look(["Readable text or logo in the photo: garbled label"], True)
+    assert executors.hero_needs_a_look(["Safety: no gloves"], True)
+    assert executors.hero_needs_a_look([], False)
+    assert not executors.hero_needs_a_look(["The left 7% of the frame is a mirrored fill"], True)
+
+
+def test_metadata_options_and_hyphens_pass_the_house_mechanics():
+    from apps.quality import house
+
+    fixed, counts = house.mechanical_fix("A 5‑Minute Guide – For Supervisors\n")
+    assert fixed.strip() == "A 5-Minute Guide, For Supervisors" and counts["typographic hyphens"] == 1
