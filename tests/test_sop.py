@@ -571,3 +571,16 @@ def test_a_plan_revision_that_drops_a_section_is_refused():
     assert not ok and "Headings-Only Outline" in reason
     ok, _ = sop._guard("outline", GOOD_OUTLINE, GOOD_OUTLINE + "\n## Extra Notes\n\nmore\n")
     assert ok
+
+
+def test_fixed_component_headings_are_normalised():
+    plan = GOOD_OUTLINE.replace(
+        "H2: Key Takeaways", "H2: What Are the Key Takeaways for SDS Retention?"
+    ).replace("H2: Frequently Asked Questions", "**H2:** SDS Retention Frequently Asked Questions")
+    fixed, n = sop.normalise_fixed_headings(plan)
+    assert n == 2 and "\nH2: Key Takeaways\n" in fixed and "\nH2: Frequently Asked Questions\n" in fixed
+    article, n = sop.normalise_fixed_headings(
+        GOOD_DRAFT.replace("## Key Takeaways", "## Key Takeaways on SDS Retention")
+    )
+    assert n == 1 and "\n## Key Takeaways\n" in article
+    assert sop.normalise_fixed_headings(GOOD_DRAFT)[1] == 0

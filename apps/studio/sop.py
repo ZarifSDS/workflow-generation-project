@@ -598,6 +598,30 @@ def _guard(step_key, before, after):
     return True, ""
 
 
+FIXED_HEADINGS = (
+    (re.compile(r"(?im)^(\s*(?:[-*]\s+)?\**H2:\**\s*).*\bkey takeaways\b.*$"), "H2: Key Takeaways"),
+    (
+        re.compile(r"(?im)^(\s*(?:[-*]\s+)?\**H2:\**\s*).*\bfrequently asked questions\b.*$"),
+        "H2: Frequently Asked Questions",
+    ),
+    (re.compile(r"(?im)^##\s+(?!Key Takeaways\s*$).*\bkey takeaways\b.*$"), "## Key Takeaways"),
+    (
+        re.compile(r"(?im)^##\s+(?!Frequently Asked Questions\s*$).*\bfrequently asked questions\b.*$"),
+        "## Frequently Asked Questions",
+    ),
+)
+
+
+def normalise_fixed_headings(text):
+    """Fixed components keep their fixed names: a model (or a reviewer) that turns `Key Takeaways` into a
+    search query is corrected mechanically. Returns (text, count)."""
+    count = 0
+    for pattern, replacement in FIXED_HEADINGS:
+        text, n = pattern.subn(replacement, text)
+        count += n
+    return text, count
+
+
 def _strip_fences(text):
     text = (text or "").strip()
     match = re.match(r"^```[a-zA-Z]*\n(.*)\n```$", text, re.DOTALL)
@@ -617,6 +641,9 @@ def run_loop(step, text, call, max_rounds=None):
         result.rounds.append(current)
         # House mechanics a script fixes better than a model (dashes, curly quotes, emoji, rules, spacing).
         result.text, current.fixes = house.mechanical_fix(result.text)
+        result.text, fixed = normalise_fixed_headings(result.text)
+        if fixed:
+            current.fixes["fixed component headings"] = fixed
         checks = check(step.key, result.text, ctx)
         current.checks = [str(f) for f in checks]
         reply, reviewer = call(
