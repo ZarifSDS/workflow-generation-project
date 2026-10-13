@@ -647,3 +647,21 @@ def test_allowed_urls_come_from_the_inputs(brief):
     allowed = sop.allowed_urls(run.steps.get(key="draft"))
     assert "https://sdsmanager.com/us/x/" in allowed and "https://www.osha.gov/laws-regs" in allowed
     assert any("ehs-software" in url for url in allowed)  # the product registry
+
+
+def test_an_edit_revision_may_drop_an_invented_url():
+    invented = GOOD_DRAFT.replace(
+        "(https://sdsmanager.com/us/sds-management-articles/sds-guide/) explains the categories.",
+        "(https://sdsmanager.com/library) explains the categories.",
+    )
+    cleaned = invented.replace(
+        "Our [SDS management guide](https://sdsmanager.com/library) explains the categories.", ""
+    )
+    assert not sop._guard("review_edit", invented, cleaned)[0]
+    assert sop._guard("review_edit", invented, cleaned, droppable=["https://sdsmanager.com/library"])[0]
+    assert (
+        sop.INVENTED_URL.match(
+            "[block] the link https://sdsmanager.com/library isn't in the inputs (x)"
+        ).group(1)
+        == "https://sdsmanager.com/library"
+    )

@@ -516,6 +516,7 @@ def context_from(step):
 
 
 URL = re.compile(r"(?:https?|wagtail)://[^\s)\]\"'>]+")
+INVENTED_URL = re.compile(r"\[block\] the link (\S+) isn't in the inputs")
 
 
 def allowed_urls(step):
@@ -633,10 +634,13 @@ def base_related(step):
     return houseref.related_articles_block(step.run.brief)
 
 
-def _guard(step_key, before, after):
+def _guard(step_key, before, after, droppable=()):
     """Whether a revision may replace the text. An edited or localised article keeps every protected span
     (the skill's rule for rewriting approved prose). A draft is still being written, so its revision only has
-    to keep the sections, most of the words, every link and every negation."""
+    to keep the sections, most of the words, every link and every negation. `droppable` lists URLs the checks
+    flagged as invented: a revision may remove those even where spans are protected."""
+    for url in droppable:
+        before = before.replace(url, "")
     if step_key in ("review_edit", "localise"):
         return quality_review.accept_rewrite(before, after)
     after = (after or "").strip()
@@ -750,7 +754,8 @@ def run_loop(step, text, call, max_rounds=None):
             None,
         )
         revised = _strip_fences(revised)
-        ok, reason = _guard(step.key, result.text, revised)
+        invented = [m.group(1) for m in (INVENTED_URL.match(str(f)) for f in checks) if m]
+        ok, reason = _guard(step.key, result.text, revised, droppable=invented)
         if not ok:
             # The next round reviews the unchanged text and tells the model why its revision was refused.
             current.revision = f"not used ({reason})"
