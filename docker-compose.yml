@@ -1,0 +1,66 @@
+# Production-style stack. For development, docker-compose.override.yml is
+# applied automatically by `docker compose up` and switches to runserver + live code.
+
+x-app: &app
+  build:
+    context: .
+  image: workflow-studio:latest
+  env_file: .env
+  environment:
+    DATABASE_URL: postgres://${POSTGRES_USER:-studio}:${POSTGRES_PASSWORD:-studio}@db:5432/${POSTGRES_DB:-studio}
+  volumes:
+    - media:/app/media
+  extra_hosts:
+    # Lets containers reach Ollama/ComfyUI on the host (Docker Desktop also provides this name).
+    - "host.docker.internal:host-gateway"
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-studio}
+      POSTGRES_USER: ${POSTGRES_USER:-studio}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-studio}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  migrate:
+    <<: *app
+    command: python manage.py migrate --noinput
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  web:
+    <<: *app
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz/', timeout=5)"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+
+  worker:
+    <<: *app
+    restart: unless-stopped
+    command: python manage.py db_worker
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+volumes:
+  pgdata:
+  media:

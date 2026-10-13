@@ -1,0 +1,8 @@
+# Runtime dependencies (pinned; resolved together on Python 3.13).
+Django==6.1.2
+wagtail==8.0
+django-tasks-db==0.13.0
+psycopg[binary]==3.3.6
+dj-database-url==3.1.2
+whitenoise==6.12.0
+gunicorn==26.2.0

@@ -1,0 +1,29 @@
+# Development overrides, applied automatically by `docker compose up`.
+# - installs dev dependencies (pytest, ruff) into the image
+# - mounts the source so code changes apply without rebuilding
+# - uses Django's runserver with DEBUG on
+#
+# For a production-style run: docker compose -f docker-compose.yml up -d --build
+
+x-dev: &dev
+  build:
+    context: .
+    args:
+      REQUIREMENTS: requirements-dev.txt
+  image: workflow-studio:dev
+  environment:
+    DJANGO_SETTINGS_MODULE: config.settings.dev
+  volumes:
+    - .:/app
+    - media:/app/media
+
+services:
+  migrate:
+    <<: *dev
+
+  web:
+    <<: *dev
+    command: python manage.py runserver 0.0.0.0:8000
+
+  worker:
+    <<: *dev

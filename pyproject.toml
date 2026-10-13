@@ -1,0 +1,22 @@
+[project]
+name = "workflow-generation-project"
+version = "0.1.0"
+description = "Content Workflow Studio: a Wagtail-based tool that runs a multi-step content generation pipeline with human approval gates."
+requires-python = ">=3.13"
+
+[tool.ruff]
+line-length = 110
+target-version = "py313"
+extend-exclude = ["*/migrations/*"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "DJ"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["apps", "config"]
+
+[tool.pytest.ini_options]
+# --ds overrides the DJANGO_SETTINGS_MODULE env var set in the containers.
+addopts = "--ds=config.settings.test"
+python_files = ["test_*.py"]
+testpaths = ["tests"]
