@@ -59,7 +59,7 @@
 ## review_edit
 
 - Everything in the draft rubric still holds after editing: intro order and scope sentence, Key Takeaways standalone test, answer-first headings, FAQ mirroring, CTA conclusion, anchors not adjacent.
-- Protected spans survived: every figure, unit, date, regulation and section number, agency name, URL, quoted string and marker is unchanged from the draft; no negation was dropped.
+- Protected spans survived: every figure, unit, date, regulation and section number, agency name, URL, quoted string and marker is unchanged from the draft; no negation was dropped. A link the deterministic checks flagged as invented is removed on purpose: its loss is not a dropped span, and it is never put back or replaced with another URL from memory. Fewer than three real sdsmanager.com links is a flagged shortfall for the editor, not a reason to add links.
 - Machine-prose signatures are gone: no copula avoidance ("serves as"), significance inflation, tricolons, negative parallelism, participle tails, hedge stacks, stamped frames; no uniform sentence lengths.
 - Clarity: every "this"/"that"/"it" has a named antecedent; one name per concept; no person or register breaks; jargon glossed for the stated reader; no metaphors standing in for plain words.
 - Reading grade near the brief's target by syntactic unpacking only; legal vocabulary may keep a section a grade or two above; standard words kept over "simpler" ones.
