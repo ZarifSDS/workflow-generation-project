@@ -1,14 +1,29 @@
-# Handoff: Content Workflow Studio (state on 2026-10-13, M8 built)
+# Handoff: Content Workflow Studio (state on 2026-10-13, M8 built; session paused, PC off)
 
 Read this first in a new session. Then `docs/development.md` (code map, how-tos, process) and `docs/tools-and-processes.md`. Also see `docs/roadmap.md`, `docs/workflow.md`, `docs/ux.md`,
 `docs/providers.md`, `docs/model-eval.md` and `AGENTS.md`.
+
+## Restarting after the PC was off
+
+Nothing needs to be re-generated: no step was queued or running at shutdown, and runs resume where they stopped. Data is in the Docker volumes on `D:\DockerData`.
+
+1. Start Docker Desktop (`D:\Docker\Docker Desktop.exe`) and wait for "Engine running".
+2. Start Ollama from the Start menu (needed for the local `quality` models: outline, draft).
+3. Start the studio in one mode (images are already built; add `--build` only after code changes):
+   - Shared over ngrok: `docker compose -f docker-compose.yml -f docker-compose.share.yml up -d --scale web=2 --scale worker=2`. The public URL is the same (`docker compose -f docker-compose.yml -f docker-compose.share.yml logs ngrok`).
+   - Dev only: `docker compose up -d` (http://localhost:8000/admin/).
+4. Check: `docker compose ps` (add the same `-f` files in share mode) shows db healthy, web healthy, worker and backup running; the dashboard's Services panel shows Ollama reachable. The `backup` service takes a backup on start.
+
+Waiting for review at shutdown (4 steps): run 11 Research and run 12 Outline ("management of change safety"), run 10 Review and edit, run 9 Publish ([Live test]). The `[Example]` demo runs 5–8 were deleted on 2026-10-13 (briefs kept; backup `backups/db-20261013-120342.dump` taken just before).
 
 ## Start here
 
 1. Score the outline evaluation (below), then set the default models.
 2. Optional: install ComfyUI and export the workflow (`docs/setup.md` step 6) to test local hero images live.
-3. Put teammates into the four groups (Writers, Editors, Moderators, Operators) under Settings › Users.
-4. Optional: point the publish webhook at an n8n workflow (`docs/setup.md` step 7); move to a server with `docker-compose.prod.yml` when ready (`docs/deployment.md`).
+3. Review run 9's article (page 5) before a moderator approves it: two claims are still marked [VERIFY], and its meta description says "30 days after last use federally" (OSHA's records rule talks about 30 years).
+4. Put teammates into the four groups (Writers, Editors, Moderators, Operators) under Settings › Users.
+5. Copy `backups/` off the PC now and then; `D:\backups\docker-2026-10-13\` (manual backups from the disk-full incident) can be deleted once everything is confirmed working.
+6. Optional: point the publish webhook at an n8n workflow (`docs/setup.md` step 7); move to a server with `docker-compose.prod.yml` when ready (`docs/deployment.md`).
 
 ## Where things stand
 
@@ -24,7 +39,7 @@ Read this first in a new session. Then `docs/development.md` (code map, how-tos,
 | M7 Publish (ArticlePage, moderation, exports, n8n hook) | Built, verified live on run 9 (draft page 5 in Moderators approval; MD/HTML/DOCX/WebP exports); webhook mocked | see git log |
 | M8 Hardening (roles, login protection, secret review, backups, production compose) | Built; see `docs/security.md` | see git log |
 
-M1–M5 are pushed to `main` on GitHub (CI runs on every push). Check `git status` for M6.
+Everything through M8 and the stuck-step fix is pushed to `main`; CI (tests, image build, secret scan) is green at 44b3209.
 
 ## Evaluation (M2)
 
