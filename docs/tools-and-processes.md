@@ -5,7 +5,8 @@ Everything we use to produce content with the Content Workflow Studio, and how t
 - [User guide](user-guide.md): writers, editors and moderators.
 - [Operations guide](operations.md): running and maintaining the studio.
 - [Development guide](development.md): developers and AI coding agents.
-- [Deployment](deployment.md): sharing the studio over ngrok, and scaling it.
+- [Deployment](deployment.md): sharing the studio over ngrok, production on a server, and scaling.
+- [Security](security.md): roles, login protection, secrets and the M8 review.
 
 ## Tools
 
@@ -93,7 +94,7 @@ Plan against the [roadmap](roadmap.md) → build with tests and docs → check l
 
 ### 5. Keeping it running
 
-Start Docker Desktop and Ollama, `docker compose up -d`, check the dashboard's Services panel. Back up the database **and** the media volume. Restart the worker after code or prompt changes. Re-copy skill scripts unchanged when the skills change. Details: [operations.md](operations.md).
+Start Docker Desktop and Ollama, `docker compose up -d`, check the dashboard's Services panel. The `backup` service dumps the database and archives the images every night into `./backups` (kept 14 days); copy that folder off the machine now and then. Restart the worker after code or prompt changes. Re-copy skill scripts unchanged when the skills change. Details: [operations.md](operations.md).
 
 ### 6. Session handoff
 
@@ -101,15 +102,15 @@ Every working session (person or AI agent) ends by updating [HANDOFF.md](HANDOFF
 
 ## Roles
 
-| Role | Responsibilities |
-|---|---|
-| Writer | Briefs, research checks, outlines, drafts, metadata choices |
-| Editor | Review and edit, hero approval, publish step, exports |
-| Moderator | Final approval in Wagtail's workflow; the only role that puts pages live |
-| Operator | Stack, keys, providers, backups, updates |
-| Developer / AI agent | Code, tests, docs, CI, handoff |
+| Role | Wagtail group | Responsibilities |
+|---|---|---|
+| Writer | Writers | Briefs, research checks, outlines, drafts, metadata choices |
+| Editor | Editors | Everything writers do, plus review and edit, hero approval, publish step, exports |
+| Moderator | Moderators | Final approval in Wagtail's workflow; the only role that puts pages live |
+| Operator | Operators | Stack, keys, providers, presets, backups, updates, stuck steps |
+| Developer / AI agent | (superuser in dev) | Code, tests, docs, CI, handoff |
 
-One person can hold several roles. Wagtail groups and permissions per role are part of M8.
+The studio enforces these groups on every screen and action ([security.md](security.md#accounts-and-roles)). One person can be in several groups.
 
 ## Current limits
 
@@ -117,4 +118,4 @@ One person can hold several roles. Wagtail groups and permissions per role are p
 - No generative fill for heroes in the container: narrow strips use a mirrored fill under the opaque veil; wider gaps need a regenerated photo.
 - Localised variants are exports, not separate pages.
 - Model defaults are interim until the evaluation is scored.
-- Roles, automated backups and a production deployment are M8.
+- The production setup (own domain, automatic HTTPS) is ready but hasn't run against a real domain yet.

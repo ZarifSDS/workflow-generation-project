@@ -16,6 +16,8 @@ x-share-env: &share-env
   DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1,.ngrok-free.app,.ngrok-free.dev,.ngrok.app,.ngrok.dev,${NGROK_DOMAIN:-localhost}
   DJANGO_CSRF_TRUSTED_ORIGINS: https://*.ngrok-free.app,https://*.ngrok-free.dev,https://*.ngrok.app,https://*.ngrok.dev,http://localhost:8080
   DJANGO_BEHIND_PROXY: "true"
+  # One proxy hop (Caddy) is appended to X-Forwarded-For after ngrok; used for login rate limiting.
+  DJANGO_PROXY_COUNT: "1"
   DJANGO_SECURE_COOKIES: "true"
   WAGTAILADMIN_BASE_URL: ${STUDIO_PUBLIC_URL:-http://localhost:8080}
 
@@ -33,6 +35,7 @@ services:
     restart: unless-stopped
     volumes:
       - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./deploy/caddy/routes.caddy:/etc/caddy/routes.caddy:ro
       - media:/srv/media:ro
     ports:
       # For a local check without the tunnel: http://localhost:8080/admin/

@@ -4,7 +4,7 @@ from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 
-from .. import services
+from .. import permissions, services
 from ..forms import BriefForm, parse_step_config, preset_from_brief, step_rows
 from ..models import BriefPreset, ContentBrief, ContentType, Region
 from .common import StudioPage
@@ -31,6 +31,7 @@ def _preset_payload():
 class BriefWizardView(StudioPage):
     template_name = "studio/brief_wizard.html"
     page_title = "New brief"
+    permission_required = permissions.WRITING
 
     def dispatch(self, request, *args, **kwargs):
         self.brief = get_object_or_404(ContentBrief, pk=kwargs["pk"]) if kwargs.get("pk") else None
@@ -100,6 +101,7 @@ class BriefWizardView(StudioPage):
 class BriefListView(StudioPage):
     template_name = "studio/brief_list.html"
     page_title = "Briefs"
+    post_permission = permissions.WRITING
 
     def get_breadcrumbs_items(self):
         return super().get_breadcrumbs_items() + [{"url": "", "label": "Briefs"}]

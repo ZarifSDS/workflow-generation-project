@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+
+{% block title %}Sign-in locked{% endblock %}
+
+{% block content %}
+    <main class="site">
+        <h1>Too many sign-in attempts</h1>
+        <p class="site__lede">Sign-in for this account is paused for 15 minutes after several wrong passwords. Try again later, or ask an operator to unlock it sooner.</p>
+        <a class="site__button" href="{% url 'wagtailadmin_login' %}">Back to sign in</a>
+    </main>
+{% endblock %}

@@ -3,11 +3,11 @@
 
 {% block main_content %}
 <div class="studio">
-    <form method="post" class="s-row-actions">{% csrf_token %}
+    {% if can_operate %}<form method="post" class="s-row-actions">{% csrf_token %}
         <span class="s-muted">{% if last_checked %}Last checked {{ last_checked|timesince }} ago{% else %}Not checked yet{% endif %}</span>
         <span class="s-spacer"></span>
         <button class="button button-secondary" type="submit" data-controller="w-progress" data-action="w-progress#activate" data-w-progress-active-value="Checking…">Re-check providers</button>
-    </form>
+    </form>{% endif %}
 
     <div class="s-table-wrap">
         <table class="s-table">

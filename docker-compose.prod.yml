@@ -1,0 +1,49 @@
+# Production on a server with its own domain: gunicorn behind Caddy, which gets HTTPS certificates
+# automatically. See docs/deployment.md › Production.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+#
+# Needs in .env: STUDIO_DOMAIN (DNS pointing at this server, ports 80 and 443 open) and ACME_EMAIL.
+# Scale with --scale web=N --scale worker=N, as in share mode.
+
+x-prod-env: &prod-env
+  DJANGO_SETTINGS_MODULE: config.settings.production
+  DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1,${STUDIO_DOMAIN:?Set STUDIO_DOMAIN in .env (docs/deployment.md)}
+  DJANGO_CSRF_TRUSTED_ORIGINS: https://${STUDIO_DOMAIN}
+  DJANGO_BEHIND_PROXY: "true"
+  # Caddy is the only proxy hop in front of web.
+  DJANGO_PROXY_COUNT: "1"
+  DJANGO_SECURE_COOKIES: "true"
+  WAGTAILADMIN_BASE_URL: https://${STUDIO_DOMAIN}
+
+services:
+  web:
+    ports: !reset []
+    environment: *prod-env
+
+  worker:
+    environment: *prod-env
+
+  proxy:
+    image: caddy:2.11.4-alpine
+    restart: unless-stopped
+    environment:
+      STUDIO_DOMAIN: ${STUDIO_DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL:?Set ACME_EMAIL in .env for certificate notices}
+    volumes:
+      - ./deploy/Caddyfile.prod:/etc/caddy/Caddyfile:ro
+      - ./deploy/caddy/routes.caddy:/etc/caddy/routes.caddy:ro
+      - media:/srv/media:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    depends_on:
+      web:
+        condition: service_healthy
+
+volumes:
+  caddy_data:
+  caddy_config:

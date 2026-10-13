@@ -2,13 +2,14 @@ import difflib
 import hashlib
 
 from django.contrib import messages
+from django.core.exceptions import PermissionDenied
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 
 from apps.ai import catalog
 
-from .. import services
+from .. import permissions, services
 from ..models import GenerationRun, StepRun
 from .common import StudioPage
 
@@ -117,6 +118,7 @@ class RunWorkspaceView(StudioPage):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         step = self.selected_step()
+        user = self.request.user
         version = step.latest_version if step else None
         versions = list(step.versions.order_by("-number")) if step else []
         kind = step.definition.kind if step else "text"
@@ -131,14 +133,23 @@ class RunWorkspaceView(StudioPage):
             checks=_checks(version, self.run.brief) if kind != "image" and step.key != "publish" else None,
             hero=_hero(version) if kind == "image" else None,
             article_page=getattr(self.run, "article_page", None) if step and step.key == "publish" else None,
-            exports=_export_links(self.run) if step and step.key == "publish" else None,
+            exports=_export_links(self.run)
+            if step and step.key == "publish" and user.has_perm(permissions.EDITING)
+            else None,
             model_groups=catalog.grouped(kind) if kind in ("text", "image") else [],
             current_model_key=f"{step.provider}::{step.model}" if step and step.model else "",
             can_review=bool(
                 step
                 and step.status == StepRun.Status.READY
                 and self.run.status != GenerationRun.Status.REJECTED
+                and permissions.can_review(user, step)
             ),
+            user_can_act=bool(step and permissions.can_review(user, step)),
+            user_can_retry=bool(step and permissions.can_act(user, step, "retry")),
+            user_can_recover=bool(
+                step and step.status == StepRun.Status.RUNNING and user.has_perm(permissions.OPERATE)
+            ),
+            review_role=permissions.describe_role(step) if step else "",
             has_metadata=self.run.metadata_options.exists(),
             review=(version.metrics or {}).get("review") if version else None,
             quality=(version.metrics or {}).get("quality") if version else None,
@@ -159,8 +170,18 @@ class RunWorkspaceView(StudioPage):
         url = (
             f"{reverse('studio:run', args=[self.run.pk])}?step={step.key}" if step else reverse("studio:runs")
         )
+        if step is None or not permissions.can_act(request.user, step, action):
+            messages.error(
+                request,
+                "Your account can't do that on this step"
+                + (f"; it's for {permissions.describe_role(step)}." if step else "."),
+            )
+            return redirect(url)
         try:
-            if action == "approve":
+            if action == "recover":
+                services.recover_step(step, request.user)
+                messages.success(request, f"Marked {step.label.lower()} as failed. Retry it when ready.")
+            elif action == "approve":
                 services.approve_step(step, request.user)
                 messages.success(request, f"Approved {step.label.lower()}.")
             elif action == "edit_approve":
@@ -235,6 +256,8 @@ class VersionCompareView(StudioPage):
 
 def run_status(request, pk):
     """Polled by the run workspace while steps are queued or running."""
+    if not request.user.has_perm(permissions.ACCESS):
+        raise PermissionDenied
     run = get_object_or_404(GenerationRun, pk=pk)
     steps = [
         {"key": s.key, "status": s.status, "started_at": s.started_at.isoformat() if s.started_at else None}
@@ -259,6 +282,8 @@ def run_export(request, pk, fmt):
     """Download the approved article (or its localised variant, ?variant=localised)."""
     from apps.content import exports
 
+    if not request.user.has_perm(permissions.EDITING):
+        raise PermissionDenied
     run = get_object_or_404(GenerationRun.objects.select_related("brief"), pk=pk)
     if fmt not in EXPORTS:
         raise Http404

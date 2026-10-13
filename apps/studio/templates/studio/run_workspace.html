@@ -101,6 +101,15 @@
                             <span class="s-mono" data-elapsed-since="{{ step.started_at|date:'c' }}">0:00</span> elapsed{% if typical %} · usually {{ typical|duration }}{% endif %}.
                             You can leave this page; you'll see a message when it's ready for review.
                         </div>
+                        {% if user_can_recover %}
+                            <details class="s-disclosure"><summary>The worker stopped and this step is stuck?</summary>
+                                <form method="post" style="display:grid;gap:.5rem;margin-top:.5rem">{% csrf_token %}
+                                    <input type="hidden" name="step" value="{{ step.key }}">
+                                    <p class="s-muted" style="margin:0">Marks the step as failed so it can be retried. Only do this if the worker was restarted or the step has run far longer than usual; a step that is still running finishes on its own.</p>
+                                    <div><button class="button button-small button-secondary" type="submit" name="action" value="recover">Mark as failed</button></div>
+                                </form>
+                            </details>
+                        {% endif %}
                     {% elif step.status == "queued" or step.status == "pending" %}
                         <div class="s-callout s-callout--info" role="status">
                             {% if step.status == "queued" %}<strong>Queued</strong> with {% model_label step.provider step.model %}. It starts as soon as the worker is free.{% else %}<strong>Waiting</strong> for the previous step to be approved.{% endif %}
@@ -110,7 +119,7 @@
                         <p class="s-muted">This step is switched off for this run.</p>
                     {% elif step.status == "failed" %}
                         <div class="s-callout" role="alert"><strong>This step failed.</strong> {{ step.error|default:"No details were recorded." }}
-                            <form method="post" style="margin-top:.6rem">{% csrf_token %}<input type="hidden" name="step" value="{{ step.key }}"><button class="button button-small" type="submit" name="action" value="retry">Retry with the same model</button> <span class="s-muted">or choose another model on the right.</span></form>
+                            {% if user_can_retry %}<form method="post" style="margin-top:.6rem">{% csrf_token %}<input type="hidden" name="step" value="{{ step.key }}"><button class="button button-small" type="submit" name="action" value="retry">Retry with the same model</button>{% if user_can_act %} <span class="s-muted">or choose another model on the right.</span>{% endif %}</form>{% endif %}
                         </div>
                     {% endif %}
                     {% if version and version.note %}
@@ -143,6 +152,8 @@
                         </form>
                     </details>
                 </div>
+            {% elif step and step.status == "ready" and run.status != "rejected" %}
+                <p class="s-callout s-callout--info" role="status">Ready for review by {{ review_role }}. You can read it, but your account can't approve this step.</p>
             {% endif %}
         </div>
 
@@ -208,7 +219,7 @@
                     </form>
                 </section>
             {% endif %}
-            {% if model_groups and run.status != "rejected" %}
+            {% if model_groups and run.status != "rejected" and user_can_act %}
                 <section class="s-box" aria-labelledby="model-head">
                     <h3 class="s-section" id="model-head">Model</h3>
                     <p class="s-muted" style="margin:0">Now: {% model_label step.provider step.model %}</p>

@@ -6,6 +6,7 @@ from django.db import transaction
 from django.tasks import task
 from django.utils import timezone
 
+from apps.ai.redact import redact
 from apps.ai.types import ProviderError
 
 from .models import StepRun
@@ -69,6 +70,6 @@ def execute_step(step_id):
 def _fail(step, message):
     from . import services
 
-    step.status, step.error, step.finished_at = StepRun.Status.FAILED, message, timezone.now()
+    step.status, step.error, step.finished_at = StepRun.Status.FAILED, redact(message), timezone.now()
     step.save(update_fields=["status", "error", "finished_at"])
     services.refresh_run_status(step.run)

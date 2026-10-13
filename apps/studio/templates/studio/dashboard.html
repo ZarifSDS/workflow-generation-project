@@ -4,7 +4,7 @@
 {% block main_content %}
 <div class="studio">
     <div class="s-row-actions">
-        <a class="button" href="{% url 'studio:brief_new' %}">New brief</a>
+        {% if can_write %}<a class="button" href="{% url 'studio:brief_new' %}">New brief</a>{% endif %}
         <a class="button button-secondary" href="{% url 'studio:runs' %}">All runs</a>
     </div>
 
@@ -12,7 +12,7 @@
         <div class="s-empty">
             <h2 class="s-section">Nothing here yet</h2>
             <p>Create a brief, choose the steps and models, and start a run. Each step waits for your approval before the next one starts.</p>
-            <a class="button" href="{% url 'studio:brief_new' %}">New brief</a>
+            {% if can_write %}<a class="button" href="{% url 'studio:brief_new' %}">New brief</a>{% endif %}
         </div>
     {% endif %}
 

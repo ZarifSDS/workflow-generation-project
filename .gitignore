@@ -30,3 +30,6 @@ Thumbs.db
 # kept out of the public repo (docs/adr/0004-brand-assets-outside-git.md). The font is OFL.
 /apps/quality/vendor/sds_hero_stock/assets/*
 !/apps/quality/vendor/sds_hero_stock/assets/fonts/
+
+# Automated backups (docker compose service `backup`)
+/backups/

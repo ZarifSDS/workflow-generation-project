@@ -1,5 +1,6 @@
 import copy
 
+from django.contrib.auth.models import Permission
 from django.templatetags.static import static
 from django.urls import include, path, reverse
 from django.utils.html import format_html
@@ -7,6 +8,7 @@ from wagtail import hooks
 from wagtail.admin.menu import Menu, MenuItem, SubmenuMenuItem
 from wagtail.admin.viewsets.model import ModelViewSet
 
+from . import permissions
 from . import urls as studio_urls
 from .models import BriefPreset
 from .services import review_count
@@ -56,11 +58,34 @@ def register_studio_urls():
     return [path("studio/", include(studio_urls, namespace="studio"))]
 
 
+class StudioSubmenuItem(SubmenuMenuItem):
+    def is_shown(self, request):
+        return request.user.has_perm(permissions.ACCESS) and super().is_shown(request)
+
+
+class PermissionMenuItem(MenuItem):
+    """A Content Studio menu entry shown only to users with `permission`."""
+
+    def __init__(self, *args, permission=permissions.ACCESS, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.permission = permission
+
+    def is_shown(self, request):
+        return request.user.has_perm(self.permission)
+
+
 @hooks.register("register_admin_menu_item")
 def register_studio_menu():
-    return SubmenuMenuItem(
+    return StudioSubmenuItem(
         "Content Studio", studio_menu, icon_name="rocket", name="content-studio", order=150
     )
+
+
+@hooks.register("register_permissions")
+def register_studio_permissions():
+    """List the Content Studio permissions in Settings › Groups."""
+    codenames = [codename for codename, _ in permissions.PERMISSIONS]
+    return Permission.objects.filter(content_type__app_label="studio", codename__in=codenames)
 
 
 @hooks.register("construct_main_menu")
@@ -77,25 +102,27 @@ def add_review_badge(request, menu_items):
 
 
 STUDIO_ITEMS = [
-    ("Dashboard", "studio:dashboard", "home", "studio-dashboard"),
-    ("New brief", "studio:brief_new", "plus", "studio-new-brief"),
-    ("Briefs", "studio:briefs", "doc-full", "studio-briefs"),
-    ("Runs", "studio:runs", "list-ul", "studio-runs"),
-    ("Presets", "studio_presets:index", "form", "studio-presets"),
-    ("Models and providers", "studio:providers", "cogs", "studio-providers"),
+    ("Dashboard", "studio:dashboard", "home", "studio-dashboard", permissions.ACCESS),
+    ("New brief", "studio:brief_new", "plus", "studio-new-brief", permissions.WRITING),
+    ("Briefs", "studio:briefs", "doc-full", "studio-briefs", permissions.ACCESS),
+    ("Runs", "studio:runs", "list-ul", "studio-runs", permissions.ACCESS),
+    ("Presets", "studio_presets:index", "form", "studio-presets", "studio.view_briefpreset"),
+    ("Models and providers", "studio:providers", "cogs", "studio-providers", permissions.ACCESS),
 ]
 
 
-def _make_item(label, url_name, icon, name, order):
+def _make_item(label, url_name, icon, name, order, permission):
     @hooks.register("register_studio_menu_item")
     def register():
-        return MenuItem(label, reverse(url_name), icon_name=icon, name=name, order=order)
+        return PermissionMenuItem(
+            label, reverse(url_name), icon_name=icon, name=name, order=order, permission=permission
+        )
 
     return register
 
 
-for _order, (_label, _url, _icon, _name) in enumerate(STUDIO_ITEMS):
-    _make_item(_label, _url, _icon, _name, _order * 10)
+for _order, (_label, _url, _icon, _name, _permission) in enumerate(STUDIO_ITEMS):
+    _make_item(_label, _url, _icon, _name, _order * 10, _permission)
 
 
 @hooks.register("insert_global_admin_css")

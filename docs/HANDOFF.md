@@ -1,4 +1,4 @@
-# Handoff: Content Workflow Studio (state on 2026-10-13, M7 built)
+# Handoff: Content Workflow Studio (state on 2026-10-13, M8 built)
 
 Read this first in a new session. Then `docs/development.md` (code map, how-tos, process) and `docs/tools-and-processes.md`. Also see `docs/roadmap.md`, `docs/workflow.md`, `docs/ux.md`,
 `docs/providers.md`, `docs/model-eval.md` and `AGENTS.md`.
@@ -7,8 +7,8 @@ Read this first in a new session. Then `docs/development.md` (code map, how-tos,
 
 1. Score the outline evaluation (below), then set the default models.
 2. Optional: install ComfyUI and export the workflow (`docs/setup.md` step 6) to test local hero images live.
-3. Optional: point the publish webhook at an n8n workflow (`docs/setup.md` step 7).
-4. Then M8 (hardening) per `docs/roadmap.md`.
+3. Put teammates into the four groups (Writers, Editors, Moderators, Operators) under Settings › Users.
+4. Optional: point the publish webhook at an n8n workflow (`docs/setup.md` step 7); move to a server with `docker-compose.prod.yml` when ready (`docs/deployment.md`).
 
 ## Where things stand
 
@@ -22,7 +22,7 @@ Read this first in a new session. Then `docs/development.md` (code map, how-tos,
 | M5 Seven-part review-and-edit sequence + vendored skill scripts | Done, verified live (run 10) | 5df13ae |
 | M6 Images (ComfyUI provider, vision check, sds-hero-stock branding) | Built, verified live on run 9 (Cloudflare + Gemini vision + branding); ComfyUI mocked | see git log |
 | M7 Publish (ArticlePage, moderation, exports, n8n hook) | Built, verified live on run 9 (draft page 5 in Moderators approval; MD/HTML/DOCX/WebP exports); webhook mocked | see git log |
-| M8 Hardening | Planned | – |
+| M8 Hardening (roles, login protection, secret review, backups, production compose) | Built; see `docs/security.md` | see git log |
 
 M1–M5 are pushed to `main` on GitHub (CI runs on every push). Check `git status` for M6.
 
@@ -63,7 +63,16 @@ Verified free models: local Ollama (Qwen3.8 27B ~19 min/outline at 4.5 tok/s; gl
 - `docker-compose.share.yml` + `deploy/Caddyfile`: production mode behind Caddy and an ngrok tunnel; `--scale web=N --scale worker=N` works. Details: `docs/deployment.md`, ADR 0005.
 - Verified: the public URL (the ngrok account's free dev domain; see `docker compose logs ngrok`, not recorded here because the repo is public) serves admin, static and media through 2 web + 2 worker containers; login CSRF passes; `DEBUG` off.
 - The ngrok authtoken is reused from the Windows (Store) ngrok agent config via `NGROK_CONFIG_FILE` in `.env`; it's never copied anywhere.
-- Docker's disk moved to `D:\DockerData` after C: filled up and Docker kept trying to reformat its disk (see operations.md › Disk space). Backups from that day: `D:ackups\docker-2026-10-13\` (SQL dump, media archive, every volume).
+- Docker's disk moved to `D:\DockerData` after C: filled up and Docker kept trying to reformat its disk (see operations.md › Disk space). Backups from that day: `D:\backups\docker-2026-10-13\` (SQL dump, media archive, every volume).
+
+## M8 notes
+
+- Roles: `apps/studio/permissions.py`, groups from migration `studio.0004_m8_groups`; enforced in views and `permissions.can_act`. Superusers bypass.
+- Login lockout: django-axes 8.3.1 (declares Django 6.0 support; tested on 6.1). Unlock with `axes_reset_username`.
+- Secrets: `apps/ai/redact.py` runs on every `ProviderError`, failed-step error and log line. CI job `secret-scan` runs gitleaks over the full history.
+- Backups: `backup` service in `docker-compose.yml` (`deploy/backup.sh`), nightly into `./backups`, 14 days; restore into a scratch Postgres tested.
+- Production: `docker-compose.prod.yml` + `deploy/Caddyfile.prod` (automatic HTTPS, HSTS); routes shared with share mode in `deploy/caddy/routes.caddy`. Validated, not run on a real domain.
+- Shell gotcha: a backslash before `b` or `n` in Windows paths inside `python - <<EOF` snippets became a control character twice; write such text with the Write tool or a script file.
 
 ## Gotchas learned
 

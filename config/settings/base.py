@@ -6,6 +6,7 @@ variables (see .env.example). Never hard-code secrets here.
 """
 
 import os
+from datetime import timedelta
 from pathlib import Path
 
 import dj_database_url
@@ -43,6 +44,7 @@ INSTALLED_APPS = [
     "taggit",
     "django_filters",
     "django_tasks_db",
+    "axes",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -64,7 +66,28 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "wagtail.contrib.redirects.middleware.RedirectMiddleware",
     "apps.studio.middleware.ReviewNotificationsMiddleware",
+    # Keep last: turns failed-login lockouts into the lockout page.
+    "axes.middleware.AxesMiddleware",
 ]
+
+AUTHENTICATION_BACKENDS = [
+    "axes.backends.AxesStandaloneBackend",
+    "django.contrib.auth.backends.ModelBackend",
+]
+
+# Login rate limiting (django-axes, M8): 5 failed attempts for one username from one address lock that
+# combination for 15 minutes. Combining both keeps one person's typos from locking out a team that shares
+# an address behind a proxy or tunnel. Unlock early: `python manage.py axes_reset_username <name>`.
+AXES_FAILURE_LIMIT = 5
+AXES_COOLOFF_TIME = timedelta(minutes=15)
+AXES_LOCKOUT_PARAMETERS = [["username", "ip_address"]]
+AXES_RESET_ON_SUCCESS = True
+AXES_LOCKOUT_TEMPLATE = "account_locked.html"
+# Behind Caddy (share or production mode) the client address is the one before the last proxy hop.
+AXES_IPWARE_PROXY_COUNT = int(os.environ.get("DJANGO_PROXY_COUNT", "0")) or None
+AXES_IPWARE_META_PRECEDENCE_ORDER = (
+    ["HTTP_X_FORWARDED_FOR", "REMOTE_ADDR"] if AXES_IPWARE_PROXY_COUNT else ["REMOTE_ADDR"]
+)
 
 ROOT_URLCONF = "config.urls"
 
@@ -113,7 +136,11 @@ TASKS = {
 
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
-    {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
+    # The admin login can be on the internet (share and production modes): 12 characters minimum.
+    {
+        "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
+        "OPTIONS": {"min_length": 12},
+    },
     {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
@@ -254,7 +281,8 @@ AI_RETRY_BACKOFF = 5  # seconds; grows 5, 15, 45
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
-    "handlers": {"console": {"class": "logging.StreamHandler"}},
+    "filters": {"redact_secrets": {"()": "apps.ai.redact.RedactingFilter"}},
+    "handlers": {"console": {"class": "logging.StreamHandler", "filters": ["redact_secrets"]}},
     "root": {"handlers": ["console"], "level": os.environ.get("LOG_LEVEL", "INFO")},
     # httpx logs every request URL at INFO, which would print account IDs.
     "loggers": {

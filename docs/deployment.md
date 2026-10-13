@@ -41,14 +41,14 @@ flowchart LR
    Otherwise set `NGROK_AUTHTOKEN` from https://dashboard.ngrok.com/get-started/your-authtoken. The token stays in your file; it's never in git.
 2. **Domain.** Free accounts get one static dev domain (shown under **Domains** in the ngrok dashboard), and the agent uses it automatically. Set `NGROK_DOMAIN` only to use a different reserved domain.
 3. **Public URL.** Set `STUDIO_PUBLIC_URL=https://<your domain>` so links the studio builds (webhook `admin_url`, notifications) use it. The URL is shown in the ngrok logs: `docker compose logs ngrok`.
-4. **Accounts for teammates.** In Wagtail, **Settings › Users › Add a user**. Give writers and editors the **Editors** group and moderators the **Moderators** group. Until M8 adds studio permissions, any user who can open the admin can use every Content Studio screen.
+4. **Accounts for teammates.** In Wagtail, **Settings › Users › Add a user**, and choose one group: **Writers**, **Editors**, **Moderators** or **Operators** (what each can do: [security.md](security.md#accounts-and-roles)).
 5. Start the share mode (command above) and send people the URL.
 
 The first visit on a free ngrok domain shows ngrok's "You are about to visit" page; click **Visit Site** once. Free plans have bandwidth and request limits; check yours in the ngrok dashboard.
 
 ## Security in share mode
 
-- The admin login is on the public internet. Use long, unique passwords; there's no login rate limiting until M8.
+- The admin login is on the public internet. Passwords need 12 characters, and 5 wrong passwords pause that username for 15 minutes from that address (django-axes; [security.md](security.md#login-protection)). Use long, unique passwords anyway.
 - `DEBUG` is off, cookies are `Secure`, and Django trusts `X-Forwarded-Proto` only because Caddy accepts it solely from the Docker network.
 - Accepted deployment-check warnings: no HSTS (the ngrok domain is shared and temporary), no forced HTTPS redirect (the local `:8080` check stays usable), and `X_FRAME_OPTIONS = SAMEORIGIN` (Wagtail's preview needs it).
 - Images in `/media/` are public by URL, as in any Wagtail site. That includes heroes of drafts.
@@ -80,6 +80,22 @@ The design keeps state in two places only (Postgres and media), so moving to sev
 4. **Containers on a scheduler** (Docker Swarm, Kubernetes or a container platform) running the same images; web and worker scale independently.
 5. **Models:** cloud providers scale with their quotas; local Ollama and ComfyUI remain one GPU host that the workers call over the network.
 
+## Production on your own server
+
+When the studio moves off this PC onto a server with a domain, use `docker-compose.prod.yml` instead of the share file. Caddy then faces the internet directly, gets and renews HTTPS certificates itself (Let's Encrypt), redirects HTTP to HTTPS and sends HSTS; no ngrok.
+
+1. Point the domain's DNS (an A or AAAA record) at the server, and open ports 80 and 443.
+2. Copy the project and `.env` to the server (and the brand assets, [setup.md step 5](setup.md#5-hero-branding-assets-sds-hero-stock)). In `.env` set `STUDIO_DOMAIN=studio.example.com`, `ACME_EMAIL=you@example.com`, a strong `DJANGO_SECRET_KEY` and `POSTGRES_PASSWORD`.
+3. Start it:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build --scale web=2 --scale worker=2
+```
+
+4. Create the first admin: `docker compose -f docker-compose.yml -f docker-compose.prod.yml exec web python manage.py createsuperuser`.
+
+Local models need a GPU host: either run Ollama on the server, or point `OLLAMA_BASE_URL` at a machine that has one (on a private network, never open to the internet). Cloud providers work as they are. The configuration validates (`docker compose … config --quiet`, `caddy validate`); it hasn't been run against a real domain yet.
+
 ## Everyday commands (share mode)
 
 Set an alias to save typing, for example in PowerShell: `function share { docker compose -f docker-compose.yml -f docker-compose.share.yml @args }`.
@@ -91,3 +107,4 @@ Set an alias to save typing, for example in PowerShell: `function share { docker
 | Logs | `share logs -f web worker proxy` |
 | Take it offline | `share stop ngrok` |
 | Back to dev mode | `share down`, then `docker compose up -d` |
+| Take a backup now | `share run --rm -e BACKUP_ONCE=1 backup` |

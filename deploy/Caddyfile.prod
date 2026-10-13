@@ -1,0 +1,17 @@
+# Production (docker-compose.prod.yml): Caddy is the edge. It gets and renews HTTPS certificates for
+# STUDIO_DOMAIN automatically and redirects HTTP to HTTPS. Client-sent X-Forwarded-* headers are not
+# trusted here, so Caddy sets them itself.
+{
+	admin off
+	email {$ACME_EMAIL}
+}
+
+{$STUDIO_DOMAIN} {
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "same-origin"
+		-Server
+	}
+	import /etc/caddy/routes.caddy
+}

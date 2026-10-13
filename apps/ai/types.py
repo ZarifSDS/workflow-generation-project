@@ -9,7 +9,9 @@ class ProviderError(Exception):
     RETRYABLE = {"rate_limited", "server", "network"}
 
     def __init__(self, kind, message, status=None):
-        super().__init__(message)
+        from .redact import redact  # keys and account IDs never reach step errors or the database
+
+        super().__init__(redact(message))
         self.kind = kind
         self.status = status
 

@@ -12,6 +12,7 @@ For whoever keeps the studio running: starting and stopping it, configuration, p
 | `migrate` | Docker | Applies migrations on every start, then exits |
 | Media | Docker volume `workflow-generation-project_media` | Uploaded and generated images (hero photos and branded heroes) |
 | `proxy`, `ngrok` | Docker, share mode only | Caddy in front of web, and the HTTPS tunnel ([deployment.md](deployment.md)) |
+| `backup` | Docker | Nightly database dump and image archive into `./backups` |
 | Ollama | Windows host, port 11434 | Local text and vision models |
 | ComfyUI | Windows host, port 8188 | Optional local image generation |
 | Cloud providers | Internet | Ollama Cloud, Gemini, Groq, Cloudflare Workers AI (free tiers; keys in `.env`) |
@@ -48,6 +49,8 @@ Secrets live only in `.env` (never in git, the database or logs). After changing
 | `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN` | Cloudflare Workers AI (hero images) |
 | `STUDIO_PUBLISH_WEBHOOK_URL`, `STUDIO_WEBHOOK_SECRET` | Optional publish webhook and its signing secret |
 | `NGROK_CONFIG_FILE` or `NGROK_AUTHTOKEN`, `NGROK_DOMAIN`, `STUDIO_PUBLIC_URL`, `GUNICORN_WORKERS` | Share mode ([deployment.md](deployment.md)) |
+| `STUDIO_DOMAIN`, `ACME_EMAIL` | Production mode on your own server ([deployment.md](deployment.md#production-on-your-own-server)) |
+| `BACKUP_DIR`, `BACKUP_INTERVAL_HOURS`, `BACKUP_KEEP_DAYS` | Automated backups |
 | `NVIDIA_API_KEY`, `MISTRAL_API_KEY`, `OPENROUTER_API_KEY` | Listed for completeness; not usable in this deployment |
 
 ## Providers and models
@@ -67,37 +70,53 @@ Secrets live only in `.env` (never in git, the database or logs). After changing
 
 Set `STUDIO_PUBLISH_WEBHOOK_URL` to an n8n Webhook node URL ([setup.md step 7](setup.md#7-publish-webhook-to-n8n-optional)). Every saved draft is POSTed as JSON (payload in [workflow.md](workflow.md#publish-step-m7)). With `STUDIO_WEBHOOK_SECRET`, verify `X-Studio-Signature` in n8n. A failing webhook shows on the Publish step and never blocks publishing.
 
+## Accounts and roles
+
+Create people in **Settings › Users › Add a user** and put them in one group (details in [security.md](security.md#accounts-and-roles)):
+
+| Group | For |
+|---|---|
+| Writers | Briefs, research, outline, draft, title and meta |
+| Editors | Everything writers do, plus review and edit, hero, localise, publish, exports |
+| Moderators | Approving and publishing pages in Wagtail |
+| Operators | Providers, presets, stuck steps |
+
+Passwords need 12 characters. After 5 wrong passwords, that username is paused for 15 minutes from that address. To unlock sooner:
+
+```bash
+docker compose exec web python manage.py axes_reset_username <username>
+```
+
 ## Backups and restore
 
-Back up **both** the database and the media volume; one without the other loses either the runs or their images.
+The `backup` service runs in every mode. Once a day it writes a database dump (`db-<time>.dump`) and an archive of the images (`media-<time>.tgz`) to `./backups` (or `BACKUP_DIR`) and deletes backups older than 14 days (`BACKUP_KEEP_DAYS`). `backups/latest.txt` holds the time of the last one; `docker compose logs backup` shows each run.
+
+Take one now (before an upgrade, for example):
 
 ```bash
-docker compose exec -T db pg_dump -U studio studio > backup-db.sql
+docker compose run --rm -e BACKUP_ONCE=1 backup
 ```
+
+Copy `./backups` somewhere else from time to time (another disk or cloud storage): backups on the same machine don't survive losing that machine. They contain the whole database, so keep them private. Also keep `.env` in a password manager, since it isn't in git.
+
+### Restore
+
+1. Stop the app containers, keeping the database running: `docker compose stop web worker` (add the share or production `-f` files if you use them).
+2. Restore the database from a dump (replaces the current content):
 
 ```bash
-docker run --rm -v workflow-generation-project_media:/media -v "%cd%":/backup alpine tar czf /backup/backup-media.tgz -C /media .
+docker compose exec -T db pg_restore -U studio -d studio --clean --if-exists --no-owner < backups/db-<time>.dump
 ```
 
-Restore onto empty volumes. `docker compose down -v` **deletes the current database and media**, so only run it when you mean to replace them:
+3. Restore the images:
 
 ```bash
-docker compose down -v
+docker run --rm -v workflow-generation-project_media:/media -v "%cd%/backups":/backup alpine sh -c "rm -rf /media/* && tar xzf /backup/media-<time>.tgz -C /media"
 ```
 
-```bash
-docker compose up -d db
-```
+4. Start everything again with `docker compose up -d`.
 
-```bash
-docker compose exec -T db psql -U studio studio < backup-db.sql
-```
-
-```bash
-docker run --rm -v workflow-generation-project_media:/media -v "%cd%":/backup alpine tar xzf /backup/backup-media.tgz -C /media
-```
-
-Then start everything with `docker compose up -d`. Also keep `.env` somewhere safe (a password manager), since it isn't in git. Automated backups are planned for M8.
+Restoring a dump into a scratch database was tested when the service was added (6 runs, 4 pages and the role groups came back).
 
 ## Updating
 
@@ -133,7 +152,8 @@ Docker's virtual disk lives on **D:** (`D:\DockerData`, moved there on 2026-10-1
 |---|---|
 | `failed to connect to the docker API` | Start Docker Desktop and wait for "Engine running" |
 | A step stays **Queued** | The worker isn't running: `docker compose ps`, then `docker compose up -d worker`; check `docker compose logs worker` |
-| A step stays **Running** after a worker restart | It was interrupted and won't finish on its own. A developer requeues it ([development.md](development.md#requeue-a-stuck-or-approved-step)) |
+| A step stays **Running** after a worker restart | It was interrupted and won't finish on its own. An operator opens the step and uses **Mark as failed**, then **Retry** |
+| "Too many sign-in attempts" | Wait 15 minutes, or unlock the username (see Accounts and roles) |
 | "Couldn't reach the provider" with a local model | Start Ollama; check the dashboard's Services panel |
 | "The free limit for this model was reached" | Wait for the limit to reset or pick another model |
 | "This provider isn't set up" | Add its key to `.env` and run `docker compose up -d` |
@@ -144,8 +164,4 @@ Docker's virtual disk lives on **D:** (`D:\DockerData`, moved there on 2026-10-1
 
 ## Security notes
 
-- Free tiers may use prompts for training: no confidential material in briefs or notes.
-- API keys come only from `.env`; they're never stored in the database or written to logs (request URL logging is turned down because Cloudflare URLs contain the account ID).
-- Model output is untrusted: it's sanitised before it's shown in the admin, exported or put on a page.
-- The repository is public. Never commit `.env`, keys, brand assets or exported customer material.
-- Roles and permissions, a secrets review, automated backups and a production compose file are M8 (see [roadmap.md](roadmap.md)).
+See [security.md](security.md): roles, login protection, where each secret lives, the M8 secret handling review, and how to rotate a secret.

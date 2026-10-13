@@ -21,18 +21,18 @@
                         </div>
                     </section>
                 {% endfor %}
-                <div><button class="button" type="submit" name="action" value="save">Save selection</button></div>
+                {% if can_write %}<div><button class="button" type="submit" name="action" value="save">Save selection</button></div>{% endif %}
             </form>
 
             <section class="s-box" aria-labelledby="add-head">
                 <h2 class="s-section" id="add-head">Add your own</h2>
-                {% for group in groups %}
+                {% for group in groups %}{% if can_write %}
                     <form method="post" class="s-addown" style="border:0;padding:0">{% csrf_token %}
                         <input type="hidden" name="kind" value="{{ group.kind }}">
                         <label for="own_{{ group.kind }}" style="flex-basis:100%">{{ group.label }} <span class="s-muted">(limit {{ group.limit }} characters)</span></label>
                         <input type="text" id="own_{{ group.kind }}" name="own_{{ group.kind }}" maxlength="300">
                         <button class="button button-small button-secondary" type="submit" name="action" value="add">Add to list</button>
-                    </form>
+                    </form>{% endif %}
                 {% endfor %}
             </section>
         </div>

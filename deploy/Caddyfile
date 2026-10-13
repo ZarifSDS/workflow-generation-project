@@ -1,7 +1,4 @@
-# Reverse proxy for the shared (production-mode) stack: docker-compose.share.yml.
-# - Serves uploaded and generated images from the media volume.
-# - Proxies everything else to every running `web` container (docker compose --scale web=N).
-# ngrok terminates TLS in front of this, so Caddy itself speaks plain HTTP.
+# Share mode (docker-compose.share.yml): plain HTTP behind the ngrok tunnel, which terminates TLS.
 {
 	admin off
 	auto_https off
@@ -13,30 +10,5 @@
 }
 
 :80 {
-	encode zstd gzip
-
-	# Wagtail image uploads
-	request_body {
-		max_size 25MB
-	}
-
-	handle_path /media/* {
-		root * /srv/media
-		file_server
-		header Cache-Control "public, max-age=86400"
-	}
-
-	handle {
-		reverse_proxy {
-			# Re-resolves the `web` service name, so scaled replicas join and leave automatically.
-			dynamic a {
-				name web
-				port 8000
-				refresh 10s
-			}
-			lb_policy round_robin
-			lb_try_duration 5s
-			fail_duration 30s
-		}
-	}
+	import /etc/caddy/routes.caddy
 }

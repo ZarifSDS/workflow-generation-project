@@ -7,6 +7,7 @@ from apps.ai.checks import check_text_providers
 from apps.ai.models import ProviderCheck
 from apps.ai.providers import get_providers
 
+from .. import permissions
 from .common import StudioPage
 
 PROFILE_USE = {
@@ -20,6 +21,7 @@ PROFILE_USE = {
 class ProvidersView(StudioPage):
     template_name = "studio/providers.html"
     page_title = "Models and providers"
+    post_permission = permissions.OPERATE
 
     def get_breadcrumbs_items(self):
         return super().get_breadcrumbs_items() + [{"url": "", "label": "Models and providers"}]

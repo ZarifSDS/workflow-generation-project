@@ -1,10 +1,13 @@
 import urllib.request
 
 from django.conf import settings
+from django.core.exceptions import PermissionDenied
 from django.db import connection
 from django.http import JsonResponse
 from django.views.generic import TemplateView
 from wagtail.admin.views.generic.base import WagtailAdminTemplateMixin
+
+from .. import permissions
 
 
 def reachable(url, timeout=1.5):
@@ -47,10 +50,24 @@ def healthz(request):
 
 
 class StudioPage(WagtailAdminTemplateMixin, TemplateView):
-    """Base for Content Studio admin pages: Wagtail header, breadcrumbs and studio assets."""
+    """Base for Content Studio admin pages: Wagtail header, breadcrumbs and studio assets.
+
+    `permission_required` guards every request and `post_permission` additionally guards POSTs
+    (apps/studio/permissions.py).
+    """
 
     header_icon = "rocket"
     breadcrumbs_items = None
+    permission_required = permissions.ACCESS
+    post_permission = None
+
+    def dispatch(self, request, *args, **kwargs):
+        user = request.user
+        if not user.has_perm(self.permission_required) or (
+            request.method == "POST" and self.post_permission and not user.has_perm(self.post_permission)
+        ):
+            raise PermissionDenied
+        return super().dispatch(request, *args, **kwargs)
 
     def get_breadcrumbs_items(self):
         items = [{"url": "", "label": "Content Studio"}]
@@ -60,4 +77,7 @@ class StudioPage(WagtailAdminTemplateMixin, TemplateView):
         context = super().get_context_data(**kwargs)
         context["generation_connected"] = getattr(settings, "STUDIO_EXECUTE_STEPS", False)
         context["profiles_interim"] = getattr(settings, "AI_PROFILES_INTERIM", False)
+        user = self.request.user
+        context["can_write"] = permissions.can_start_runs(user)
+        context["can_operate"] = user.has_perm(permissions.OPERATE)
         return context

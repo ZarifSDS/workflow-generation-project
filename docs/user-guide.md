@@ -28,6 +28,21 @@ Log in at `http://localhost:8000/admin/` (or the address your operator gives you
 | **Presets** | Saved brief defaults per content type |
 | **Models and providers** | Which models are available, free or paid, and the result of the last provider check |
 
+### What your role lets you do
+
+Your account is in one of four groups, set by an admin:
+
+| Group | You can |
+|---|---|
+| **Writers** | Write briefs and start runs; approve, edit or regenerate site crawl, research, outline and draft; choose title, meta description and slug |
+| **Editors** | Everything writers can, plus review and edit, final cleanup, hero image, localise, publish, and downloads |
+| **Moderators** | Read every run; approve and publish pages in Wagtail |
+| **Operators** | Read every run; re-check providers, manage presets, and mark a stuck step as failed |
+
+Screens and buttons you can't use are hidden. If a step is waiting for someone else's role, it says so, for example "Ready for review by editors".
+
+Passwords need at least 12 characters. After 5 wrong passwords, sign-in for your username pauses for 15 minutes; an operator can unlock it sooner.
+
 ## 1. Write a brief
 
 Open **New brief**. Start from a preset if one fits (for example "SDS Manager blog · US · FKGL 9"); it fills the defaults, including a model per step.

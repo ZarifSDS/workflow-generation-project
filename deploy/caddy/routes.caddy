@@ -1,0 +1,27 @@
+# Shared by deploy/Caddyfile (share mode) and deploy/Caddyfile.prod (production).
+encode zstd gzip
+
+# Wagtail image uploads
+request_body {
+	max_size 25MB
+}
+
+handle_path /media/* {
+	root * /srv/media
+	file_server
+	header Cache-Control "public, max-age=86400"
+}
+
+handle {
+	reverse_proxy {
+		# Re-resolves the `web` service name, so scaled replicas join and leave automatically.
+		dynamic a {
+			name web
+			port 8000
+			refresh 10s
+		}
+		lb_policy round_robin
+		lb_try_duration 5s
+		fail_duration 30s
+	}
+}

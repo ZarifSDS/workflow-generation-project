@@ -11,7 +11,7 @@
         <select id="region" name="region"><option value="">All regions</option>{% for value, label in regions %}<option value="{{ value }}" {% if value == region %}selected{% endif %}>{{ value }}</option>{% endfor %}</select>
         <button class="button button-secondary" type="submit">Filter</button>
         <span class="s-spacer"></span>
-        <a class="button" href="{% url 'studio:brief_new' %}">New brief</a>
+        {% if can_write %}<a class="button" href="{% url 'studio:brief_new' %}">New brief</a>{% endif %}
     </form>
 
     {% if briefs %}
@@ -27,7 +27,7 @@
                         <td>{% with last=brief.runs.first %}{% if last %}<a href="{% url 'studio:run' last.pk %}">{{ brief.runs.count }}</a>{% else %}0{% endif %}{% endwith %}</td>
                         <td class="s-mono">{{ brief.updated_at|date:"j M Y" }}</td>
                         <td>
-                            <form method="post">{% csrf_token %}<input type="hidden" name="brief" value="{{ brief.pk }}"><button class="button button-small button-secondary" type="submit">Start run</button></form>
+                            {% if can_write %}<form method="post">{% csrf_token %}<input type="hidden" name="brief" value="{{ brief.pk }}"><button class="button button-small button-secondary" type="submit">Start run</button></form>{% endif %}
                         </td>
                     </tr>
                 {% endfor %}
@@ -37,7 +37,7 @@
     {% else %}
         <div class="s-empty">
             <p>{% if q or type or region %}No briefs match these filters.{% else %}No briefs yet.{% endif %}</p>
-            <a class="button" href="{% url 'studio:brief_new' %}">New brief</a>
+            {% if can_write %}<a class="button" href="{% url 'studio:brief_new' %}">New brief</a>{% endif %}
         </div>
     {% endif %}
 </div>

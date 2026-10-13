@@ -8,7 +8,7 @@
         <select id="status" name="status"><option value="">All statuses</option>{% for value, label in statuses %}<option value="{{ value }}" {% if value == status %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>
         <button class="button button-secondary" type="submit">Filter</button>
         <span class="s-spacer"></span>
-        <a class="button" href="{% url 'studio:brief_new' %}">New brief</a>
+        {% if can_write %}<a class="button" href="{% url 'studio:brief_new' %}">New brief</a>{% endif %}
     </form>
     {% if runs %}
         <div class="s-table-wrap">
@@ -27,7 +27,7 @@
             </table>
         </div>
     {% else %}
-        <div class="s-empty"><p>No runs{% if status %} with this status{% endif %}.</p><a class="button" href="{% url 'studio:brief_new' %}">New brief</a></div>
+        <div class="s-empty"><p>No runs{% if status %} with this status{% endif %}.</p>{% if can_write %}<a class="button" href="{% url 'studio:brief_new' %}">New brief</a>{% endif %}</div>
     {% endif %}
 </div>
 {% endblock %}

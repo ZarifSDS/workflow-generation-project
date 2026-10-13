@@ -196,6 +196,20 @@ def rerun_step(step):
 
 
 @transaction.atomic
+def recover_step(step, user=None, reason=""):
+    """Mark a step stuck in "running" (its worker stopped) as failed, so it can be retried."""
+    step.refresh_from_db()
+    if step.status != StepRun.Status.RUNNING:
+        raise ValueError("Only a running step can be marked as failed.")
+    who = f" by {user.get_username()}" if user else ""
+    step.status = StepRun.Status.FAILED
+    step.error = reason or f"Marked as failed{who}: the worker stopped before the step finished. Retry it."
+    step.finished_at = timezone.now()
+    step.save(update_fields=["status", "error", "finished_at"])
+    return refresh_run_status(step.run)
+
+
+@transaction.atomic
 def retry_step(step):
     """Queue a failed step again with the same model."""
     if step.status != StepRun.Status.FAILED:

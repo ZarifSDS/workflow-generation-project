@@ -2,7 +2,7 @@ from django.contrib import messages
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 
-from .. import services
+from .. import permissions, services
 from ..models import GenerationRun, MetadataOption
 from .common import StudioPage
 
@@ -10,6 +10,7 @@ from .common import StudioPage
 class MetadataView(StudioPage):
     template_name = "studio/metadata.html"
     page_title = "Title and meta"
+    post_permission = permissions.WRITING
 
     def dispatch(self, request, *args, **kwargs):
         self.run = get_object_or_404(GenerationRun.objects.select_related("brief"), pk=kwargs["pk"])

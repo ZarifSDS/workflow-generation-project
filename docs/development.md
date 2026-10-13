@@ -7,8 +7,8 @@ For developers and AI coding agents (Claude Code, Codex and others). The rules a
 | Path | What's there |
 |---|---|
 | `config/settings/` | `base.py` (apps, providers, `AI_PROFILES`, studio settings), `dev.py`, `production.py`, `test.py` |
-| `apps/studio/` | Content Studio: models (`ContentBrief`, `BriefPreset`, `GenerationRun`, `StepRun`, `StepVersion`, `MetadataOption`), `pipeline.py` (steps per content type), `executors.py` (what each step does), `tasks.py` (worker entry point), `services.py` (state changes), `prompting.py` + `prompts/*.md` (prompt templates), views and templates, `wagtail_hooks.py` (menu, URLs, badge) |
-| `apps/ai/` | Provider layer: `providers.py` (registry from settings), `service.py` (`generate`, `generate_image`, retries), `adapters/` (OpenAI-compatible, Ollama native), `images/` (Cloudflare, ComfyUI), `catalog.py` (models offered in dropdowns), `checks.py` (provider checks), `evaluation/` + `eval_models` / `eval_report` commands |
+| `apps/studio/` | Content Studio: models (`ContentBrief`, `BriefPreset`, `GenerationRun`, `StepRun`, `StepVersion`, `MetadataOption`), `pipeline.py` (steps per content type), `executors.py` (what each step does), `tasks.py` (worker entry point), `services.py` (state changes), `permissions.py` (roles and who may act on which step), `prompting.py` + `prompts/*.md` (prompt templates), views and templates, `wagtail_hooks.py` (menu, URLs, badge, group permissions) |
+| `apps/ai/` | Provider layer: `providers.py` (registry from settings), `service.py` (`generate`, `generate_image`, retries), `adapters/` (OpenAI-compatible, Ollama native), `images/` (Cloudflare, ComfyUI), `catalog.py` (models offered in dropdowns), `checks.py` (provider checks), `redact.py` (removes secrets from errors and logs), `evaluation/` + `eval_models` / `eval_report` commands |
 | `apps/quality/` | Vendored skill scripts (`vendor/`, unchanged copies) and their wrappers: `scripts.py` (runs scanners via `--json`), `scans.py` (quality badges), `review.py` (the seven-part review sequence), `hero.py` (hero branding) |
 | `apps/content/` | `ArticleIndexPage`, `ArticlePage`, `markup.py` (Markdown → sanitised HTML and StreamField blocks), `publishing.py` (draft + moderation + webhook), `exports.py` (Markdown, HTML, DOCX, WebP) |
 | `apps/home/`, `apps/search/` | Wagtail starter apps |
@@ -47,6 +47,8 @@ sequenceDiagram
 - Every behaviour change comes with tests and a doc update; significant decisions get an ADR in `docs/adr/`.
 - `ruff check` and `ruff format` clean, line length 110. Vendored scripts are excluded from ruff and must stay byte-identical to the skills.
 - Model output is untrusted: render it through `apps.content.markup.markdown_to_html` (Markdown + nh3), never `|safe` on raw text.
+- **Permissions:** every studio view sets `permission_required` (and `post_permission` for actions) from `apps/studio/permissions.py`; every run-workspace action goes through `permissions.can_act`. Hiding a button is not enough.
+- Text that might contain provider output or errors is stored through `ProviderError` or `apps.ai.redact.redact`, so keys and account IDs never reach the database or logs.
 
 ## Everyday commands
 
@@ -67,6 +69,7 @@ sequenceDiagram
 - **No real provider calls in tests.** Patch `executors.generate` / `executors.generate_image` with fakes (see `FakeLLM` in `tests/test_pipeline.py`), mock raw HTTP with `respx`, and for the openai SDK inject a mock transport through `openai_compat.http_client_factory` (the SDK bundles its own httpx fork that respx can't see).
 - Hero branding tests copy the vendored scripts into a temp folder with generated placeholder assets (`vendor` fixture in `tests/test_images.py`), so CI never needs the real logo.
 - Publishing tests build an approved run with `_approve()` in `tests/test_publish.py`.
+- Role tests log in users from the real groups (`_user(name, "Writers")` in `tests/test_permissions.py`); most other tests use `admin_client`, a superuser.
 
 ## How to…
 
@@ -102,7 +105,7 @@ Copy the new files from `~/.claude/skills/<skill>/scripts/` over `apps/quality/v
 
 ### Requeue a stuck or approved step
 
-The UI only requeues failed steps (Retry), steps with a model (Regenerate) and model-less steps waiting for review (Run again). For anything else, from `docker compose exec web python manage.py shell`:
+A step stuck in **Running** after a worker restart: an operator uses **Mark as failed** on the step, then **Retry**. The UI also requeues failed steps (Retry), steps with a model (Regenerate) and model-less steps waiting for review (Run again). To rerun an already approved step, from `docker compose exec web python manage.py shell`:
 
 ```python
 from django.db import transaction
@@ -135,5 +138,6 @@ services.refresh_run_status(step.run)
 | [0003](adr/0003-provider-registry.md) | One OpenAI-compatible client, profiles, free providers only, Ollama native API for local models |
 | [0004](adr/0004-brand-assets-outside-git.md) | Hero brand assets stay outside git |
 | [0005](adr/0005-containerised-sharing-and-scaling.md) | Share mode behind Caddy and ngrok; stateless web and workers that scale out |
+| [0006](adr/0006-roles-and-login-protection.md) | Four studio roles as Wagtail groups; login rate limiting with django-axes |
 
 Other standing decisions: free models only (no paid APIs, no Claude API); model defaults come from blind evaluation on real briefs; local-first where the hardware allows.

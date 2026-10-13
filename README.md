@@ -4,7 +4,7 @@ A self-hosted tool that runs a multi-step content generation pipeline (brief →
 
 Text and images come from **local models** (Ollama, ComfyUI) or **free API tiers** (Ollama Cloud, Gemini, Groq, Cloudflare Workers AI). Each step picks its provider and model from configuration, so models can be swapped without code changes.
 
-> Status: **M1–M7 built** (pipeline, review sequence, branded hero images, publishing into Wagtail moderation, exports). M8 (hardening) is next, and model defaults are interim until the evaluation is scored. See [docs/roadmap.md](docs/roadmap.md).
+> Status: **M1–M8 built** (pipeline, review sequence, branded hero images, publishing into Wagtail moderation, exports, roles, login protection, backups, production setup). Model defaults are interim until the evaluation is scored. See [docs/roadmap.md](docs/roadmap.md).
 
 ## Quick start (Windows + Docker Desktop)
 
@@ -51,7 +51,8 @@ Start with **[Tools and processes](docs/tools-and-processes.md)**, then the guid
 - [User guide](docs/user-guide.md): writers, editors, moderators
 - [Operations guide](docs/operations.md): running and maintaining the studio
 - [Development guide](docs/development.md): developers and AI agents
-- [Deployment](docs/deployment.md): sharing over ngrok and scaling
+- [Deployment](docs/deployment.md): sharing over ngrok, production on a server, and scaling
+- [Security](docs/security.md): roles, login protection, secrets
 
 Reference:
 

@@ -2,6 +2,7 @@ from django.conf import settings
 from django.db import models
 from django.utils import timezone
 
+from .permissions import PERMISSIONS
 from .pipeline import STEPS
 
 VERSIONS_TO_KEEP = 3  # the first version is always kept as well (docs/ux.md)
@@ -160,6 +161,8 @@ class GenerationRun(models.Model):
 
     class Meta:
         ordering = ["-updated_at"]
+        # Studio-wide permissions (apps/studio/permissions.py); kept on the run model by convention.
+        permissions = PERMISSIONS
 
     def __str__(self):
         return f"{self.brief.topic} (run {self.pk})"
