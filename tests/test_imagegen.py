@@ -95,6 +95,9 @@ def test_a_blog_hero_is_made_without_a_brief(admin_user, fakes):
     prompt = fakes["prompts"][0][0]["content"] + fakes["prompts"][0][1]["content"]
     assert "right third" in prompt and "white veil" in fakes["vision_prompt"]
     assert not ContentBrief.objects.exists() and not GenerationRun.objects.exists()
+    # Every photo prompt ends with the no-text clause, once (the writer model sometimes drops it).
+    assert fakes["image_prompt"].endswith(executors.NO_TEXT)
+    assert executors.with_no_text(fakes["image_prompt"]) == fakes["image_prompt"]
 
 
 def test_a_lead_image_is_unbranded_at_its_size(admin_user, fakes):

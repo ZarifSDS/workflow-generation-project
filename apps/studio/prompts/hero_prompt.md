@@ -11,6 +11,7 @@ Write one image prompt (60–90 words) for the hero image of this article. Descr
 {{hero_framing}}
 - PPE that fits the task and the setting, nothing extra: no hard hat or gloves for desk or office work
 - no text, labels, signs with words, numbers or brand names; any screen or document is seen from the side or out of focus
+- never name what a drum, bottle or container holds (the image model paints those words onto it as a label): describe it by its look ("a plain steel drum", "a white jerrycan"), labels turned away or out of focus
 
 Title: {{title}}
 Topic: {{topic}}

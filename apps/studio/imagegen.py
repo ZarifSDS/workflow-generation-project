@@ -87,7 +87,7 @@ def _context(job):
 
 def _photo_prompt(job, context):
     if job.photo_prompt.strip():
-        return " ".join(job.photo_prompt.split())[:1500]
+        return executors.with_no_text(job.photo_prompt[:1500])
     if not (job.description or job.headline).strip():
         raise ImageJobError("Describe what the image shows, write a photo prompt, or upload a photo.")
     caller = SimpleNamespace(key="hero_image")  # _call_text only reads .key when a task is given
@@ -95,7 +95,7 @@ def _photo_prompt(job, context):
     prompt = " ".join(result.text.split())[:1500]
     if not prompt:
         raise ImageJobError("The model returned an empty photo prompt. Try again or write one yourself.")
-    return prompt
+    return executors.with_no_text(prompt)
 
 
 def _generate(prompt):

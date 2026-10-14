@@ -468,6 +468,14 @@ PLACE_RIGHT = (
     "Composition: the person and everything they work with are entirely in the right 35% of the "
     "frame; the left 60% is empty, bright background."
 )
+# Appended to every photo prompt: the prompt writer sometimes drops it, and the image model then paints
+# garbled labels and invented logos (seen live on 2026-10-14: "TOXIC SOLIVENT" on a drum).
+NO_TEXT = "No words, letters, numbers, labels, signs or logos anywhere in the image."
+
+
+def with_no_text(prompt):
+    prompt = " ".join((prompt or "").split())
+    return prompt if not prompt or NO_TEXT in prompt else f"{prompt} {NO_TEXT}"
 
 
 def _new_photo(step, image_prompt, title):
@@ -609,6 +617,7 @@ def hero_image(step):
         prompt_result = _call_text(step, prompting.render("hero_prompt", context), task="hero_prompt")
         image_prompt = " ".join(prompt_result.text.split())[:1500]
         _require(image_prompt, "The model returned an empty image prompt. Retry, or choose another model.")
+        image_prompt = with_no_text(image_prompt)
 
     for attempt in (1, 2):
         if not previous:
