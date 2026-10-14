@@ -3,6 +3,7 @@
 {% block main_content %}
 <div class="studio">
     <form method="get" class="s-keys__form" id="provider-pick">
+        {% if return_to %}<input type="hidden" name="return_to" value="defaults">{% endif %}
         <div class="s-keys__field">
             <label for="id_pick_provider">Provider</label>
             <select id="id_pick_provider" name="provider">
@@ -16,13 +17,14 @@
     {% if provider %}
         <form method="post" class="s-keys__form" novalidate>{% csrf_token %}
             <input type="hidden" name="provider" value="{{ provider }}">
+            {% if return_to %}<input type="hidden" name="return_to" value="defaults">{% endif %}
             {% if remote_error %}<div class="s-callout" role="alert">{{ remote_error }}</div>{% endif %}
             {% if form.non_field_errors %}<div class="s-callout" role="alert">{{ form.non_field_errors|join:" " }}</div>{% endif %}
             {% if remote_count %}
                 <div class="s-keys__field">
                     <label for="model-filter">Find a model</label>
                     <input type="search" id="model-filter" placeholder="Type to narrow the list, e.g. claude, free, vision" autocomplete="off" aria-controls="{{ form.listed.id_for_label }}">
-                    <p class="s-muted" id="model-count" aria-live="polite">{{ remote_count }} model{{ remote_count|pluralize }} from {{ provider_label }}. <a href="?provider={{ provider }}&amp;refresh=1">Refresh the list</a></p>
+                    <p class="s-muted" id="model-count" aria-live="polite">{{ remote_count }} model{{ remote_count|pluralize }} from {{ provider_label }}. <a href="?provider={{ provider }}&amp;refresh=1{% if return_to %}&amp;return_to=defaults{% endif %}">Refresh the list</a></p>
                 </div>
             {% endif %}
             {% for field in form %}
@@ -38,9 +40,9 @@
                 {% endif %}
             {% endfor %}
             <div class="s-row-actions">
-                <button class="button" type="submit">Add model</button>
+                <button class="button" type="submit">{% if return_to %}Add and go back to Default models{% else %}Add model{% endif %}</button>
                 <button class="button button-secondary" type="submit" name="next" value="another">Add and pick another</button>
-                <a class="button button-secondary" href="{% url 'studio:provider_keys' %}">Cancel</a>
+                <a class="button button-secondary" href="{% if return_to %}{% url 'studio:task_defaults' %}{% else %}{% url 'studio:provider_keys' %}{% endif %}">Cancel</a>
             </div>
         </form>
     {% endif %}

@@ -12,9 +12,10 @@ from wagtail.log_actions import log
 
 from apps.ai import catalog, defaults
 from apps.ai.models import TaskDefault
+from apps.ai.providers import get_providers
 
 from ..pipeline import MODEL_TASKS
-from .provider_keys import KeysPage
+from .provider_keys import TEXT_ADAPTERS, KeysPage
 
 
 def _label(key):
@@ -54,9 +55,26 @@ class TaskDefaultsView(KeysPage):
             )
         return rows
 
+    def providers(self):
+        """Each text provider that has a key, with how many of its models the lists offer, so a provider
+        with none (e.g. a newly added OpenRouter) is visible here with a way to add its models."""
+        counts = {}
+        for item in catalog.all_models():
+            if item.kind == "text" and item.selectable:
+                counts[item.provider] = counts.get(item.provider, 0) + 1
+        return [
+            {"name": name, "label": self.label_for(name, spec), "count": counts.get(name, 0)}
+            for name, spec in get_providers().items()
+            if spec.adapter in TEXT_ADAPTERS and spec.is_configured
+        ]
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context.update(rows=kwargs.get("rows") or self.rows(), errors=kwargs.get("errors") or {})
+        context.update(
+            rows=kwargs.get("rows") or self.rows(),
+            errors=kwargs.get("errors") or {},
+            providers=self.providers(),
+        )
         return context
 
     def post(self, request, *args, **kwargs):

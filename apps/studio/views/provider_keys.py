@@ -309,6 +309,10 @@ class AddedModelView(KeysPage):
         }
         chosen = self.request.POST.get("provider") or self.request.GET.get("provider", "")
         self.provider = chosen if chosen in self.providers else ""
+        # Opened from Settings › Default models: go back there after adding (that page only).
+        self.return_to = (
+            "defaults" if (self.request.POST or self.request.GET).get("return_to") == "defaults" else ""
+        )
         self.remote, self.remote_error = [], ""
         if self.provider:
             try:
@@ -344,6 +348,7 @@ class AddedModelView(KeysPage):
             else "",
             remote_count=len(self.remote),
             remote_error=self.remote_error,
+            return_to=self.return_to,
         )
         return context
 
@@ -355,8 +360,9 @@ class AddedModelView(KeysPage):
         log(instance=item, action="ai.model_added", user=request.user)
         messages.success(request, f"Added {item.label}. It's offered in the model lists now.")
         if request.POST.get("next") == "another":
-            return redirect(f"{reverse('studio:provider_model_add')}?provider={item.provider}")
-        return redirect("studio:provider_keys")
+            back = "&return_to=defaults" if self.return_to else ""
+            return redirect(f"{reverse('studio:provider_model_add')}?provider={item.provider}{back}")
+        return redirect("studio:task_defaults" if self.return_to else "studio:provider_keys")
 
 
 class DeleteModelView(ConfirmView):

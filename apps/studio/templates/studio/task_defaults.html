@@ -4,7 +4,15 @@
 {% block main_content %}
 <form method="post" class="studio" novalidate>{% csrf_token %}
     <p class="s-muted s-m0">Choose the model each task uses by default, and the model to try if it fails. New runs and the brief wizard start from these; each run can still pick its own model per step. "Built-in" keeps the studio's own choice. Only superusers see this page, and every change is recorded under Reports › Site history.</p>
-    <p class="s-muted s-m0">Need another model or provider? Add it under <a href="{% url 'studio:provider_keys' %}">Settings › AI providers</a>; it then appears in these lists.</p>
+    <section class="s-box" aria-labelledby="providers-head">
+        <h3 class="s-section" id="providers-head">Models in these lists, by provider</h3>
+        <ul class="s-m0">
+            {% for p in providers %}
+                <li>{{ p.label }}: {% if p.count %}{{ p.count }} model{{ p.count|pluralize }}{% else %}<strong>none yet</strong>{% endif %} · <a href="{% url 'studio:provider_model_add' %}?provider={{ p.name }}&amp;return_to=defaults">{% if p.count %}Add more{% else %}Add its models{% endif %}</a></li>
+            {% endfor %}
+        </ul>
+        <p class="s-muted s-small s-m0">A provider shows up in the dropdowns once it has a model. Add its models from its own list; you come back here to choose them. New providers and keys: <a href="{% url 'studio:provider_keys' %}">Settings › AI providers</a>.</p>
+    </section>
 
     <div class="s-table-wrap">
         <table class="s-table">

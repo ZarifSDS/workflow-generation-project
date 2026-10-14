@@ -161,3 +161,30 @@ def test_an_unpriced_model_takes_the_providers_usual_status():
     assert form.is_valid(), form.errors
     assert form.cleaned_data["status"] == catalog.usual_status("groq")
     assert "when it doesn&#x27;t say" in str(form["status"])
+
+
+def test_an_id_the_provider_doesnt_list_is_refused_with_suggestions(admin_client, openrouter):
+    url = reverse("studio:provider_model_add")
+    refused = admin_client.post(url, {"provider": "openrouter", "model": "anthropic/claude-sonnet-55"})
+    assert "isn&#x27;t in this provider&#x27;s list of models" in refused.text
+    assert "Did you mean anthropic/claude-sonnet-5.5?" in refused.text
+    assert not AddedModel.objects.exists()
+    accepted = admin_client.post(
+        url, {"provider": "openrouter", "model": "anthropic/claude-sonnet-55", "unlisted_ok": "on"}
+    )
+    assert accepted.status_code == 302 and AddedModel.objects.get().model == "anthropic/claude-sonnet-55"
+
+
+def test_default_models_shows_providers_without_models_and_comes_back(admin_client, openrouter):
+    defaults_url = reverse("studio:task_defaults")
+    page = admin_client.get(defaults_url)
+    assert "OpenRouter: <strong>none yet</strong>" in page.text
+    assert "?provider=openrouter&amp;return_to=defaults" in page.text
+    response = admin_client.post(
+        reverse("studio:provider_model_add"),
+        {"provider": "openrouter", "listed": "anthropic/claude-sonnet-5.5", "return_to": "defaults"},
+    )
+    assert response["Location"] == defaults_url
+    page = admin_client.get(defaults_url)
+    assert "OpenRouter: 1 model" in page.text
+    assert 'value="openrouter::anthropic/claude-sonnet-5.5"' in page.text

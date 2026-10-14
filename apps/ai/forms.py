@@ -4,6 +4,7 @@ Key fields are write-only: they never render a value back, and only the last cha
 a hint elsewhere.
 """
 
+import difflib
 from urllib.parse import urlsplit
 
 from django import forms
@@ -107,6 +108,11 @@ class AddedModelForm(forms.ModelForm):
     id. The name and the free/paid status come from the list when left empty."""
 
     listed = forms.ChoiceField(label="Model", required=False)
+    unlisted_ok = forms.BooleanField(
+        label="Add it anyway",
+        required=False,
+        help_text="Only when you're sure: the provider's list doesn't show this id.",
+    )
 
     class Meta:
         model = AddedModel
@@ -146,6 +152,7 @@ class AddedModelForm(forms.ModelForm):
         ]
         if not remote:
             self.fields["listed"].widget = forms.HiddenInput()
+            self.fields["unlisted_ok"].widget = forms.HiddenInput()
             self.fields["model"].label = "Model id"
             self.fields["model"].help_text = "Exactly as the provider lists it."
 
@@ -166,6 +173,15 @@ class AddedModelForm(forms.ModelForm):
         if not model_id:
             raise forms.ValidationError("Pick a model from the list, or type its id.")
         listed = self.remote.get(model_id)
+        if self.remote and listed is None and not data.get("unlisted_ok"):
+            # A typed id the provider doesn't list fails at run time (seen: an OpenRouter id filed under
+            # local Ollama, and an id missing its "~"). Suggest the nearest listed ids.
+            close = difflib.get_close_matches(model_id, list(self.remote), n=3, cutoff=0.6)
+            hint = f" Did you mean {' or '.join(close)}?" if close else ""
+            raise forms.ValidationError(
+                f"{model_id} isn't in this provider's list of models.{hint} Pick it from the list, check the "
+                "provider, or tick “Add it anyway” if you're sure."
+            )
         data["model"] = self.instance.model = model_id
         data["label"] = (data.get("label") or "").strip() or (
             (listed.name or listed.id) if listed else model_id
