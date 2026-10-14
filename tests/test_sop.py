@@ -690,3 +690,34 @@ def test_dashes_in_headings_and_titles_become_colons():
         house.mechanical_fix("How to Read an SDS – 5-Minute Guide")[0].strip()
         == "How to Read an SDS: 5-Minute Guide"
     )
+
+
+def test_rubrics_carry_the_vendored_reference_rules_and_the_guest_post_variant():
+    draft = sop.rubric("draft")
+    for rule in (
+        "### Flow and reasoning",
+        "### Voice",
+        "### AI patterns",
+        "### Formatting",
+        "### Links",
+        "plot-free",
+        "one home",
+    ):
+        assert rule in draft, rule
+    assert "SITE_PROFILE" not in draft
+    outbound = sop.rubric("draft", "outbound")
+    assert outbound.startswith(draft) and "SITE_PROFILE governs the surface" in outbound
+    assert sop.rubric("draft", "seo_blog") == draft
+    assert "NARRATIVE_MODE held" in sop.rubric("review_edit", "outbound")
+    assert "distinct piece" in sop.rubric("localise")
+
+
+def test_blog_shaped_components_are_advisory_on_a_guest_post():
+    text = GOOD_DRAFT.replace("## Key Takeaways\n", "## Why It Matters\n").replace(
+        "## Frequently Asked Questions", "## Common Questions"
+    )
+    assert any("Key Takeaways" in f for f in blocking(sop.check("draft", text, CTX)))
+    guest = {**CTX, "content_type": "outbound"}
+    assert not any(
+        "Key Takeaways" in f or "Frequently Asked" in f for f in blocking(sop.check("draft", text, guest))
+    )

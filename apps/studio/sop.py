@@ -336,6 +336,7 @@ def _faq(text):
 
 def check_article(text, ctx, *, metadata=True):
     findings = _mechanics(text)
+    shape = "advise" if ctx.get("content_type") == "outbound" else "block"  # host-dependent on a guest post
     pk = (ctx.get("pkeyword") or "").lower()
     h1s = re.findall(r"(?m)^#\s+(.+)$", text)
     if len(h1s) != 1:
@@ -363,11 +364,11 @@ def check_article(text, ctx, *, metadata=True):
     sections = _sections(text)
     names = [name for name, _ in sections[1:]]
     if not names or names[0].lower() != "key takeaways":
-        findings.append(Finding("block", "`## Key Takeaways` must be the first H2, right after the intro"))
+        findings.append(Finding(shape, "`## Key Takeaways` must be the first H2, right after the intro"))
     else:
         bullets = _items(sections[1][1])
         if not 3 <= len(bullets) <= 7:
-            findings.append(Finding("block", f"{len(bullets)} Key Takeaways bullet(s); the SOP asks for 3-7"))
+            findings.append(Finding(shape, f"{len(bullets)} Key Takeaways bullet(s); the SOP asks for 3-7"))
         for bullet in bullets:
             item = re.sub(r"^\s*(?:[-*]|\d+[.)])\s*", "", bullet).strip("* ")
             if COVERAGE_FRAMING.search(item):
@@ -383,10 +384,10 @@ def check_article(text, ctx, *, metadata=True):
         findings.append(Finding("block", "no H2 or H3 carries the primary keyword"))
     faq_body, faq_items = _faq(text)
     if faq_body is None:
-        findings.append(Finding("block", "no `## Frequently Asked Questions` section"))
+        findings.append(Finding(shape, "no `## Frequently Asked Questions` section"))
     else:
         if not 3 <= len(faq_items) <= 7:
-            findings.append(Finding("block", f"{len(faq_items)} FAQ question(s); the SOP asks for 3-7"))
+            findings.append(Finding(shape, f"{len(faq_items)} FAQ question(s); the SOP asks for 3-7"))
         if ":::faq" not in faq_body:
             findings.append(
                 Finding(
@@ -574,11 +575,18 @@ def check(step_key, text, ctx):
 # ---- The reviewer and the revision ----
 
 
-def rubric(step_key):
-    """The step's section of prompts/sop_rubrics.md."""
+def rubric(step_key, content_type=None):
+    """The step's section of prompts/sop_rubrics.md, plus the `## step:content_type` section when the
+    file has one (guest posts follow the outbound skill where it differs from the blog rules)."""
     text = prompting._template("sop_rubrics")
-    match = re.search(rf"(?ms)^## {re.escape(step_key)}\s*$\n(.*?)(?=^## \w|\Z)", text)
-    return match.group(1).strip() if match else ""
+
+    def section(name):
+        match = re.search(rf"(?ms)^## {re.escape(name)}\s*$\n(.*?)(?=^## \w|\Z)", text)
+        return match.group(1).strip() if match else ""
+
+    base = section(step_key)
+    extra = section(f"{step_key}:{content_type}") if content_type else ""
+    return f"{base}\n\n{extra}".strip() if extra else base
 
 
 def parse_verdict(reply):
@@ -720,7 +728,7 @@ def run_loop(step, text, call, max_rounds=None):
             {
                 **base,
                 "step_label": step.label,
-                "rubric": rubric(step.key),
+                "rubric": rubric(step.key, step.run.brief.content_type),
                 "inputs": inputs,
                 "checks": "\n".join(f"- {f}" for f in checks) or "- (none)",
                 "output": result.text,
