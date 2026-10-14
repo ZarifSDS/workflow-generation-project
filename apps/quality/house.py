@@ -16,7 +16,8 @@ from .review import heading_name, split_sections
 # Tolerant of spacing and case: run 20's model wrote "[ SRC: url ]", which a strict pattern let through to
 # publishing. `mechanical_fix` also normalises them to the canonical form.
 MARKER_PATTERNS = {
-    "VERIFY": re.compile(r"\[\s*VERIFY\s*(?::[^\]]*)?\]", re.I),
+    # Any [VERIFY…] form: "[VERIFY]", "[VERIFY: date]", "[VERIFY at publication]", "[VERIFY-AUTHOR: …]".
+    "VERIFY": re.compile(r"\[\s*VERIFY\b[^\]]*\]", re.I),
     "SRC": re.compile(r"\[\s*SRC\s*:[^\]]*\]", re.I),
     "VISUAL": re.compile(r"\[\s*VISUAL\s*:[^\]]*\]", re.I),
 }
@@ -64,6 +65,13 @@ def mechanical_fix(text):
     text, n = normalise_markers(text)
     if n:
         counts["markers normalised"] = n
+    # "claim. [VERIFY]" leaves the marker outside the sentence it qualifies: "claim [VERIFY]."
+    text = count(
+        "[VERIFY] moved inside its sentence",
+        r"([.!?])[ \t]+(\[VERIFY\])(?=[ \t]*(?:\n|$|[A-Z*\[]))",
+        r" \2\1",
+        text,
+    )
     text = count("dashes", r"(\d)\s*[–—]\s*(\d)", r"\1-\2", text)
     # In a heading or a one-line title a dash separates a topic from its qualifier: a colon reads right.
     text = count("dashes", r"(?m)^(#{1,6}\s+[^\n–—]+?)\s*[–—]\s*", r"\1: ", text)

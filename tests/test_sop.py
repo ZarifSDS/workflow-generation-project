@@ -911,6 +911,15 @@ def test_the_skills_link_and_flow_scripts_run_as_checks():
     assert not [f for f in sop.check_skill_scripts(GOOD_DRAFT) if f.severity == "block"]
 
 
+def test_verify_marker_forms_are_all_held_and_kept_inside_their_sentence():
+    for marker in ("[VERIFY at publication]", "[VERIFY-AUTHOR: date of the audit]", "[verify]"):
+        assert [m["kind"] for m in sop.house.find_markers(f"## A\n\nA claim {marker}.\n")] == ["VERIFY"]
+    fixed, counts = sop.house.mechanical_fix("Training follows 1910.1200(h)(3). [VERIFY] Next point.\n")
+    assert fixed == "Training follows 1910.1200(h)(3) [VERIFY]. Next point.\n"
+    ctx = {**CTX, "allowed_citations": set()}
+    assert sop.check_citations(fixed, ctx) == []  # the fix the finding asks for now satisfies it
+
+
 def test_a_pointer_sentence_may_take_its_link_with_it():
     url = "https://sdsmanager.com/us/sds-management-articles/job-safety-analysis/"
     pointer = f"For more details, see our article on [job safety analysis]({url})."

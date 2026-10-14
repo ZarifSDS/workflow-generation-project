@@ -39,7 +39,7 @@ NOT_GRADED = {
 }
 BANNED_WORDS_TSV = scripts.VENDOR / "ehs_seo_blog" / "data" / "banned-words.tsv"
 
-MARKER = re.compile(r"\[(?:VERIFY|SRC:[^\]]*|VISUAL:[^\]]*|HERO:[^\]]*)\]")
+MARKER = re.compile(r"\[(?:VERIFY\b[^\]]*|SRC:[^\]]*|VISUAL:[^\]]*|HERO:[^\]]*)\]")
 NEGATION = re.compile(
     r"\b(?:no|not|never|none|nor|cannot|without|can't|don't|doesn't|isn't|aren't|won't|wasn't|weren't|"
     r"shouldn't|mustn't|didn't|hasn't|haven't)\b",

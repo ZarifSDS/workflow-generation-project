@@ -21,7 +21,9 @@ Read this first in a new session. Then `docs/development.md` (code map, how-tos,
 - Metadata screen: own options get house mechanics (dash to colon), slugs normalised, over-limit own options refused, saving a selection with an over-limit option refused with a message, adding your own meta/slug/tags/excerpt now replaces the previous choice (two were selected before), and the search preview shows the real path (`sdsmanager.com › us › sds-management-articles › slug`, or the host for a guest post).
 - The model panel on a step that hasn't run yet says "Run with … / Use this model when it runs".
 
-**Still open from the audit list:** item 4 (one grade/checks panel per step, scan counts with what-to-do copy, send-back model list with durations) and sectional drafting / re-branding library images. The SOP audit's findings are recorded below once done.
+**Still open from the audit list:** item 4 (one grade/checks panel per step, scan counts with what-to-do copy, send-back model list with durations) and sectional drafting / re-branding library images.
+
+**The SOP audit is in `docs/sop-audit.md`** (read it before touching sop.py): six root causes, the phased plan and the owner's open decisions. Phase 0 is done (not-live index rows removed, every `[VERIFY…]` form held, `[VERIFY]` kept inside its sentence). Next is phase 1 (Fixture A/B per check plus an offline replay harness over stored runs 17-21), then phase 2 (finding-scoped guard permissions), which removes the deadlock class by construction.
 
 ## Session of 2026-10-14 (03:45–07:50 GMT+6): what changed and where it stands
 

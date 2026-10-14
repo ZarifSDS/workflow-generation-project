@@ -733,7 +733,7 @@ def check_citations(text, ctx):
 
 
 INVENTED_CITATION = re.compile(r"\[block\] the regulation reference (.+?) isn't in the research")
-MARKER_VERIFY = re.compile(r"\[\s*VERIFY\s*(?::[^\]]*)?\]", re.I)
+MARKER_VERIFY = house.MARKER_PATTERNS["VERIFY"]
 
 
 URL = re.compile(r"(?:https?|wagtail)://[^\s)\]\"'>]+")

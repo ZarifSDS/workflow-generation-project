@@ -34,23 +34,12 @@ Loaded at Steps 1f, 2, and 3I, alongside `linking.md`. Read `linking.md` first f
 | ALARP | UK | https://sdsmanager.com/uk/sds-management-articles/alarp-as-low-as-reasonably-practicable/ |
 | SFAIRP / so far as is reasonably practicable | AU | https://sdsmanager.com/au/sds-management-articles/sfairp-so-far-as-is-reasonably-practicable/ |
 | as far as is reasonably practicable | CA | https://sdsmanager.com/ca/sds-management-articles/as-far-as-is-reasonably-practicable/ |
-| OSHA risk assessment | US | https://sdsmanager.com/us/sds-management-articles/osha-risk-assessment/ |
 | risk assessment legal requirements | UK | https://sdsmanager.com/uk/sds-management-articles/risk-assessment-legal-requirements/ |
 | hazard assessment requirements | CA | https://sdsmanager.com/ca/sds-management-articles/hazard-assessment-requirements/ |
 | WHS risk management regulation / how to manage work health and safety risks | AU | https://sdsmanager.com/au/sds-management-articles/whs-risk-management-regulation/ |
 | unsafe acts vs unsafe conditions | All | https://sdsmanager.com/us/sds-management-articles/unsafe-acts-vs-unsafe-conditions/ |
 | job safety analysis | US | https://sdsmanager.com/us/sds-management-articles/job-safety-analysis/ |
 | safe system of work | UK | https://sdsmanager.com/uk/sds-management-articles/safe-system-of-work/ |
-| field level hazard assessment (FLHA) / field level risk assessment (FLRA) | CA | https://sdsmanager.com/ca/sds-management-articles/field-level-hazard-assessment/ |
-| job safety and environmental analysis (JSEA) | AU | https://sdsmanager.com/au/sds-management-articles/jsea-job-safety-environmental-analysis/ |
-| SWMS safe work method statement | AU | https://sdsmanager.com/au/sds-management-articles/swms-safe-work-method-statement/ |
-| RAMS risk assessment method statement | UK | https://sdsmanager.com/uk/sds-management-articles/rams-risk-assessment-method-statement/ |
-| permit to work | All | https://sdsmanager.com/us/sds-management-articles/permit-to-work/ |
-| management of change safety | All | https://sdsmanager.com/us/sds-management-articles/management-of-change-safety/ |
-| how to build a risk register | All | https://sdsmanager.com/us/sds-management-articles/how-to-build-a-risk-register/ |
-| contractor safety management | US | https://sdsmanager.com/us/sds-management-articles/contractor-safety-management/ |
-| CDM 2015 contractor duties / contractor competence | UK | https://sdsmanager.com/uk/sds-management-articles/cdm-2015-contractor-duties/ |
-| prime contractor responsibilities | CA | https://sdsmanager.com/ca/sds-management-articles/prime-contractor-responsibilities/ |
 | best ehs software | All | https://sdsmanager.com/us/sds-management-articles/best-ehs-software/ |
 | hrcw meaning | AU | https://sdsmanager.com/au/sds-management-articles/hrcw-meaning/ |
 | safe work practices | CA | https://sdsmanager.com/ca/sds-management-articles/safe-work-practices/ |
