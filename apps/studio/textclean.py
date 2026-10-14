@@ -58,7 +58,8 @@ def strip_metadata_lines(article):
 
 def split_metadata(markdown):
     """Separate a draft's '## Metadata options' section; return (article, {kind: [options]})."""
-    match = re.search(r"^##\s+Metadata options\s*$", markdown, re.M | re.I)
+    # "## Metadata Options:", "## SEO Metadata", "## Metadata": the block's heading as models write it.
+    match = re.search(r"^##\s+(?:seo\s+)?metadata(?:\s+options)?\s*:?\s*$", markdown, re.M | re.I)
     if not match:
         article, stray = strip_metadata_lines(markdown.strip())
         return article, {kind: items[:5] for kind, items in stray.items()}

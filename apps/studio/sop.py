@@ -104,7 +104,6 @@ OUTLINE_SECTIONS = [
     "Headings-Only Outline",
 ]
 INTERNAL_LINK = re.compile(r"\]\((?:https?://(?:www\.)?sdsmanager\.com[^)]*|wagtail://page[^)]*)\)")
-ANY_LINK = re.compile(r"\]\([^)]+\)")
 
 
 LEVELS = ("strategic", "structural", "line", "mechanical")
@@ -395,6 +394,19 @@ def _mirrors(question, answer):
     return bool(content) and len(content & opening) >= 0.5 * len(content)
 
 
+def _comma_for_colon(heading):
+    """One comma and no list word: a topic and its qualifier ("Worked Example, Acetone SDS"), which the house
+    style separates with a colon; a comma in a heading only lists items. Not a question ("If an SDS Is
+    Missing, What Should You Do?"), a number ("1,000 Chemicals") or a heading that already has its colon."""
+    plain = re.sub(r"\d,\d", "", re.sub(r"\s*\{#[^}]*\}\s*$", "", heading)).strip()
+    return (
+        plain.count(",") == 1
+        and not plain.endswith("?")
+        and ":" not in plain
+        and not re.search(r"(?i)\b(?:and|or)\b|&", plain)
+    )
+
+
 def _tacked_on_keyword(headings, pk, minimum=3):
     """Headings that end in the same connective plus the keyword ("… for How to Read a Safety Data Sheet",
     "… on SDS Retention Requirements"), at least `minimum` of them: the mechanical stuffing a model produces
@@ -633,7 +645,8 @@ def check_article(text, ctx, *, metadata=True):
                 findings.append(
                     Finding("block", f"Key Takeaways bullet leans on another bullet: '{item[:80]}'")
                 )
-    headings = re.findall(r"(?m)^#{2,3}\s+(.+)$", text)
+    # A heading's `{#anchor}` tag is markup, not words (it would read as a keyword or a comma's partner).
+    headings = [re.sub(r"\s*\{#[^}]*\}\s*$", "", h) for h in re.findall(r"(?m)^#{2,3}\s+(.+)$", text)]
     if pk and not any(carries_keyword(h, pk) for h in headings):
         # On a guest post the outbound skill says flag the shortfall rather than bend a heading.
         findings.append(
@@ -643,18 +656,11 @@ def check_article(text, ctx, *, metadata=True):
                 allows={"rename": ["*"]},
             )
         )
-    for heading in [*h1s[:1], *headings]:
-        # One comma and no list word: a topic and its qualifier ("Worked Example, Acetone SDS"), which the
-        # house style separates with a colon. A comma in a heading only lists items.
-        # Not a question ("If an SDS Is Missing, What Should You Do?"), a number ("1,000 Chemicals") or a
-        # heading that already has its colon. The replay of runs 18-21 found 11 headings, all real cases.
-        plain = re.sub(r"\d,\d", "", heading).strip()
-        if (
-            plain.count(",") == 1
-            and not plain.endswith("?")
-            and ":" not in plain
-            and not re.search(r"(?i)\b(?:and|or)\b|&", plain)
-        ):
+    # H2/H3 commas are fixed mechanically (normalise); this still catches an H1 (a verbatim guest-post title
+    # is exempt) and anything a revision reintroduces.
+    titles = [] if prof["title_verbatim"] else h1s[:1]
+    for heading in [*titles, *headings]:
+        if _comma_for_colon(heading):
             findings.append(
                 Finding(
                     "block",
@@ -703,14 +709,7 @@ def check_article(text, ctx, *, metadata=True):
         for item in faq_items:
             question, _, answer = item.partition("\n")
             answer = answer.strip()
-            if ANY_LINK.search(answer):
-                findings.append(
-                    Finding(
-                        "block",
-                        f"the FAQ answer to '{question.strip()[:60]}' contains a link",
-                        allows={"drop_urls": _links_in(answer)},
-                    )
-                )
+            # A link in an FAQ answer is allowed (the owner's rule, over the skill's "no hyperlinks").
             if re.match(r"(?i)^(?:yes|no)[,.!]", answer) and not _mirrors(question, answer):
                 # A bare Yes/No is one the question's subject doesn't follow ("Yes, a PCBU owes…" to "Does
                 # WHS risk management apply…?"); "Yes, WHS risk management applies…" mirrors it (Fixture A).
@@ -1188,6 +1187,12 @@ def _input_sources(step):
     return sources
 
 
+def _url_key(url):
+    if "sdsmanager.com" not in url:
+        return url
+    return house.canonical_sds_url(url).split("#", 1)[0]
+
+
 def check_sourced_urls(text, ctx):
     """Block findings for sdsmanager.com and wagtail links that don't come from the inputs."""
     allowed = ctx.get("allowed_urls")
@@ -1195,17 +1200,19 @@ def check_sourced_urls(text, ctx):
         return []
     findings = []
     seen = set()
+    # Compared in canonical form (scheme, www, trailing slash, no fragment), as the mechanics write links.
+    allowed_keys = {_url_key(u) for u in allowed}
     for url in URL.findall(text):
         url = url.rstrip(".,;:")
         own = "sdsmanager.com" in url or url.startswith("wagtail://")
         if (
             not own
-            or url in allowed
-            or url in seen
+            or _url_key(url) in allowed_keys
+            or _url_key(url) in seen  # one finding per page, however it is spelled
             or re.match(r"wagtail://(?:page|document|image)\?id=\d+", url)
         ):
             continue
-        seen.add(url)
+        seen.add(_url_key(url))
         findings.append(
             Finding(
                 "block",
@@ -1473,6 +1480,58 @@ def link_sources(step_key, base):
 
 
 BOLD_HEADING = re.compile(r"(?m)^(#{1,6})\s+\*\*(.+?)\*\*[ \t]*$")
+# Article headings models write for the fixed components, mapped to the names the checks and the publish
+# step read (docs/sop-audit.md, phase 4).
+HEADING_VARIANTS = (
+    (
+        re.compile(
+            r"(?im)^##\s+(?:faqs?|frequently asked questions\s*\(faqs?\)|common questions)"
+            r"\s*:?\s*(\{#[^}]*\})?\s*$"
+        ),
+        "## Frequently Asked Questions",
+    ),
+    (
+        re.compile(
+            r"(?im)^##\s+(?:sources|source list|reference list|references and sources|bibliography"
+            r"|works cited)\s*:?\s*$"
+        ),
+        "## References",
+    ),
+)
+FIRST_H2_TAKEAWAYS = re.compile(r"(?i)^(?:key points|key takeaway|takeaways|tl;?\s?dr|at a glance)\s*:?\s*$")
+
+
+def normalise_article_headings(text):
+    """FAQs/FAQ → Frequently Asked Questions, Sources/Bibliography → References, a first-H2 "Key Points" or
+    "TL;DR" → Key Takeaways, and an FAQ section with `###` questions but no `:::faq` fence gets one (the
+    page's FAQ component reads the fence). Returns (text, {fix: count})."""
+    fixes = {}
+    for pattern, replacement in HEADING_VARIANTS:
+        text, n = pattern.subn(replacement, text)
+        if n:
+            fixes["component headings named"] = fixes.get("component headings named", 0) + n
+
+    # "Worked Example, Acetone SDS" → "Worked Example: Acetone SDS": the same test as the comma check, whose
+    # 11 distinct firings on runs 18-21 were all real; a script does it without a model round.
+    def colon(match):
+        heading = match.group(2)
+        if _comma_for_colon(heading):
+            fixes["heading commas made colons"] = fixes.get("heading commas made colons", 0) + 1
+            # The first comma that isn't between digits ("1,000" stays).
+            return match.group(1) + re.sub(r"(?<!\d),|,(?!\d)", ":", heading, count=1)
+        return match.group(0)
+
+    text = re.sub(r"(?m)^(#{2,3}\s+)(.+?)[ \t]*$", colon, text)
+    first = re.search(r"(?m)^##\s+(.+?)\s*$", text)
+    if first and FIRST_H2_TAKEAWAYS.match(first.group(1)):
+        text = text[: first.start()] + "## Key Takeaways" + text[first.end() :]
+        fixes["component headings named"] = fixes.get("component headings named", 0) + 1
+    faq = re.search(r"(?ms)^## Frequently Asked Questions\s*\n(.*?)(?=^## |\Z)", text)
+    if faq and ":::faq" not in faq.group(1) and re.search(r"(?m)^###\s", faq.group(1)):
+        body = faq.group(1).strip()
+        text = text[: faq.start(1)] + f"\n:::faq\n{body}\n:::\n\n" + text[faq.end(1) :]
+        fixes["FAQ wrapped in :::faq"] = 1
+    return text, fixes
 
 
 def normalise(step_key, text):
@@ -1496,6 +1555,9 @@ def normalise(step_key, text):
     if fixed:
         fixes["fixed component headings"] = fixed
     if step_key in ARTICLE_STEPS:
+        text, named = normalise_article_headings(text)
+        for fix, n in named.items():
+            fixes[fix] = fixes.get(fix, 0) + n
         # "Tags: …" / "Excerpt: …" lines under the H1 would publish as intro text.
         text, stray = textclean.strip_metadata_lines(text)
         if stray:

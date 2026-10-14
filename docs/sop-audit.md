@@ -232,6 +232,21 @@ The agent then guides the workflow instead of looping on one step: it decides pe
   - the literal `++underlined text++` the replay found copied into a heading.
 - **Replay of runs 18-21:** identical counts to phase 2.
 
+### Phase 4 (done): mechanical fixes before any model round
+
+- **FAQ answers may carry links** (the owner's rule, over the skill's "no hyperlinks in FAQ answers"). The check, both FAQ prompt lines in `types.yaml`, the draft rubric and Fixture B no longer forbid them. The blog draft and edit rubrics also lost the retired "no anchors in adjacent sections" line.
+- **`sop.normalise` now also does these, on article steps:**
+  - names the component headings: FAQ/FAQs/"(FAQ)" become Frequently Asked Questions, Sources/Bibliography/Works Cited become References, and a first-H2 "Key Points"/"TL;DR" becomes Key Takeaways;
+  - fences an FAQ that has `###` questions but no `:::faq`;
+  - turns H2/H3 topic-and-qualifier commas into colons, with the same test as the check (`_comma_for_colon`). H1s are left to the check, so a guest post's verbatim title is never touched.
+- **`house.mechanical_fix`** (also run by Final cleanup):
+  - canonicalises sdsmanager.com links: https, no `www.`, a trailing slash on a page path, query and fragment kept;
+  - removes a copied `++underlined text++` placeholder.
+- **The URL-sourcing check** compares canonical forms and reports each page once, however it is spelled.
+- **Smaller fixes:** heading checks ignore `{#anchor}` tags, and `## Metadata Options:`, `## SEO Metadata` and `## Metadata` are split off as metadata.
+- **Fixture B** gains a `fixes:` list (repairs the mechanics must make). Its comma defect now sits in the H1, where the check still applies.
+- **Replay of runs 18-21:** 40 blocks became 22. Comma headings went from 24 to 6, the six left being H1s; the rest of the drop is auto-fixed. Every remaining block is a defect read as real in phase 1.
+
 Phases 1 and 2 matter most: phase 1 makes misfires measurable offline, and phase 2 removes the largest class by construction.
 
 ## Decisions for the owner

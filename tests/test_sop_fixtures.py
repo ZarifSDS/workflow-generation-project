@@ -46,10 +46,12 @@ def _fired(findings, severity="block"):
 @pytest.mark.parametrize("path", fixtures("b"), ids=lambda p: p.stem)
 def test_fixture_b_every_planted_defect_is_caught(path):
     meta, body, ctx = load(path)
-    _, _, findings = replay.findings_for(meta["step"], body, ctx)
+    _, fixes, findings = replay.findings_for(meta["step"], body, ctx)
     fired = _fired(findings)
     missed = [check for check in meta.get("checks", []) if not any(check in text for text in fired)]
     assert not missed, f"planted defects not caught: {missed}"
+    unfixed = [fix for fix in meta.get("fixes", []) if fix not in fixes]
+    assert not unfixed, f"planted defects the mechanics should have repaired: {unfixed}"
     declared = [*meta.get("checks", []), *meta.get("also_fires", [])]
     unexpected = [text for text in fired if not any(item in text for item in declared)]
     assert not unexpected, (

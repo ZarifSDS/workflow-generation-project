@@ -1275,3 +1275,71 @@ def test_the_first_guest_post_anchor_must_sit_in_the_first_thirty_percent():
     )
     assert any("first 30%" in f for f in blocking(sop.check("draft", late, GUEST_CTX)))
     assert not any("first 30%" in f for f in blocking(sop.check("draft", GUEST, GUEST_CTX)))
+
+
+# ---- Phase 4 (docs/sop-audit.md): mechanical fixes before any model round ----
+
+
+def test_component_heading_variants_are_named_and_the_faq_fenced():
+    text = (
+        "# T\n\nIntro.\n\n## Key Points\n\n- One.\n\n## Body\n\nText.\n\n## FAQs\n\n### Q one?\n\nA one.\n\n"
+        "### Q two?\n\nA two.\n\n## Sources\n\n1. OSHA.\n"
+    )
+    fixed, fixes = sop.normalise("draft", text)
+    assert (
+        "## Key Takeaways" in fixed and "## Frequently Asked Questions" in fixed and "## References" in fixed
+    )
+    assert ":::faq\n### Q one?" in fixed and fixed.count(":::") == 2
+    assert fixes["component headings named"] == 3 and fixes["FAQ wrapped in :::faq"] == 1
+    # A "Key Points" that isn't the first H2 is a normal section.
+    later = text.replace("## Key Points", "## Overview").replace("## Body", "## Key Points")
+    assert "## Key Points" in sop.normalise("draft", later)[0]
+
+
+def test_sdsmanager_links_are_canonical_and_still_count_as_sourced():
+    text = "See [EHS software](http://www.sdsmanager.com/us/ehs-software) and [SDS](https://sdsmanager.com/uk#top).\n"
+    fixed, counts = sop.house.mechanical_fix(text)
+    assert (
+        "(https://sdsmanager.com/us/ehs-software/)" in fixed and "(https://sdsmanager.com/uk/#top)" in fixed
+    )
+    assert counts["sdsmanager.com links canonicalised"] == 2
+    ctx = {**CTX, "allowed_urls": {"https://sdsmanager.com/us/ehs-software/", "https://sdsmanager.com/uk"}}
+    assert not blocking(sop.check_sourced_urls(fixed, ctx))
+    assert sop.house.mechanical_fix("[logo](https://sdsmanager.com/logo.svg)\n")[0].count("logo.svg)") == 1
+
+
+def test_the_underline_placeholder_and_heading_anchors_are_handled():
+    fixed, counts = sop.house.mechanical_fix("## Which Sections to Read First ++underlined text++\n")
+    assert "underlined text" not in fixed and counts["underline placeholder"] == 1
+    tagged = GOOD_DRAFT.replace(
+        "## Do Safety Data Sheets Expire?", "## Do Safety Data Sheets Expire? {#expiry}"
+    )
+    assert not any("with a comma" in f or "{#" in f for f in blocking(sop.check("draft", tagged, CTX)))
+
+
+def test_faq_answers_may_carry_links():
+    linked = GOOD_DRAFT.replace(
+        "even when a supplier hosts the sheets.",
+        "even when a supplier hosts the [sheets](https://sdsmanager.com/us/ehs-software/).",
+    )
+    assert not any("FAQ answer" in f and "link" in f for f in blocking(sop.check("draft", linked, CTX)))
+
+
+def test_metadata_heading_variants_are_split_off():
+    from apps.studio import textclean
+
+    for heading in ("## Metadata Options:", "## SEO Metadata", "## Metadata"):
+        article, options = textclean.split_metadata(f"# T\n\nBody.\n\n{heading}\n\n### Slugs\n\n- my-slug\n")
+        assert "Metadata" not in article and options == {"slug": ["my-slug"]}, heading
+
+
+def test_heading_commas_become_colons_mechanically_but_not_in_the_title():
+    text = (
+        "# Worked Guide, Acetone\n\n## Worked Example, Acetone SDS\n\nText.\n\n"
+        "### Managing 1,000 Chemicals, Fast\n\nText.\n\n"
+        "## If an SDS Is Missing, What Should You Do?\n\nText.\n"
+    )
+    fixed, fixes = sop.normalise("draft", text)
+    assert "## Worked Example: Acetone SDS" in fixed and "### Managing 1,000 Chemicals: Fast" in fixed
+    assert "## If an SDS Is Missing, What Should You Do?" in fixed  # a question keeps its comma
+    assert "# Worked Guide, Acetone" in fixed and fixes["heading commas made colons"] == 2

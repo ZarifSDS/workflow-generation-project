@@ -19,18 +19,20 @@ checks:
   - "no scope sentence with the literal words"            # intro without "this article"
   - "uses coverage framing"                               # Key Takeaways bullet describing the article
   - "leans on another bullet"                             # Key Takeaways bullet starting "That"
-  - "joins a topic and its qualifier with a comma"        # "Worked Example, Acetone SDS"
+  - "joins a topic and its qualifier with a comma"        # the H1 "How to Read a Safety Data Sheet, Quick Guide"
   - "exists only to point at another page"                # "For more details, see our ... guide"
   - "two links in one sentence"                           # link_check
   - "meta narration"                                      # "In this section, we will look at"
   - "opens with a bare Yes/No"                            # FAQ answer "Yes, ..."
-  - "contains a link"                                     # link inside an FAQ answer
   - "is generic"                                          # "## Conclusion"
   - "links no product page"                               # close without a product link
   - "tacked onto the end of"                              # "… for How to Read a Safety Data Sheet" x3
   - "isn't in the inputs (invented URL)"                  # sdsmanager.com URL not in the inputs
   - "is a bare path or a marker"                          # (/resources/training)
   - "isn't in the research or the search results"         # 1910.1200(c)(1), unsourced
+# Repairs the mechanics must make before any check (sop.normalise): the H2 "Worked Example, Acetone SDS".
+fixes:
+  - "heading commas made colons"
 scans:
   - "banned-A:pivotal"         # puffery: "a pivotal, game-changing cornerstone"
   - "banned-B:vibrant"         # puffery: "a vibrant safety culture"
@@ -50,7 +52,7 @@ known_gaps:
   - "uniform sentence length: a run of five short sentences (structure_scan reads the whole article only)"
   - "unsourced statistic: 'cut incidents by 47%' with no [SRC:] or [VERIFY]"
 ---
-# How to Read a Safety Data Sheet
+# How to Read a Safety Data Sheet, Quick Guide
 
 A safety data sheet is a document. It lists the hazards of a product. It tells you how to store it. It explains what to wear. It says what to do in a spill. Experts agree that reading it is a pivotal, game-changing cornerstone of a vibrant safety culture.
 

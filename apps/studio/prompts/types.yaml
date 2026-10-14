@@ -73,7 +73,7 @@ seo_blog:
     The answer's first sentence answers directly and repeats the question's wording; two or three sentences.
     :::
 
-    Answer yes/no questions by making the question's subject the subject of your sentence, not with a bare "Yes," or "No,". FAQ answers stand on their own and contain no links. Vary how answers land so the set doesn't read as one template.
+    Answer yes/no questions by making the question's subject the subject of your sentence, not with a bare "Yes," or "No,". FAQ answers stand on their own; a link is fine where it helps the reader. Vary how answers land so the set doesn't read as one template.
 
     7. `## References`: a numbered list of the sources cited, with their URLs when you have them.
   metadata: |
@@ -140,7 +140,7 @@ outbound:
     2. Intro, two to four short paragraphs: the topic stated directly and then the pain point (or the pain point and then the topic), why it matters to this reader, then the core content stated as content. No "this article", "this guide" or "in this post" sentence, no table of contents, no "Imagine".
     3. The body in the host's structure and heading case (the site profile): the first H2 opens with the core answer; H3s only where the host uses them; tables only where the host uses them. Each anchor from the brief exactly once, in a section on its topic, as the plain solution to a problem the reader has just met. Put `[SRC: url]` right after each sourced statistic or regulatory claim, using only URLs from the research or search results.
     4. {{type_conclusion}}
-    5. An FAQ only if the site profile or the notes ask for one (`## Frequently Asked Questions`, `###` questions, answers mirroring the question's subject, no links in answers). No Key Takeaways and no References section unless the host uses them.
+    5. An FAQ only if the site profile or the notes ask for one (`## Frequently Asked Questions`, `###` questions, answers mirroring the question's subject). No Key Takeaways and no References section unless the host uses them.
   metadata: |
     ### Meta Titles
     - the brief's title, kept word for word, as every option (only its case may change)

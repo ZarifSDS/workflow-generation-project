@@ -97,8 +97,34 @@ def mechanical_fix(text):
     text = count("broken links", r"\[([^\]\n]+)\]\[((?:https?|wagtail)://[^\]\s]+)\]", r"[\1](\2)", text)
     # A link whose target is only [VERIFY] links nowhere: keep the words and the marker.
     text = count("links to [VERIFY]", r"\[([^\]\n]+)\]\(\s*\[VERIFY\]\s*\)", r"\1 [VERIFY]", text)
+    # sdsmanager.com links in their canonical form (https, no www, a trailing slash on a page path), so a
+    # correct link isn't flagged as invented over its spelling.
+    if n := sum(canonical_sds_url(url) != url for url in SDS_LINK.findall(text)):
+        text = SDS_LINK.sub(_canonical_link, text)
+        counts["sdsmanager.com links canonicalised"] = n
+    # A copied formatting placeholder ("Which Sections to Read First, ++underlined text++ …", run 18).
+    text = count("underline placeholder", r"[ \t]*\+\+underlined text\+\+", "", text, re.I)
     text = re.sub(r"\n{3,}", "\n\n", text).strip() + "\n"
     return text, counts
+
+
+SDS_LINK = re.compile(r"\]\(\s*((?:https?://)?(?:www\.)?sdsmanager\.com(?:/[^)\s]*)?)\s*\)", re.I)
+
+
+def canonical_sds_url(url):
+    """https://sdsmanager.com/<path>/ for any spelling of an sdsmanager.com page URL (query and fragment
+    kept; a file path such as /logo.svg keeps no trailing slash)."""
+    match = re.match(r"(?i)^(?:https?://)?(?:www\.)?sdsmanager\.com(/[^?#]*)?([?#].*)?$", url.strip())
+    if not match:
+        return url
+    path, rest = match.group(1) or "/", match.group(2) or ""
+    if not path.endswith("/") and "." not in path.rsplit("/", 1)[-1]:
+        path += "/"
+    return f"https://sdsmanager.com{path}{rest}"
+
+
+def _canonical_link(match):
+    return f"]({canonical_sds_url(match.group(1))})"
 
 
 def find_markers(text):
