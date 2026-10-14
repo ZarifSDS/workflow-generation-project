@@ -247,6 +247,22 @@ The agent then guides the workflow instead of looping on one step: it decides pe
 - **Fixture B** gains a `fixes:` list (repairs the mechanics must make). Its comma defect now sits in the H1, where the check still applies.
 - **Replay of runs 18-21:** 40 blocks became 22. Comma headings went from 24 to 6, the six left being H1s; the rest of the drop is auto-fixed. Every remaining block is a defect read as real in phase 1.
 
+### Phase 5 (done): what the reviewer and the reviser are given
+
+- **Two lists.** The reviewer gets the blocking checks ("verified by script; they count against a PASS") separately from the advisories ("prompts to read: often false, they never count against a PASS by themselves; make one a finding only if it breaks a rubric rule on reading").
+- **Measurements.** On article steps the reviewer also gets the article's FKGL against the target, whether sentence lengths look flat, the words against the guide, and the sections more than a grade above target (`sop.measurements`). It is told to judge the grade only from these.
+- **Data-backed inputs.**
+  - Article steps get the internal index and the product pages the rubric judges links against.
+  - Plans get a longer excerpt of the search results (3,500 words, from 2,000).
+  - The edit rubric's lines that needed the full draft are rewritten: protected spans, negations and markers are enforced by the guard and no longer re-checked from memory, and the grade is judged from the measurements.
+- **Findings carry an example rewrite and a level.** Each reviewer finding gives an example rewrite where the fix is wording (the content-editing skill's "skin in the game"), and the reviser is told to use it. The reviewer may tag a finding `[strategic]` (the intent is wrong, or the piece duplicates a published article with no distinct angle) or `[structural]` (a section missing, out of scope or out of order, a promise not paid off). Strategic holds for a person with no revision; structural on an article joins the send-back, and on a plan it is revised in place.
+- **Concrete values for the reviser.**
+  - A close with no product link names the outline's planned product URL (`outline_plan` reads it from the Conclusion Plan).
+  - An unsourced citation lists the subsections the inputs do give for that standard.
+  - The reviser now gets the brief's notes, and on a guest post the site profile.
+- **Verdict parsing** accepts bold or colon headings ("**Findings:**"), drops "None." items, and treats a reply with no headings as findings.
+- **Hold notes** lead with "Look at first:", the open findings grouped into at most three themes ("2× invented URL"), before the full list.
+
 Phases 1 and 2 matter most: phase 1 makes misfires measurable offline, and phase 2 removes the largest class by construction.
 
 ## Decisions for the owner

@@ -230,9 +230,45 @@ class SopResult:
                     "Structural findings remain (a missing or misplaced section): fix them in the plan or "
                     "send the step back, rather than editing sentences."
                 )
+            if themes := self.themes():
+                # The content-editing skill's overview: the few things to look at, before the full list.
+                lines += ["", "Look at first: " + "; ".join(themes) + "."]
             lines += ["", "Open findings:", ""]
             lines += [f"- {f}" for f in self.open_findings()[:12]] or ["- (none recorded)"]
         return "\n".join(line for line in lines if line is not None).strip()
+
+    def themes(self, limit=3):
+        """The open findings grouped by kind, most frequent first, as short labels ("2× invented URL")."""
+        counts = Counter(_theme(f) for f in self.open_findings())
+        return [f"{n}× {kind}" if n > 1 else kind for kind, n in counts.most_common(limit)]
+
+
+THEMES = (
+    ("invented URL", r"isn't in the inputs \(invented URL\)|is a bare path or a marker"),
+    ("meta narration", r"meta narration"),
+    ("unsourced regulation reference", "the regulation reference"),
+    ("pointer sentence", "exists only to point|little more than its link"),
+    ("product link in the close", "links no product page|the close links an article|sits in the close"),
+    ("heading wording", "joins a topic and its qualifier|tacked onto|is generic|carries the primary keyword"),
+    (
+        "missing or misplaced section",
+        "Key Takeaways` must|Frequently Asked Questions` section|missing section",
+    ),
+    ("FAQ answer", "the FAQ answer"),
+    ("intro", "scope sentence|announces the article|first 100 words"),
+    ("links", "anchor|sdsmanager.com link|two links|back to back"),
+    ("house mechanics", "dash|curly quote|emoji|horizontal rule"),
+)
+
+
+def _theme(finding):
+    text = str(finding)
+    if text.lower().startswith(("[strategic]", "[structural]")):
+        return text[1 : text.index("]")] + " (reviewer)"
+    for label, pattern in THEMES:
+        if re.search(pattern, text, re.I):
+            return label
+    return "the reviewer's findings" if not text.startswith("[") else check_kind(text)[:40]
 
 
 # ---- Deterministic checks ----
@@ -747,7 +783,8 @@ def check_article(text, ctx, *, metadata=True):
                 Finding(
                     "block",
                     f"the closing section '{body_names[-1]}' links no product page; link the one product "
-                    "page the conclusion plan names, in the sentence that offers it",
+                    "page the conclusion plan names, in the sentence that offers it"
+                    + (f": {ctx['planned_product']}" if ctx.get("planned_product") else ""),
                 )
             )
         elif all(ARTICLE_PATH.search(link) for link in close_links):
@@ -1100,9 +1137,13 @@ def outline_plan(outline):
         for line in _headings_only(outline)
         if line.startswith("H2:") and _norm(line[3:]) not in (_norm("Key Takeaways"), _norm(FAQ_HEADING))
     ]
+    conclusion = _section_body(outline, "Conclusion Plan") or ""
+    product = next((u for u in _links_in(conclusion) if "sdsmanager.com" in u), "")
     return {
         "planned_h2s": planned,
-        "no_product": bool(NO_PRODUCT.search(_section_body(outline, "Conclusion Plan") or "")),
+        "no_product": bool(NO_PRODUCT.search(conclusion)),
+        # The concrete value a finding hands the reviser ("link the page the plan names" alone isn't enough).
+        "planned_product": product.rstrip(".,;:)"),
     }
 
 
@@ -1137,12 +1178,15 @@ def check_citations(text, ctx):
                 if cite in seen or any(source.startswith(cite) for source in allowed):
                     continue
                 seen.add(cite)
+                # Hand the reviser the subsections it may cite for the same standard (the concrete value).
+                same = sorted(s for s in allowed if s.startswith(match.group(1)))[:6]
                 findings.append(
                     Finding(
                         "block",
                         f"the regulation reference {match.group(0).strip()} isn't in the research or the "
-                        "search results; cite only subsections the inputs give, or keep the claim and add "
-                        "[VERIFY] before the sentence's full stop",
+                        "search results; cite only subsections the inputs give"
+                        + (f" (for this standard: {', '.join(same)})" if same else "")
+                        + ", or keep the claim and add [VERIFY] before the sentence's full stop",
                         allows={"drop_spans": [match.group(0).strip(), match.group(1)]},
                     )
                 )
@@ -1268,17 +1312,19 @@ def parse_verdict(reply):
     match = re.search(r"(?im)^\**\s*verdict\s*:?\**\s*:?\s*\**\s*(PASS|REVISE)", reply)
     verdict = match.group(1).upper() if match else ""
     findings, suggestions = [], []
-    bucket = findings
+    bucket = None  # items before any heading count as findings (a reply that skips the headings)
     for line in reply.splitlines():
-        if re.match(r"(?i)^\s*#{1,3}\s*suggestions?\b", line):
-            bucket = suggestions
-            continue
-        if re.match(r"(?i)^\s*#{1,3}\s*findings?\b", line):
-            bucket = findings
+        # "## Suggestions", "**Suggestions:**", "Suggestions:" all open a list.
+        heading = re.match(r"(?i)^\s*(?:#{1,3}\s*)?\**\s*(findings?|suggestions?)\s*\**\s*:?\s*\**\s*$", line)
+        if heading:
+            bucket = suggestions if heading.group(1).lower().startswith("sugg") else findings
             continue
         item = re.sub(r"^\s*(?:\d+[.)]|[-*])\s+", "", line).strip()
-        if item and item != line.strip() and not item.lower().startswith("verdict"):
-            bucket.append(item[:400])
+        if not item or item == line.strip() or item.lower().startswith("verdict"):
+            continue
+        if re.fullmatch(r"(?i)\**none\.?\**", item):
+            continue
+        (findings if bucket is None else bucket).append(item[:400])
     if not verdict or (verdict == "REVISE" and not findings):
         verdict = "REVISE" if findings else "PASS"
     return verdict, findings[:12], suggestions[:8]
@@ -1291,8 +1337,14 @@ def _inputs_for(step):
     run = step.run
     parts = []
     if step.key in ("research", "outline"):
-        parts.append(("Search results the step saw", prompting.approved_output(run, "search_results"), 2000))
+        parts.append(("Search results the step saw", prompting.approved_output(run, "search_results"), 3500))
         parts.append(("Published sdsmanager.com articles (internal index)", base_related(step), 600))
+    if step.key in ARTICLE_STEPS and run.brief.content_type != "outbound":
+        # The rubric judges links against these ("deepest relevant registry page", "URLs from the index").
+        from . import houseref
+
+        parts.append(("Published sdsmanager.com articles (internal index)", base_related(step), 600))
+        parts.append(("SDS Manager product pages", houseref.product_pages_block(run.brief.region), 600))
     if step.key in ("outline", "draft"):
         parts.append(("Approved research", prompting.approved_output(run, "research"), 2500))
     if step.key == "draft":
@@ -1577,6 +1629,34 @@ def check_kind(finding):
     return re.sub(r"\s+", " ", text).strip()[:90]
 
 
+def measurements(step_key, text, ctx):
+    """What the reviewer may judge the reading grade and length from (it is told to judge them from nothing
+    else): article FKGL against the target, sentence-length flatness, words against the guide, and the
+    sections more than a grade above target."""
+    if step_key not in ARTICLE_STEPS:
+        return ""
+    metrics = quality_review.article_metrics(text)
+    target = ctx.get("fkgl")
+    line = f"\nMeasured by script (estimates): article FKGL {metrics['fkgl']}"
+    line += f" against a target of {target:g}" if target else ""
+    line += f"; sentence lengths {'look flat' if metrics['flat'] else 'vary'}; {metrics['words']} words"
+    line += f" against a guide of {ctx['wordcount']}" if ctx.get("wordcount") else ""
+    lines = [line + "."]
+    over = [
+        f"'{name}' {grade}"
+        for name, grade in quality_review.section_grades(text)
+        if grade and target and grade > target + 1
+    ]
+    if over:
+        lines.append(
+            "Sections more than a grade above target: "
+            + "; ".join(over[:8])
+            + ". Legal and domain terms may "
+            "keep a section a grade or two above target; judge only syntax the writer could unpack."
+        )
+    return "\n".join(lines) + "\n"
+
+
 def run_loop(step, text, call, max_rounds=None):
     """The review-revise loop. `call(prompt_name, context, task)` returns (text, "provider/model")."""
     max_rounds = settings.STUDIO_SOP_MAX_ROUNDS if max_rounds is None else max_rounds
@@ -1599,7 +1679,10 @@ def run_loop(step, text, call, max_rounds=None):
                 "step_label": step.label,
                 "rubric": rubric(step.key, step.run.brief.content_type),
                 "inputs": inputs,
-                "checks": "\n".join(f"- {f}" for f in checks if f.severity != "note") or "- (none)",
+                # Two lists (docs/sop-audit.md, cause 4): blocks are verified; advisories are prompts to read.
+                "checks": "\n".join(f"- {f.text}" for f in checks if f.severity == "block") or "- (none)",
+                "prompts": "\n".join(f"- {f.text}" for f in checks if f.severity == "advise") or "- (none)",
+                "measurements": measurements(step.key, result.text, ctx),
                 "output": result.text,
             },
             "sop_review",
@@ -1615,20 +1698,30 @@ def run_loop(step, text, call, max_rounds=None):
         if current.verdict == "PASS" and not blocking:
             result.passed = True
             break
-        # Route by level (docs/sop-audit.md): strategy and structure aren't fixed by a line revision.
-        if strategic := [f for f in block_findings if f.level == "strategic"]:
-            result.route, result.routed = "hold", [str(f) for f in strategic]
+        # Route by level (docs/sop-audit.md): strategy and structure aren't fixed by a line revision. The
+        # reviewer tags its own findings [strategic] / [structural]; the checks carry `level`.
+        said = {tag: [f for f in current.findings if f.lower().startswith(f"[{tag}]")] for tag in LEVELS}
+        if strategic := [str(f) for f in block_findings if f.level == "strategic"] + said["strategic"]:
+            result.route, result.routed = "hold", strategic
             current.revision = "not revised: a strategic finding needs a person"
             break
-        structural = [f for f in block_findings if f.level == "structural" and step.key in ARTICLE_STEPS]
-        result.route, result.routed = ("send_back", [str(f) for f in structural]) if structural else ("", [])
+        article = step.key in ARTICLE_STEPS
+        structural = [f for f in block_findings if f.level == "structural" and article]
+        reviewer_structural = said["structural"] if article else []
+        routed = [str(f) for f in structural] + reviewer_structural
+        result.route, result.routed = ("send_back", routed) if routed else ("", [])
         line_blocks = [f for f in block_findings if f not in structural]
+        line_findings = [
+            re.sub(r"(?i)^\[(?:structural|line)\]\s*", "", f)
+            for f in current.findings
+            if f not in reviewer_structural
+        ]
         if number > max_rounds:
             break
-        if not line_blocks and not current.findings:
-            break  # only structural blocks are left: they go back to the step, not to the reviser
+        if not line_blocks and not line_findings:
+            break  # only structural findings are left: they go back to the step, not to the reviser
         # Blocking checks always go; a handful of reviewer findings keeps the revision targeted.
-        to_fix = [str(f) for f in line_blocks] + current.findings[:MAX_FINDINGS_PER_REVISION]
+        to_fix = [str(f) for f in line_blocks] + line_findings[:MAX_FINDINGS_PER_REVISION]
         revised, _ = call(
             "sop_revise",
             {

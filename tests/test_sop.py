@@ -1343,3 +1343,86 @@ def test_heading_commas_become_colons_mechanically_but_not_in_the_title():
     assert "## Worked Example: Acetone SDS" in fixed and "### Managing 1,000 Chemicals: Fast" in fixed
     assert "## If an SDS Is Missing, What Should You Do?" in fixed  # a question keeps its comma
     assert "# Worked Guide, Acetone" in fixed and fixes["heading commas made colons"] == 2
+
+
+# ---- Phase 5 (docs/sop-audit.md): what the reviewer and the reviser are given ----
+
+
+def test_the_reviewer_gets_blocks_and_prompts_as_two_lists_and_the_measurements(draft_step):
+    comma = GOOD_DRAFT.replace("## Do Safety Data Sheets Expire?", "# Second Title")  # a block: two H1s
+    call = ScriptedCall(["PASS"], [])
+    sop.run_loop(draft_step, comma, call, max_rounds=0)
+    context = call.sent[0][1]
+    assert "2 H1 heading(s)" in context["checks"] and "[block]" not in context["checks"]
+    assert "2 H1 heading(s)" not in context["prompts"]
+    assert "article FKGL" in context["measurements"] and "words" in context["measurements"]
+    target = sop.measurements("draft", GOOD_DRAFT, {**CTX, "fkgl": 9.0, "wordcount": 1200})
+    assert "against a target of 9" in target and "against a guide of 1200" in target
+    assert sop.measurements("outline", GOOD_DRAFT, CTX) == ""
+
+
+def test_verdicts_parse_whatever_heading_style_the_reviewer_uses():
+    verdict, findings, suggestions = sop.parse_verdict(
+        "VERDICT: REVISE\n\n**Findings:**\n1. Intro · rule · fix\n2. None.\n\n**Suggestions**\n- Add a table"
+    )
+    assert verdict == "REVISE" and findings == ["Intro · rule · fix"] and suggestions == ["Add a table"]
+    assert sop.parse_verdict("VERDICT: REVISE\n\n## Findings\n1. None.\n")[0] == "PASS"
+    assert sop.parse_verdict("VERDICT: REVISE\n1. A heading · rule · fix\n")[1] == ["A heading · rule · fix"]
+
+
+def test_a_strategic_reviewer_finding_holds_without_a_revision(draft_step):
+    call = ScriptedCall([], [])
+    call.verdicts = []
+    original = call.__call__
+
+    def reviewer(prompt_name, context, task):
+        if prompt_name == "sop_review":
+            call.sent.append((prompt_name, context))
+            return "VERDICT: REVISE\n\n## Findings\n1. [strategic] The intent is commercial, not how-to.", "r"
+        return original(prompt_name, context, task)
+
+    result = sop.run_loop(draft_step, GOOD_DRAFT, reviewer, max_rounds=2)
+    assert result.route == "hold" and "[strategic]" in result.routed[0]
+    assert [name for name, _ in call.sent] == ["sop_review"]
+    assert "strategic (reviewer)" in result.note()
+
+
+def test_a_structural_reviewer_finding_sends_an_article_back(draft_step):
+    sent = []
+
+    def reviewer(prompt_name, context, task):
+        sent.append(prompt_name)
+        return "VERDICT: REVISE\n\n## Findings\n1. [structural] The section on archiving is missing.", "r"
+
+    result = sop.run_loop(draft_step, GOOD_DRAFT, reviewer, max_rounds=2)
+    assert result.route == "send_back" and sent == ["sop_review"]
+
+
+def test_findings_hand_the_reviser_concrete_values():
+    close = "## Keep Every SDS Where Your Auditor Can Find It"
+    body = GOOD_DRAFT.split(close, 1)[1].split("\n## ", 1)[0]
+    unlinked = GOOD_DRAFT.replace(body, "\n\nPaper binders go missing; list every product this week.\n")
+    ctx = {**CTX, "planned_product": "https://sdsmanager.com/us/ehs-software/"}
+    found = blocking(sop.check("draft", unlinked, ctx))
+    assert any("links no product page" in f and "https://sdsmanager.com/us/ehs-software/" in f for f in found)
+    assert sop.outline_plan(GOOD_OUTLINE)["planned_product"] == "https://sdsmanager.com/us/ehs-software/"
+    cite = "## Rules\n\nTraining is required under 1910.1200(c)(1).\n"
+    finding = blocking(sop.check_citations(cite, {**CTX, "allowed_citations": {"1910.1200(h)(1)"}}))[0]
+    assert "for this standard: 1910.1200(h)(1)" in finding
+
+
+def test_a_hold_note_leads_with_what_to_look_at():
+    result = sop.SopResult(text="", passed=False)
+    result.rounds.append(
+        sop.Round(
+            1,
+            checks=[
+                "[block] the link https://sdsmanager.com/x/ isn't in the inputs (invented URL); use …",
+                "[block] the link https://sdsmanager.com/y/ isn't in the inputs (invented URL); use …",
+                "[block] meta narration: 'In this section'",
+            ],
+            findings=["Intro · rule · fix"],
+        )
+    )
+    note = result.note()
+    assert "Look at first: 2× invented URL" in note

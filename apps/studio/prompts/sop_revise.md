@@ -9,8 +9,10 @@ You revise one step's output ({{step_label}}) of an EHS content pipeline so it f
 The brief:
 
 {{brief_table}}
-{{audience_block}}
-Findings to apply, all of them:
+
+Notes from the requester: {{notes}}
+{{audience_block}}{{site_profile_block}}
+Findings to apply, all of them (where a finding gives an example rewrite, use it unless it breaks a rule above):
 
 {{findings}}
 {{length_rule}}{{link_sources}}{{previous_rejection}}
