@@ -749,3 +749,19 @@ def test_metadata_shortfall_is_a_log_note_not_a_reviewer_check():
     notes = [f for f in sop.check("draft", GOOD_DRAFT, ctx) if f.severity == "note"]
     assert len(notes) == 1 and "tags, excerpt" in notes[0].text
     assert blocking(sop.check("draft", GOOD_DRAFT, ctx)) == []
+
+
+def test_link_carrier_sentences_are_blocked():
+    pointer = GOOD_DRAFT.replace(
+        "Keep the version in use at the time of exposure.",
+        "Keep the version in use at the time of exposure. For a deeper look at creating job-specific safety "
+        "documents, refer to the job safety analysis guide.",
+    )
+    found = blocking(sop.check("draft", pointer, CTX))
+    assert any("exists only to point at another page" in f for f in found)
+    assert not any("point at another page" in f for f in blocking(sop.check("draft", GOOD_DRAFT, CTX)))
+    see = GOOD_DRAFT.replace(
+        "Keep the version in use at the time of exposure.",
+        "To manage changes, see the management-of-change resource.",
+    )
+    assert any("point at another page" in f for f in blocking(sop.check("draft", see, CTX)))

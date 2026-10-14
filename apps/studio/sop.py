@@ -45,6 +45,17 @@ META_NARRATION = re.compile(
     r"before)|let'?s dive in|we(?:'ll| will) (?:unpack|explore|dive)|in the (?:next|following) section|"
     r"below,? we)\b"
 )
+LINK_CARRIER = re.compile(
+    r"(?i)\b(?:"
+    r"for (?:a deeper|a closer|more|further) (?:look|detail|details|information|reading|guidance)"
+    r"(?: (?:at|on|into|about))?"
+    r"|refer to (?:our|the)"
+    r"|see (?:our|the) [^.\n]{0,60}?(?:guide|article|resource|post)"
+    r"|learn more (?:about|in|from)"
+    r"|read (?:our|the) [^.\n]{0,40}?(?:guide|article|post)"
+    r"|check out (?:our|the)"
+    r")\b[^.\n]*[.!?]"
+)
 COVERAGE_FRAMING = re.compile(r"(?i)\b(?:covers|you(?:'ll| will) learn|this article|explains how)\b")
 POINTER_START = re.compile(r"(?i)^(?:that|this|these|those|the same|it)\b")
 GENERIC_CLOSE = {
@@ -459,6 +470,16 @@ def check_article(text, ctx, *, metadata=True):
             findings.append(
                 Finding("block", "a product anchor sits in the close; guest posts carry none there")
             )
+    for match in LINK_CARRIER.finditer(text):
+        findings.append(
+            Finding(
+                "block",
+                "a sentence exists only to point at another page: '"
+                + match.group(0).strip()[:90]
+                + "'; cut it, and link a noun phrase in a sentence that states the fact or the fix instead",
+            )
+        )
+        break
     for match in META_NARRATION.finditer(text):
         findings.append(Finding("block", f"meta narration: '{match.group(0)}'"))
         break

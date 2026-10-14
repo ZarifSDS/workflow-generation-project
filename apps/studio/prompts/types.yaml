@@ -20,7 +20,11 @@ seo_blog:
   links: >
     Use at least three sdsmanager.com links in total (the CTA link counts), each in its own section and
     never in two adjacent sections, with natural noun-phrase anchors from the outline's keyword and
-    anchor map. If the article can't host three naturally, flag the shortfall in the metadata section.
+    anchor map. Every anchor is self-justifying: write the sentence as a fact or a fix the reader
+    uses, then link the noun phrase it is about; never a sentence whose job is to point at another
+    page ("For a deeper look, refer to our guide", "see the X resource"). A product link names what
+    the tool does about the pain point just described, in the same plain register as the advice.
+    If the article can't host three naturally, flag the shortfall in the metadata section.
 
 outbound:
   label: "Guest post for a third-party website"
