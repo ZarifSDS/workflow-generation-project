@@ -208,3 +208,9 @@
 
 /* Filter box above long model dropdowns (select_filter.js) */
 .s-select-filter { display: block; width: 100%; max-width: 32rem; margin-bottom: 0.25rem; }
+
+/* Choose models: a scrollable checklist (provider_model_form.html) */
+.s-checklist { max-height: 28rem; overflow-y: auto; border: 1px solid var(--w-color-border-furniture, #ccc); border-radius: 0.25rem; padding: 0.5rem 0.75rem; }
+.s-checklist__group { border: 0; padding: 0; margin: 0 0 0.75rem; }
+.s-checklist__group legend { font-weight: 600; margin-bottom: 0.25rem; }
+.s-checklist__item { display: flex; gap: 0.5rem; align-items: baseline; padding: 0.15rem 0; font-size: 0.875rem; }

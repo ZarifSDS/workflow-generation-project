@@ -472,7 +472,8 @@
         <script src="{% static 'studio/editor/editor.js' %}" defer></script>
     {% endif %}
     <script>
-    (function () {
+    // Wagtail renders extra_js before the page content: start once the page is parsed.
+    document.addEventListener("DOMContentLoaded", function () {
         // Live timers for running and queued steps. The server renders the current value, so a reload (or
         // a page without JavaScript) shows the real elapsed time; this keeps it ticking. The clock offset
         // between the server and this browser is measured once, so a wrong PC clock doesn't skew it.
@@ -512,6 +513,6 @@
                 .catch(function () { setTimeout(poll, 15000); });
         }
         {% if run_active %}poll();{% endif %}
-    })();
+    });
     </script>
 {% endblock %}

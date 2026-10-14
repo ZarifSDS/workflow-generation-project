@@ -6,10 +6,10 @@
         {% if return_to %}<input type="hidden" name="return_to" value="defaults">{% endif %}
         <div class="s-keys__field">
             <label for="id_pick_provider">Provider</label>
-            <select id="id_pick_provider" name="provider">
+            <select id="id_pick_provider" name="provider" data-no-filter="1">
                 {% for value, label in form.fields.provider.choices %}<option value="{{ value }}" {% if value == provider %}selected{% endif %}>{{ label }}</option>{% endfor %}
             </select>
-            <p class="s-muted">Its models are read from the provider with your key. Add one under <a href="{% url 'studio:provider_keys' %}">AI providers</a> first if it isn't listed here.</p>
+            <p class="s-muted">Its models are read from the provider with your key. Add the provider under <a href="{% url 'studio:provider_keys' %}">AI providers</a> first if it isn't here.</p>
         </div>
         <noscript><div class="s-row-actions"><button class="button button-secondary" type="submit">Show its models</button></div></noscript>
     </form>
@@ -20,28 +20,50 @@
             {% if return_to %}<input type="hidden" name="return_to" value="defaults">{% endif %}
             {% if remote_error %}<div class="s-callout" role="alert">{{ remote_error }}</div>{% endif %}
             {% if form.non_field_errors %}<div class="s-callout" role="alert">{{ form.non_field_errors|join:" " }}</div>{% endif %}
-            {% if remote_count %}
-                <div class="s-keys__field">
-                    <label for="model-filter">Find a model</label>
-                    <input type="search" id="model-filter" placeholder="Type to narrow the list, e.g. claude, free, vision" autocomplete="off" aria-controls="{{ form.listed.id_for_label }}">
-                    <p class="s-muted" id="model-count" aria-live="polite">{{ remote_count }} model{{ remote_count|pluralize }} from {{ provider_label }}. <a href="?provider={{ provider }}&amp;refresh=1{% if return_to %}&amp;return_to=defaults{% endif %}">Refresh the list</a></p>
-                </div>
-            {% endif %}
-            {% for field in form %}
-                {% if field.name != "provider" %}
-                    {% if field.is_hidden %}{{ field }}{% else %}
+            <p class="s-muted s-m0">Ticked models are in the model lists. Tick to add, untick to remove (a model the provider lists is hidden and can be ticked again; one added by hand is deleted). Then save.</p>
+            {% if built_in_models %}<p class="s-muted s-small s-m0">Always in the lists (built in): {% for item in built_in_models %}{{ item.label }}{% if not forloop.last %}, {% endif %}{% endfor %}.</p>{% endif %}
+
+            {% with groups=form.checkbox_groups %}
+                {% if groups %}
                     <div class="s-keys__field">
-                        <label for="{{ field.id_for_label }}">{{ field.label }}</label>
-                        {{ field }}
-                        {% if field.help_text %}<p class="s-muted">{{ field.help_text }}</p>{% endif %}
-                        {% for error in field.errors %}<p class="s-keys__error" role="alert">{{ error }}</p>{% endfor %}
+                        <label for="model-filter">Find a model</label>
+                        <input type="search" id="model-filter" placeholder="Type to narrow the list, e.g. claude, free, vision" autocomplete="off" aria-controls="model-checklist">
+                        <p class="s-muted" id="model-count" aria-live="polite">{% if remote_count %}{{ remote_count }} model{{ remote_count|pluralize }} from {{ provider_label }}. <a href="?provider={{ provider }}&amp;refresh=1{% if return_to %}&amp;return_to=defaults{% endif %}">Refresh the list</a>{% endif %}</p>
+                        <div class="s-cluster">
+                            <button class="button button-small button-secondary" type="button" data-tick="1">Tick all shown</button>
+                            <button class="button button-small button-secondary" type="button" data-tick="0">Untick all shown</button>
+                            <label class="s-cluster s-small"><input type="checkbox" id="only-ticked"> Show only ticked</label>
+                        </div>
                     </div>
-                    {% endif %}
+                    <div class="s-checklist" id="model-checklist">
+                        {% for group, options in groups %}
+                            <fieldset class="s-checklist__group">
+                                <legend>{{ group }} <span class="s-muted s-small">({{ options|length }})</span></legend>
+                                {% for model_id, label, ticked in options %}
+                                    <label class="s-checklist__item"><input type="checkbox" name="chosen" value="{{ model_id }}" {% if ticked %}checked{% endif %}><input type="hidden" name="shown" value="{{ model_id }}"> {{ label }}</label>
+                                {% endfor %}
+                            </fieldset>
+                        {% endfor %}
+                    </div>
                 {% endif %}
-            {% endfor %}
+            {% endwith %}
+
+            <details class="s-disclosure" {% if form.model.value or form.errors %}open{% endif %}>
+                <summary>Add ids by hand</summary>
+                {% for field in form %}
+                    {% if field.name in "model label status typical_seconds unlisted_ok" and not field.is_hidden %}
+                        <div class="s-keys__field">
+                            <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                            {{ field }}
+                            {% if field.help_text %}<p class="s-muted">{{ field.help_text }}</p>{% endif %}
+                            {% for error in field.errors %}<p class="s-keys__error" role="alert">{{ error }}</p>{% endfor %}
+                        </div>
+                    {% endif %}
+                {% endfor %}
+            </details>
             <div class="s-row-actions">
-                <button class="button" type="submit">{% if return_to %}Add and go back to Default models{% else %}Add{% endif %}</button>
-                <button class="button button-secondary" type="submit" name="next" value="another">Add and pick another</button>
+                <button class="button" type="submit">{% if return_to %}Save and go back to Default models{% else %}Save{% endif %}</button>
+                <button class="button button-secondary" type="submit" name="next" value="another">Save and stay here</button>
                 <a class="button button-secondary" href="{% if return_to %}{% url 'studio:task_defaults' %}{% else %}{% url 'studio:provider_keys' %}{% endif %}">Cancel</a>
             </div>
         </form>
@@ -52,29 +74,43 @@
 {% block extra_js %}
     {{ block.super }}
     <script>
+    // Wagtail renders extra_js before the page content: run once the page is parsed.
+    document.addEventListener("DOMContentLoaded", function () {
     (function () {
         // Choosing a provider loads its models.
         var pick = document.getElementById("id_pick_provider");
         if (pick) pick.addEventListener("change", function () { if (pick.value) document.getElementById("provider-pick").submit(); });
-        // The filter narrows the dropdown as you type (every word must match the option text).
-        var filter = document.getElementById("model-filter"), select = document.getElementById("{{ form.listed.id_for_label }}");
-        var count = document.getElementById("model-count");
-        if (!filter || !select) return;
-        var total = select.querySelectorAll("option[value]:not([value=''])").length;
-        filter.addEventListener("input", function () {
+        var filter = document.getElementById("model-filter"), list = document.getElementById("model-checklist");
+        var onlyTicked = document.getElementById("only-ticked"), count = document.getElementById("model-count");
+        if (!filter || !list) return;
+        var items = Array.prototype.slice.call(list.querySelectorAll(".s-checklist__item"));
+        var countText = count.firstChild ? count.firstChild.textContent : "";
+        // Narrow the checklist: every typed word must be in the model's line; optionally only ticked ones.
+        function apply() {
             var words = filter.value.toLowerCase().split(/\s+/).filter(Boolean), shown = 0;
-            select.querySelectorAll("option").forEach(function (option) {
-                if (!option.value) return;
-                var text = option.textContent.toLowerCase();
-                var match = words.every(function (w) { return text.indexOf(w) !== -1; });
-                option.hidden = !match && !option.selected;  // picks already made stay visible and are sent
+            items.forEach(function (item) {
+                var box = item.querySelector("input[type=checkbox]"), text = item.textContent.toLowerCase();
+                var match = words.every(function (w) { return text.indexOf(w) !== -1; }) && (!onlyTicked.checked || box.checked);
+                item.hidden = !match;
                 if (match) shown += 1;
             });
-            select.querySelectorAll("optgroup").forEach(function (group) {
-                group.hidden = !group.querySelector("option:not([hidden])");
+            list.querySelectorAll(".s-checklist__group").forEach(function (group) {
+                group.hidden = !group.querySelector(".s-checklist__item:not([hidden])");
             });
-            count.firstChild.textContent = (words.length ? shown + " of " + total : total) + " models match. ";
+            var ticked = list.querySelectorAll("input[name=chosen]:checked").length;
+            if (count.firstChild) count.firstChild.textContent = (words.length || onlyTicked.checked ? shown + " shown · " : countText) + ticked + " ticked. ";
+        }
+        filter.addEventListener("input", apply);
+        onlyTicked.addEventListener("change", apply);
+        list.addEventListener("change", apply);
+        document.querySelectorAll("[data-tick]").forEach(function (button) {
+            button.addEventListener("click", function () {
+                items.forEach(function (item) { if (!item.hidden) item.querySelector("input[type=checkbox]").checked = button.dataset.tick === "1"; });
+                apply();
+            });
         });
+        apply();
     })();
+    });
     </script>
 {% endblock %}

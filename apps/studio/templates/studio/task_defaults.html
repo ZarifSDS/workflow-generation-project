@@ -62,6 +62,8 @@
 {% block extra_js %}
     {{ block.super }}
     <script>
+    // Wagtail renders extra_js before the page content: run once the page is parsed.
+    document.addEventListener("DOMContentLoaded", function () {
     (function () {
         // Fill every model dropdown from its kind's shared options, keeping the saved choice selected.
         document.querySelectorAll("select[data-model-options]").forEach(function (select) {
@@ -73,5 +75,6 @@
             if (chosen) select.value = chosen;
         });
     })();
+    });
     </script>
 {% endblock %}

@@ -15,7 +15,7 @@
         <label class="s-cluster"><input type="checkbox" name="hidden" value="1" {% if show_hidden %}checked{% endif %}> Hidden models</label>
         <button class="button button-secondary" type="submit">Show</button>
         <span class="s-spacer"></span>
-        <a class="button button-secondary" href="{% url 'studio:provider_model_add' %}{% if provider %}?provider={{ provider }}{% endif %}">Add models</a>
+        <a class="button button-secondary" href="{% url 'studio:provider_model_add' %}{% if provider %}?provider={{ provider }}{% endif %}">Choose models</a>
     </form>
 
     {% if rows %}
@@ -64,6 +64,8 @@
 {% block extra_js %}
     {{ block.super }}
     <script>
+    // Wagtail renders extra_js before the page content: run once the page is parsed.
+    document.addEventListener("DOMContentLoaded", function () {
     (function () {
         var all = document.getElementById("mm-all");
         if (!all) return;
@@ -71,5 +73,6 @@
             document.querySelectorAll("input[name='pick']").forEach(function (box) { box.checked = all.checked; });
         });
     })();
+    });
     </script>
 {% endblock %}

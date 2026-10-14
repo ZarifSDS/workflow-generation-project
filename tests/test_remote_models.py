@@ -197,23 +197,35 @@ def test_stale_lists_are_found(openrouter):
 # ---- By hand: add several, rename, re-price, remove, restore ----
 
 
-def test_the_add_page_marks_what_is_already_in_the_lists(admin_client, openrouter):
+def test_the_picker_shows_the_models_in_the_lists_ticked(admin_client, openrouter):
     page = admin_client.get(reverse("studio:provider_model_add") + "?provider=openrouter")
-    assert '<optgroup label="Already in the lists">' in page.text and "2 models from OpenRouter" in page.text
-    refused = admin_client.post(
-        reverse("studio:provider_model_add"),
-        {"provider": "openrouter", "listed": "anthropic/claude-sonnet-5.5"},
-    )
-    assert "Already in the model lists for this provider" in refused.text
+    assert 'value="anthropic/claude-sonnet-5.5" checked' in page.text
+    assert 'value="meta-llama/llama-4-scout:free" checked' in page.text
+    assert "2 models from OpenRouter" in page.text and "Tick all shown" in page.text
+
+
+def test_unticking_removes_and_ticking_restores(admin_client, openrouter):
+    url = reverse("studio:provider_model_add")
+    both = ["anthropic/claude-sonnet-5.5", "meta-llama/llama-4-scout:free"]
+    admin_client.post(url, {"provider": "openrouter", "chosen": [both[1]], "shown": both})
+    assert AddedModel.objects.get(model=both[0]).hidden  # listed: hidden, so a sync skips it
+    page = admin_client.get(url + "?provider=openrouter")
+    assert f'value="{both[0]}" >' in page.text or f'value="{both[0]}" checked' not in page.text
+    admin_client.post(url, {"provider": "openrouter", "chosen": both, "shown": both})
+    assert not AddedModel.objects.get(model=both[0]).hidden
+    nothing = admin_client.post(url, {"provider": "openrouter", "chosen": both, "shown": both})
+    assert "Nothing changed" in nothing.text
 
 
 def test_several_models_are_added_at_once_and_a_hidden_one_is_restored(admin_client, openrouter):
     AddedModel.objects.filter(model="meta-llama/llama-4-scout:free").update(hidden=True)
+    both = ["anthropic/claude-sonnet-5.5", "meta-llama/llama-4-scout:free"]
     response = admin_client.post(
         reverse("studio:provider_model_add"),
         {
             "provider": "openrouter",
-            "listed": ["meta-llama/llama-4-scout:free"],
+            "chosen": both,
+            "shown": both,
             "model": "x/one\nx/two\n",
             "unlisted_ok": "on",
             "status": "limited",
@@ -227,6 +239,14 @@ def test_several_models_are_added_at_once_and_a_hidden_one_is_restored(admin_cli
         ("x/one", "limited", "manual"),
         ("x/two", "limited", "manual"),
     ]
+    # Ids added by hand show up ticked too; unticking deletes them.
+    page = admin_client.get(reverse("studio:provider_model_add") + "?provider=openrouter")
+    assert 'value="x/one" checked' in page.text
+    admin_client.post(
+        reverse("studio:provider_model_add"),
+        {"provider": "openrouter", "chosen": [*both, "x/two"], "shown": [*both, "x/one", "x/two"]},
+    )
+    assert not AddedModel.objects.filter(model="x/one").exists()
 
 
 def test_an_id_the_provider_doesnt_list_is_refused_with_suggestions(admin_client, openrouter):
@@ -249,7 +269,7 @@ def test_a_typed_id_works_when_the_list_fails(admin_client, openrouter):
     item = AddedModel.objects.get(model="openai/gpt-5.5")
     assert (item.label, item.status, item.source) == ("GPT", "paid", "manual")
     empty = admin_client.post(reverse("studio:provider_model_add"), {"provider": "openrouter"})
-    assert "Pick a model from the list, or type its id." in empty.text
+    assert "Nothing changed" in empty.text
 
 
 def test_an_unpriced_model_takes_the_providers_usual_status():
@@ -258,13 +278,14 @@ def test_an_unpriced_model_takes_the_providers_usual_status():
     assert catalog.usual_status("groq") in ("free", "limited")
     assert catalog.usual_status("an-added-provider") == "paid"
     form = AddedModelForm(
-        {"provider": "groq", "listed": ["llama-4-scout"]},
+        {"provider": "groq", "chosen": ["llama-4-scout"], "shown": ["llama-4-scout"]},
         provider_choices=[("groq", "Groq")],
         remote=[remote_models.RemoteModel(id="llama-4-scout", name="Llama 4 Scout")],
         default_status=catalog.usual_status("groq"),
     )
     assert form.is_valid(), form.errors
-    assert form.items[0]["status"] == catalog.usual_status("groq")
+    added, removed = form.save()
+    assert (added[0].status, removed) == (catalog.usual_status("groq"), 0)
     assert "when it doesn&#x27;t say" in str(form["status"])
 
 

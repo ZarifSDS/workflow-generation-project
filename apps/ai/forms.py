@@ -104,30 +104,27 @@ class AddedProviderForm(forms.ModelForm):
 
 
 class AddedModelForm(forms.Form):
-    """Add one or more models to a provider: pick them from the provider's own list (apps.ai.remote_models)
-    or type their ids, one per line. A name and the free/paid status come from the list when left empty;
-    a hidden model that is picked again is restored."""
+    """Choose a provider's models: every model it lists is a checkbox, ticked when it is in the model lists,
+    so ticking adds and unticking removes (a listed model is hidden, one added by hand deleted). Ids the list
+    doesn't show can be typed, one per line. Removals only touch the checkboxes the page showed
+    (`shown`), so a post without them never empties the lists."""
 
     provider = forms.ChoiceField(label="Provider")
-    listed = forms.MultipleChoiceField(
-        label="Models",
-        required=False,
-        widget=forms.SelectMultiple(attrs={"size": 14}),
-        help_text="Ctrl-click (Cmd-click on a Mac) to pick several.",
-    )
+    chosen = forms.MultipleChoiceField(label="Models", required=False)
+    shown = forms.MultipleChoiceField(required=False, widget=forms.MultipleHiddenInput)
     model = forms.CharField(
-        label="Or type model ids",
+        label="Add ids by hand",
         required=False,
         widget=forms.Textarea(attrs={"rows": 3}),
-        help_text="One per line, exactly as the provider spells them. For models the list doesn't show.",
+        help_text="One per line, exactly as the provider spells them: for models its list doesn't show.",
     )
     label = forms.CharField(
         label="Name shown in the studio",
         required=False,
         max_length=80,
-        help_text="Only when adding one model. Empty: the provider's name for it.",
+        help_text="Only when adding one id by hand. Empty: the id.",
     )
-    status = forms.ChoiceField(label="Free or paid", required=False)
+    status = forms.ChoiceField(label="Free or paid, for models added now", required=False)
     typical_seconds = forms.IntegerField(
         label="Typical seconds per step",
         required=False,
@@ -141,13 +138,14 @@ class AddedModelForm(forms.Form):
     )
 
     def __init__(
-        self, *args, provider_choices=(), remote=(), added=(), hidden=(), default_status="paid", **kwargs
+        self, *args, provider_choices=(), remote=(), rows=(), built_in=(), default_status="paid", **kwargs
     ):
         super().__init__(*args, **kwargs)
         self.remote = {model.id: model for model in remote}
-        self.added, self.hidden = set(added), set(hidden)
+        self.rows = {row.model: row for row in rows}
+        self.built_in = set(built_in)
         self.default_status = default_status
-        self.items = []
+        self.in_lists = {model_id for model_id, row in self.rows.items() if not row.hidden}
         self.fields["provider"].choices = provider_choices
         self.fields["status"].choices = [
             (
@@ -156,26 +154,36 @@ class AddedModelForm(forms.Form):
                 "doesn't say)",
             )
         ] + list(AddedModel.Status.choices)
-        groups = {
-            "Free": [],
-            "Paid": [],
-            "Price not listed": [],
-            "Hidden (picking restores them)": [],
-            "Already in the lists": [],
-        }
+        # Checkboxes: the provider's list (minus the built-in models, always on), then ids added by hand that
+        # the list doesn't show (unticking removes them).
+        groups = {"Free": [], "Paid": [], "Price not listed": []}
         for model in remote:
-            if model.id in self.added:
-                group = "Already in the lists"
-            elif model.id in self.hidden:
-                group = "Hidden (picking restores them)"
-            else:
-                group = {"free": "Free", "paid": "Paid"}.get(model.status, "Price not listed")
+            if model.id in self.built_in:
+                continue
+            group = {"free": "Free", "paid": "Paid"}.get(model.status, "Price not listed")
             groups[group].append((model.id, model.option_label))
-        self.fields["listed"].choices = [(name, options) for name, options in groups.items() if options]
+        extra = [
+            (model_id, f"{row.label} ({model_id})" if row.label != model_id else model_id)
+            for model_id, row in sorted(self.rows.items())
+            if model_id not in self.remote and not row.hidden
+        ]
+        if extra:
+            groups["In your lists, not in the provider's list" if remote else "In your lists"] = extra
+        self.groups = [(name, options) for name, options in groups.items() if options]
+        flat = [(model_id, label) for _, options in self.groups for model_id, label in options]
+        self.fields["chosen"].choices = flat
+        self.fields["shown"].choices = flat
+        self.initial.setdefault("chosen", sorted(self.in_lists))
         if not remote:
-            self.fields["listed"].widget = forms.MultipleHiddenInput()
             self.fields["unlisted_ok"].widget = forms.HiddenInput()
-            self.fields["model"].label = "Model ids"
+
+    def checkbox_groups(self):
+        """[(group, [(id, label, ticked)])] for the template, with the posted ticks after an error."""
+        ticked = set(self.data.getlist("chosen")) if self.is_bound else set(self.initial.get("chosen") or [])
+        return [
+            (name, [(model_id, label, model_id in ticked) for model_id, label in options])
+            for name, options in self.groups
+        ]
 
     def clean_model(self):
         ids = [line.strip() for line in (self.cleaned_data.get("model") or "").splitlines() if line.strip()]
@@ -186,10 +194,11 @@ class AddedModelForm(forms.Form):
 
     def clean(self):
         data = super().clean()
-        typed, picked = data.get("model") or [], data.get("listed") or []
-        ids = list(dict.fromkeys([*picked, *typed]))
-        if not ids:
-            raise forms.ValidationError("Pick a model from the list, or type its id.")
+        chosen, shown, typed = (
+            set(data.get("chosen") or []),
+            set(data.get("shown") or []),
+            data.get("model") or [],
+        )
         unlisted = [model_id for model_id in typed if self.remote and model_id not in self.remote]
         if unlisted and not data.get("unlisted_ok"):
             # A typed id the provider doesn't list fails at run time (seen: an OpenRouter id filed under
@@ -199,52 +208,53 @@ class AddedModelForm(forms.Form):
                 close = difflib.get_close_matches(model_id, list(self.remote), n=3, cutoff=0.6)
                 hints.append(f"{model_id} (did you mean {' or '.join(close)}?)" if close else model_id)
             raise forms.ValidationError(
-                f"Not in this provider's list of models: {'; '.join(hints)}. Pick from the list, check the "
+                f"Not in this provider's list of models: {'; '.join(hints)}. Tick it in the list, check the "
                 "provider, or tick “Add them anyway” if you're sure."
             )
-        existing = {
-            row.model: row for row in AddedModel.objects.filter(provider=data.get("provider"), model__in=ids)
-        }
-        already = [model_id for model_id in ids if model_id in existing and not existing[model_id].hidden]
+        already = [model_id for model_id in typed if model_id in self.in_lists or model_id in self.built_in]
         if already:
             raise forms.ValidationError(
                 f"Already in the model lists for this provider: {', '.join(already)}."
             )
-        label = (data.get("label") or "").strip()
-        self.items = []
-        for model_id in ids:
-            listed = self.remote.get(model_id)
-            self.items.append(
-                {
-                    "model": model_id,
-                    "row": existing.get(model_id),
-                    "label": (
-                        label if len(ids) == 1 and label else (listed.name if listed else "") or model_id
-                    )[:80],
-                    "status": data.get("status")
-                    or (listed.status if listed and listed.status else self.default_status),
-                    "details": listed.details[:200] if listed else "",
-                }
-            )
+        self.to_add = [model_id for model_id in [*sorted(chosen), *typed] if model_id not in self.in_lists]
+        self.to_add = list(dict.fromkeys(self.to_add))
+        self.to_remove = sorted((shown - chosen) & self.in_lists)
+        if not self.to_add and not self.to_remove:
+            raise forms.ValidationError("Nothing changed: tick or untick models, or type an id.")
         return data
 
     def save(self):
-        """Create the new rows and restore hidden ones; returns them."""
-        rows = []
-        provider, seconds = self.cleaned_data["provider"], self.cleaned_data.get("typical_seconds")
-        for item in self.items:
-            row = item["row"]
-            if row is not None:  # a hidden model picked again
+        """Apply the ticks: (added or restored rows, number removed)."""
+        provider = self.cleaned_data["provider"]
+        typed = set(self.cleaned_data.get("model") or [])
+        label, status = (self.cleaned_data.get("label") or "").strip(), self.cleaned_data.get("status")
+        added = []
+        for model_id in self.to_add:
+            row, listed = self.rows.get(model_id), self.remote.get(model_id)
+            if row is not None:  # a hidden model ticked again
                 row.hidden = False
                 row.save(update_fields=["hidden"])
             else:
+                single = len(self.to_add) == 1 and label
                 row = AddedModel.objects.create(
                     provider=provider,
-                    model=item["model"],
-                    label=item["label"],
-                    status=item["status"],
-                    details=item["details"],
-                    typical_seconds=seconds,
+                    model=model_id,
+                    label=(label if single else (listed.name if listed else "") or model_id)[:80],
+                    status=status or (listed.status if listed and listed.status else self.default_status),
+                    source=AddedModel.Source.MANUAL
+                    if model_id in typed or not listed
+                    else AddedModel.Source.LISTED,
+                    details=listed.details[:200] if listed else "",
+                    typical_seconds=self.cleaned_data.get("typical_seconds"),
                 )
-            rows.append(row)
-        return rows
+            added.append(row)
+        removed = 0
+        for model_id in self.to_remove:
+            row = self.rows[model_id]
+            if row.source == AddedModel.Source.LISTED:
+                row.hidden = True
+                row.save(update_fields=["hidden"])
+            else:
+                row.delete()
+            removed += 1
+        return added, removed

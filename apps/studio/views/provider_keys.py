@@ -388,7 +388,7 @@ class AddedModelView(KeysPage):
     possible for a model the list doesn't show."""
 
     template_name = "studio/provider_model_form.html"
-    page_title = "Add models"
+    page_title = "Choose models"
 
     def prepare(self, **kwargs):
         self.providers = {
@@ -409,21 +409,22 @@ class AddedModelView(KeysPage):
             except remote_models.RemoteModelsError as error:
                 self.remote_error = f"Couldn't list its models: {error}. Type the model id instead."
 
+    def built_in(self):
+        return [item for item in catalog.CATALOG if item.provider == self.provider and item.kind == "text"]
+
     def provider_choices(self):
         return [("", "Choose a provider")] + [
             (name, self.label_for(name, spec)) for name, spec in self.providers.items()
         ]
 
     def get_form(self):
-        rows = AddedModel.objects.filter(provider=self.provider).values_list("model", "hidden")
-        built_in = {item.model for item in catalog.CATALOG if item.provider == self.provider}
         return AddedModelForm(
             self.request.POST or None,
             initial={"provider": self.provider},
             provider_choices=self.provider_choices(),
             remote=self.remote,
-            added={model for model, hidden in rows if not hidden} | built_in,
-            hidden={model for model, hidden in rows if hidden},
+            rows=list(AddedModel.objects.filter(provider=self.provider)),
+            built_in=[item.model for item in self.built_in()],
             default_status=catalog.usual_status(self.provider) if self.provider else "paid",
         )
 
@@ -438,6 +439,7 @@ class AddedModelView(KeysPage):
             remote_count=len(self.remote),
             remote_error=self.remote_error,
             return_to=self.return_to,
+            built_in_models=self.built_in() if self.provider else [],
         )
         return context
 
@@ -445,15 +447,17 @@ class AddedModelView(KeysPage):
         form = self.get_form()
         if not form.is_valid():
             return self.render_to_response(self.get_context_data(form=form))
-        rows = form.save()
-        for row in rows:
+        added, removed = form.save()
+        for row in added:
             log(instance=row, action="ai.model_added", user=request.user)
-        names = ", ".join(row.label for row in rows[:5]) + (
-            f" and {len(rows) - 5} more" if len(rows) > 5 else ""
-        )
-        messages.success(
-            request, f"Added {names}. {'They are' if len(rows) > 1 else 'It is'} in the model lists now."
-        )
+        catalog.clear_cache()
+        parts = []
+        if added:
+            names = ", ".join(row.label for row in added[:5])
+            parts.append(f"Added {names}{f' and {len(added) - 5} more' if len(added) > 5 else ''}.")
+        if removed:
+            parts.append(f"Removed {removed} model{'s' if removed != 1 else ''} from the lists.")
+        messages.success(request, " ".join(parts))
         if request.POST.get("next") == "another":
             back = "&return_to=defaults" if self.return_to else ""
             return redirect(f"{reverse('studio:provider_model_add')}?provider={self.provider}{back}")

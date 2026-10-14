@@ -53,3 +53,19 @@ def test_one_grade_readout_and_what_to_do_about_scans(run, admin_client):
     assert 'href="#grades-head">Grade by section, with Tune' in page.text
     assert 'class="s-grade"' not in page.text  # the sidebar bars aren't repeated beside the table
     assert "remove the AI tells" in page.text and "Name the thing." in page.text
+
+
+@pytest.mark.parametrize(
+    "template",
+    ["task_defaults.html", "provider_model_form.html", "provider_models.html", "run_workspace.html"],
+)
+def test_inline_scripts_wait_for_the_page(template):
+    """Wagtail renders the extra_js block before the page content, so an inline script that looks up
+    elements must wait for DOMContentLoaded (Default models showed empty dropdowns without it)."""
+    from pathlib import Path
+
+    text = (Path(__file__).parent.parent / "apps/studio/templates/studio" / template).read_text(
+        encoding="utf-8"
+    )
+    script = text[text.index("{% block extra_js %}") :]
+    assert 'document.addEventListener("DOMContentLoaded"' in script

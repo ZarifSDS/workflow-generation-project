@@ -55,7 +55,7 @@
             <span class="s-spacer"></span>
             <form method="post">{% csrf_token %}<button class="button button-small button-secondary" type="submit" name="action" value="refresh">Refresh model lists</button></form>
             <a class="button button-small button-secondary" href="{% url 'studio:provider_models' %}">Manage models</a>
-            <a class="button button-small button-secondary" href="{% url 'studio:provider_model_add' %}">Add models</a>
+            <a class="button button-small button-secondary" href="{% url 'studio:provider_model_add' %}">Choose models</a>
         </div>
         <p class="s-muted s-m0">Every model a provider lists for your key (chat models only) is offered in the model lists, paid ones included: a stored key is the go-ahead to use it. Lists are read again when a key is saved, once a day, and when you refresh. Manage models to rename, re-price, hide or restore several at once.</p>
         <div class="s-table-wrap">

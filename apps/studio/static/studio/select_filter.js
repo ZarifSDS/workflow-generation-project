@@ -33,6 +33,9 @@
     function run() {
         document.querySelectorAll(".studio select").forEach(enhance);
     }
-    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", run);
-    else run();
+    // Deferred scripts run before DOMContentLoaded; pages fill some dropdowns in their own DOMContentLoaded
+    // handler (Default models), so enhance after those have run.
+    window.studioEnhanceSelects = run;
+    if (document.readyState === "complete") run();
+    else document.addEventListener("DOMContentLoaded", function () { setTimeout(run, 0); });
 })();
