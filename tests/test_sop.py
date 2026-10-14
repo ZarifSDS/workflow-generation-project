@@ -1426,3 +1426,71 @@ def test_a_hold_note_leads_with_what_to_look_at():
     )
     note = result.note()
     assert "Look at first: 2× invented URL" in note
+
+
+# ---- Phase 6 (docs/sop-audit.md): checks that fired on correct text ----
+
+
+def _with(sentence):
+    return GOOD_DRAFT.replace("Keep the version in use at the time of exposure.", sentence)
+
+
+@pytest.mark.parametrize(
+    "fine",
+    [
+        "Before you decant a solvent, refer to the SDS for the PPE it lists.",  # an instruction
+        "Workers learn more from a hands-on drill than from a slide deck.",  # a fact
+        # About SDS Section 8, named just before:
+        "Section 8 names the PPE. The PPE named in this section is the minimum for the task.",
+    ],
+)
+def test_ordinary_sentences_are_not_pointers_or_meta_narration(fine):
+    found = blocking(sop.check("draft", _with(fine), CTX))
+    assert not any("point at another page" in f or "meta narration" in f for f in found), found
+
+
+def test_real_pointers_and_meta_narration_still_block():
+    linked = _with("For more details, see our [retention guide](https://sdsmanager.com/us/sds-guide/).")
+    assert any("point at another page" in f for f in blocking(sop.check("draft", linked, CTX)))
+    unlinked = _with("For a deeper look at retention, refer to our guide.")
+    assert any("point at another page" in f for f in blocking(sop.check("draft", unlinked, CTX)))
+    meta = _with("In this section, we look at retention.")
+    assert any("meta narration" in f for f in blocking(sop.check("draft", meta, CTX)))
+
+
+def test_key_takeaways_facts_about_a_source_are_not_coverage_framing():
+    facts = GOOD_DRAFT.replace(
+        "- ",
+        "- Section 8 covers exposure controls and PPE.\n- It is the supplier's duty to update an SDS.\n- ",
+        1,
+    )
+    found = blocking(sop.check("draft", facts, CTX))
+    assert not any("coverage framing" in f or "leans on another" in f for f in found), found
+    framed = GOOD_DRAFT.replace(
+        "- ", "- This article covers retention.\n- That rule applies to every site.\n- ", 1
+    )
+    found = blocking(sop.check("draft", framed, CTX))
+    assert any("coverage framing" in f for f in found) and any("leans on another" in f for f in found)
+
+
+def test_keyword_density_counts_prose_words_not_link_targets():
+    ctx = {**CTX, "pkeyword": "sds"}
+    prose = "Keep the sheets current and train every worker on the hazards they handle. " * 15
+    links = " ".join(f"[page {i}](https://sdsmanager.com/us/p{i}/)" for i in range(20))
+    text = f"# The SDS\n\n{prose}\n\n## Pages\n\nUseful pages: {links}.\n"
+    assert not any("density" in f for f in blocking(sop.check("draft", text, ctx)))  # "sds" in sdsmanager.com
+    stuffed = f"# The SDS\n\n{prose}\n\n## Pages\n\n" + "The SDS lists the SDS hazards. " * 12 + "\n"
+    assert any("density" in f for f in blocking(sop.check("draft", stuffed, ctx)))
+
+
+def test_link_checks_read_bullets_as_sentences_and_link_only_is_a_prompt():
+    bullets = _with(
+        "\n\n- [SDS search](https://sdsmanager.com/us/search/)\n- [EHS software](https://sdsmanager.com/us/ehs-software/)\n"
+    )
+    found = [str(f) for f in sop.check_skill_scripts(bullets)]
+    assert not any("two links in one sentence" in f for f in found), found
+    product = _with("[SDS management software](https://sdsmanager.com/us/) keeps every sheet current.")
+    assert not any(
+        f.severity == "block" and "little more than its link" in f.text
+        for f in sop.check_skill_scripts(product)
+    )

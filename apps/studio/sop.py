@@ -61,8 +61,14 @@ LINK_CARRIER = re.compile(
     r")\b(?:[^.!?\n]|[.!?](?=\S))*[.!?]"
 )
 LINKED_URL = re.compile(r"(?:https?|wagtail)://[^\s)\]]+")
-COVERAGE_FRAMING = re.compile(r"(?i)\b(?:covers|you(?:'ll| will) learn|this article|explains how)\b")
-POINTER_START = re.compile(r"(?i)^(?:that|this|these|those|the same|it)\b")
+# Coverage framing describes the article ("This article covers…", "you'll learn"), not a source: "Section 8
+# covers exposure controls" is a fact (docs/sop-audit.md, phase 6).
+COVERAGE_FRAMING = re.compile(
+    r"(?i)\b(?:(?:this|the) (?:article|guide|post|section) (?:covers|explains|walks)|you(?:'ll| will) learn"
+    r"|in this article|we(?:'ll| will)? (?:cover|explain|look at))\b"
+)
+# A bullet that leans on another one; a dummy "It is…" / "It's…" stands alone.
+POINTER_START = re.compile(r"(?i)^(?:that|this|these|those|the same|it(?!\s+is\b|'s\b))\b")
 GENERIC_CLOSE = {
     "conclusion",
     "final thoughts",
@@ -841,24 +847,34 @@ def check_article(text, ctx, *, metadata=True):
                 )
             )
     findings += check_brief_anchors(text, ctx, prof, body_names)
-    for match in LINK_CARRIER.finditer(text):
+    for match in pointer_sentences(text)[:3]:
         # A pointer sentence is cut, never reworded, so its link may go with it (run 20 deadlocked here).
+        # Up to three at once, so several don't burn several rounds.
         findings.append(
             Finding(
                 "block",
                 "a sentence exists only to point at another page: '"
-                + match.group(0).strip()[:90]
+                + match.strip()[:90]
                 + "'; cut it, and link a noun phrase in a sentence that states the fact or the fix instead",
-                allows={"drop_urls": _links_in(match.group(0))},
+                allows={"drop_urls": _links_in(match)},
             )
         )
-        break
     for match in META_NARRATION.finditer(text):
+        # "the PPE named in this section is the minimum" is about SDS Section 8 named earlier in the same
+        # paragraph; "In this section, we look at…" opening a paragraph is narration.
+        paragraph = text[text.rfind("\n\n", 0, match.start()) + 1 : match.end()]
+        if re.search(r"\b(?:Section|Chapter|Part|Article|Schedule)\s+\d", paragraph):
+            continue
         findings.append(Finding("block", f"meta narration: '{match.group(0)}'"))
         break
     words = _words(text)
     if pk and words:
-        density = text.lower().count(pk) / words  # occurrences per word, the usual SEO-tool reading
+        # Whole-word matches in the prose, not inside link targets ("sds" in sdsmanager.com, phase 6), as
+        # occurrences per word. Fixture A decided the reading: metrics.py's keyword-words share puts both
+        # approved blogs over the line (2.6% and 4.2%); occurrences per word tops out at 1.4% on them.
+        prose_text = re.sub(r"\]\([^)]*\)", "]", text).lower()
+        hits = len(re.findall(rf"(?<![\w-]){re.escape(pk)}(?![\w-])", prose_text))
+        density = hits / words
         if density > 0.025:
             findings.append(
                 Finding(
@@ -1016,6 +1032,27 @@ def check_reverse_outline(text, ctx):
 MAX_FLOW_PROMPTS = 6  # the flow check's prompts go to the reviewer; more than a handful drowns the rubric
 
 
+def pointer_sentences(text):
+    """Sentences whose job is to point at another page. A LINK_CARRIER phrase counts only with a link in the
+    sentence or "our" in it ("see our guide"): "refer to the SDS for the PPE it lists" and "workers learn
+    more from a drill" are instructions and facts (docs/sop-audit.md, phase 6)."""
+    found = []
+    for match in LINK_CARRIER.finditer(text):
+        sentence = match.group(0)
+        # Only "refer to the …" and "learn more …" need the link or "our": they are also how instructions and
+        # facts are phrased. "see the X resource" stays a pointer (the owner's own example).
+        loose = re.match(r"(?i)(?:refer to the|learn more)\b", sentence)
+        if not loose or "](" in sentence or re.search(r"(?i)\bour\b", sentence):
+            found.append(sentence)
+    return found
+
+
+def _terminated(text):
+    """Headings and list items ended with a full stop where they have none (link_check splits sentences)."""
+    text = re.sub(r"(?m)^(#{1,6}\s+.*?[^.!?:\s])[ \t]*$", r"\1.", text)
+    return re.sub(r"(?m)^(\s*(?:[-*+]|\d+[.)])\s+.*?[^.!?:\s])[ \t]*$", r"\1.", text)
+
+
 def check_skill_scripts(text):
     """The skill's own deterministic link and flow checks (vendored `link_check.py` and
     `editorial_flow_check.py`). Link placement the skill bans blocks; the flow check's output is, in its
@@ -1024,14 +1061,15 @@ def check_skill_scripts(text):
 
     findings = []
     try:
-        links = scripts.run_json("links", text)
+        # List items and headings end in a full stop for link_check only, so two unpunctuated bullets with a
+        # link each aren't read as one sentence with two links (phase 6).
+        links = scripts.run_json("links", _terminated(text))
         flow = scripts.run_json("flow", text)
     except (scripts.ScriptError, OSError, ValueError) as error:
         return [Finding("note", f"the skill's link and flow checks didn't run: {error}")]
     banned = (
         ("two_links_one_sentence", "two links in one sentence"),
         ("consecutive_links", "two links back to back in one paragraph"),
-        ("link_only_sentences", "a sentence that is little more than its link"),
     )
     for key, label in banned:
         for item in (links.get(key) or [])[:2]:
@@ -1042,6 +1080,18 @@ def check_skill_scripts(text):
                     "block",
                     f"{label} (link_check): '{_one_line(item)}'",
                     allows={"drop_urls": _links_in(item)},
+                )
+            )
+    pointers = [_one_line(p, 60) for p in pointer_sentences(text)]
+    for item in (links.get("link_only_sentences") or [])[:2]:
+        # link_check's link-only test ("for more", four words or fewer) also fires on "[SDS software](…) keeps
+        # every sheet current", the product-link form the rubric asks for: it blocks only where the
+        # pointer-sentence check agrees (that finding is raised there), and otherwise prompts a read.
+        if not any(p[:40] in _one_line(item, 200) for p in pointers):
+            findings.append(
+                Finding(
+                    "advise",
+                    f"a sentence that may be little more than its link (link_check): '{_one_line(item)}'",
                 )
             )
     for heading, count in links.get("sections_over_one_internal") or []:

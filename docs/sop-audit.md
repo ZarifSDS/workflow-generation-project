@@ -263,6 +263,22 @@ The agent then guides the workflow instead of looping on one step: it decides pe
 - **Verdict parsing** accepts bold or colon headings ("**Findings:**"), drops "None." items, and treats a reply with no headings as findings.
 - **Hold notes** lead with "Look at first:", the open findings grouped into at most three themes ("2× invented URL"), before the full list.
 
+### Phase 6 (done): checks that fired on correct text
+
+Each change was proven three ways: tests with the audit's correct sentences (no firing) beside real defects (still firing), Fixture A (zero blocks) and Fixture B (all caught), and the replay of every stored article version.
+
+| Check | Was | Now |
+|---|---|---|
+| Pointer sentence | Any "refer to the…", "learn more…" phrase: hit "refer to the SDS for the PPE it lists" | Those two phrasings count only with a link or "our" in the sentence; "see the X resource" (the owner's own example) and "for a deeper look…" always count. Up to three reported at once |
+| Coverage framing (Key Takeaways) | Bare "covers", "explains how": hit "Section 8 covers exposure controls" | Only phrases about the article ("this article covers", "you'll learn", "we cover") |
+| Leans on another bullet | "It …" at the start: hit "It is the supplier's duty…" | A dummy "It is / It's" stands alone |
+| Meta narration | "in this section" anywhere: hit "the PPE named in this section", meaning SDS Section 8 | Exempt when a numbered Section/Part/Article is named earlier in the same paragraph |
+| Keyword density | Substring count over the whole text: "sds" counted in every sdsmanager.com link | Whole-word matches in prose, link targets excluded. Occurrences per word, because `metrics.py`'s keyword-words share puts both approved Fixture A blogs over the line (2.6% and 4.2%, against at most 1.4% this way) |
+| link_check link-only sentence | A block: hit the product-link form the rubric asks for ("[SDS management software](…) keeps every sheet current") | Advisory unless the pointer-sentence check agrees (that one blocks) |
+| link_check two links in a sentence | Unpunctuated bullets merged into one "sentence" | Headings and list items are terminated before link_check runs |
+
+**Replay result:** the same texts fire. Pointer findings went from 8 to 10 (up to three per text). The four link-only blocks are now advisories, and each sits on a sentence the pointer check still blocks. Nothing real was lost.
+
 Phases 1 and 2 matter most: phase 1 makes misfires measurable offline, and phase 2 removes the largest class by construction.
 
 ## Decisions for the owner
