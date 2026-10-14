@@ -678,4 +678,15 @@ def test_metadata_options_and_hyphens_pass_the_house_mechanics():
     from apps.quality import house
 
     fixed, counts = house.mechanical_fix("A 5‑Minute Guide – For Supervisors\n")
-    assert fixed.strip() == "A 5-Minute Guide, For Supervisors" and counts["typographic hyphens"] == 1
+    assert fixed.strip() == "A 5-Minute Guide: For Supervisors" and counts["typographic hyphens"] == 1
+
+
+def test_dashes_in_headings_and_titles_become_colons():
+    from apps.quality import house
+
+    fixed, _ = house.mechanical_fix("## Take Action — Digitize Your SDS Management\n\nA – B body.\n")
+    assert fixed.startswith("## Take Action: Digitize Your SDS Management\n") and "A, B body." in fixed
+    assert (
+        house.mechanical_fix("How to Read an SDS – 5-Minute Guide")[0].strip()
+        == "How to Read an SDS: 5-Minute Guide"
+    )

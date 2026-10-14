@@ -45,6 +45,7 @@
 - Intro, in order: a generic example or the pain point the reader recognises; the topic and why knowing it matters to this reader; one or two snippet sentences answering the primary query with the primary keyword in the first 100 words; a bridge after any number; last, a scope sentence with the literal words "this article" naming the core contents. Four to seven sentences, no "Imagine", no "In today's workplace".
 - Key Takeaways: three to seven standalone facts in article order, the first answering the primary query; no bullet leans on another (no "that", "this", "the same" pointing outside itself) and none uses coverage framing.
 - The first H2 carries the core answer. Every question heading opens with its direct, self-contained answer. Every H3 passes the necessity test. `## Key Takeaways` (first H2), the verb-first CTA heading and `## Frequently Asked Questions` (last) are fixed components, never reworded into queries.
+- Reader flow: sentences follow from each other, each paragraph connects to the previous one through a shared idea, and each H2 opens from what the section before established (hinge or bridge), so the article reads as one argument rather than stacked facts. A section whose paragraphs could be shuffled without loss, or an H2 that starts cold, breaks this rule; name the seam.
 - The article answers the supporting search queries completely and in the ranking pages' depth; regulation is cited only where it settles a question (the research's Regulation Depth), never as a tour.
 - Facts and figures carry [SRC: url] with URLs from the inputs only; uncertain claims carry [VERIFY]; nothing is invented; enumerated lists match the source's count; no deflection sentences ("check the current figure for your state").
 - Second person by default; plain, specific, standard words (no "simpler" synonyms that lose meaning, no metaphors, no meta narration beyond the scope sentence); no promotional voice; no author credentials.
@@ -64,6 +65,7 @@
 - Clarity: every "this"/"that"/"it" has a named antecedent; one name per concept; no person or register breaks; jargon glossed for the stated reader; no metaphors standing in for plain words.
 - Reading grade near the brief's target by syntactic unpacking only; legal vocabulary may keep a section a grade or two above; standard words kept over "simpler" ones.
 - No fact is re-explained in a second section; the title's questions are still answered in the first 30%.
+- Reader flow survived the edit: paragraph seams still connect through a shared idea and each H2 still opens from the section before; a de-slop pass that left stacked, disconnected sentences is a defect to name.
 
 ## localise
 
