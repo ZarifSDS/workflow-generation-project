@@ -689,6 +689,25 @@ FIXED_HEADINGS = (
 )
 
 
+BOLD_LABEL_LINE = re.compile(r"(?m)^[ \t]*\*\*([^*\n]{3,80}?)\**:?\*\*[ \t]*:?[ \t]*$")
+
+
+def normalise_plan_headings(text):
+    """Plans sometimes come back with bold labels instead of headings ("**Search Intent**"). A line that is
+    only a bold label becomes a `## ` heading, so the section checks, the reviewer and the exports read it.
+    Lines that carry `H2:`/`H3:` plan markers are left to the headings-only parser. Returns (text, count)."""
+
+    def heading(match):
+        label = match.group(1).strip().rstrip(":")
+        if re.match(r"(?i)^H[1-4]\s*:", label):
+            return match.group(0)
+        return f"## {label}"
+
+    new_text, count = BOLD_LABEL_LINE.subn(heading, text)
+    # subn counts the H-line matches we left alone; count only real changes.
+    return new_text, sum(1 for a, b in zip(text.splitlines(), new_text.splitlines(), strict=False) if a != b)
+
+
 def normalise_fixed_headings(text):
     """Fixed components keep their fixed names: a model (or a reviewer) that turns `Key Takeaways` into a
     search query is corrected mechanically. Returns (text, count)."""
@@ -718,6 +737,10 @@ def run_loop(step, text, call, max_rounds=None):
         result.rounds.append(current)
         # House mechanics a script fixes better than a model (dashes, curly quotes, emoji, rules, spacing).
         result.text, current.fixes = house.mechanical_fix(result.text)
+        if step.key in PLAN_STEPS:
+            result.text, promoted = normalise_plan_headings(result.text)
+            if promoted:
+                current.fixes["bold labels made headings"] = promoted
         result.text, fixed = normalise_fixed_headings(result.text)
         if fixed:
             current.fixes["fixed component headings"] = fixed

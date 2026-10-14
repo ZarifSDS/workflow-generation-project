@@ -721,3 +721,16 @@ def test_blog_shaped_components_are_advisory_on_a_guest_post():
     assert not any(
         "Key Takeaways" in f or "Frequently Asked" in f for f in blocking(sop.check("draft", text, guest))
     )
+
+
+def test_bold_labels_in_a_plan_become_headings():
+    bolded = (
+        GOOD_OUTLINE.replace("## Search Intent", "**Search Intent**")
+        .replace("## Headings-Only Outline", "**Headings-Only Outline**  ")
+        .replace("H2: Key Takeaways", "**H2: Key Takeaways**")
+    )
+    assert any("missing section" in f for f in blocking(sop.check("outline", bolded, CTX)))
+    fixed, n = sop.normalise_plan_headings(bolded)
+    assert n == 2 and "\n## Search Intent\n" in fixed and "\n## Headings-Only Outline\n" in fixed
+    assert "**H2: Key Takeaways**" in fixed  # plan marker lines are the headings-only parser's job
+    assert blocking(sop.check("outline", fixed, CTX)) == []
