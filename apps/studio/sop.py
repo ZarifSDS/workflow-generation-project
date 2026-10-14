@@ -40,6 +40,7 @@ DASH = re.compile("[–—]")
 CURLY = re.compile("[“”‘’]")
 META_NARRATION = re.compile(
     r"(?i)\b(?:in this (?:section|guide|post|piece|chapter)|"
+    r"this (?:section|guide|post|piece|chapter) (?:outlines|covers|explains|describes|walks|discusses|looks)|"
     r"as (?:mentioned|discussed|noted) (?:above|earlier|"
     r"before)|let'?s dive in|we(?:'ll| will) (?:unpack|explore|dive)|in the (?:next|following) section|"
     r"below,? we)\b"
@@ -474,7 +475,8 @@ def check_article(text, ctx, *, metadata=True):
     if metadata and (counts := ctx.get("metadata_counts")):
         short = [kind for kind, n in counts.items() if n < 3]
         if short:
-            findings.append(Finding("advise", "fewer than three metadata options for: " + ", ".join(short)))
+            # A note for the log only: the options live outside the text, so no revision can act on it.
+            findings.append(Finding("note", "fewer than three metadata options for: " + ", ".join(short)))
     return findings
 
 
@@ -753,7 +755,7 @@ def run_loop(step, text, call, max_rounds=None):
                 "step_label": step.label,
                 "rubric": rubric(step.key, step.run.brief.content_type),
                 "inputs": inputs,
-                "checks": "\n".join(f"- {f}" for f in checks) or "- (none)",
+                "checks": "\n".join(f"- {f}" for f in checks if f.severity != "note") or "- (none)",
                 "output": result.text,
             },
             "sop_review",

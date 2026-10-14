@@ -734,3 +734,18 @@ def test_bold_labels_in_a_plan_become_headings():
     assert n == 2 and fixed.startswith("## Search Intent\n") and "\n## Headings-Only Outline\n" in fixed
     assert "**H2: Key Takeaways**" in fixed  # plan marker lines are the headings-only parser's job
     assert blocking(sop.check("outline", fixed, CTX)) == []
+
+
+def test_meta_narration_catches_this_section_outlines():
+    text = GOOD_DRAFT.replace(
+        "You keep a record for 30 years", "This section outlines the rule. You keep a record for 30 years"
+    )
+    assert any("meta narration" in f for f in blocking(sop.check("draft", text, CTX)))
+    assert not any("meta narration" in f for f in blocking(sop.check("draft", GOOD_DRAFT, CTX)))
+
+
+def test_metadata_shortfall_is_a_log_note_not_a_reviewer_check():
+    ctx = {**CTX, "metadata_counts": {"title": 3, "meta": 3, "slug": 3, "tags": 1, "excerpt": 1}}
+    notes = [f for f in sop.check("draft", GOOD_DRAFT, ctx) if f.severity == "note"]
+    assert len(notes) == 1 and "tags, excerpt" in notes[0].text
+    assert blocking(sop.check("draft", GOOD_DRAFT, ctx)) == []
