@@ -213,3 +213,82 @@ def test_a_number_protects_its_unit_not_the_next_word():
     assert review.protected_ok("Workers in 2024 reported it.", "In 2024, workers reported it.")[0]
     assert not review.protected_ok("Keep it for 30 years.", "Keep it for 30 months.")[0]
     assert not review.protected_ok("Limit exposure to 50 ppm.", "Limit exposure to 5 ppm.")[0]
+
+
+# ---- Phase 7 (docs/sop-audit.md): grade tuning ----
+
+
+def test_grading_leaves_headings_out_and_ends_list_items():
+    text = (
+        "## Steps for Reading the Hazard Section of a Safety Data Sheet\n\nRead section two first. "
+        "It lists the hazards you need before you open the container.\n\n- Signal word\n"
+        "- Pictograms and hazard statements\n- Precautionary statements for handling\n- Supplier contact details\n"
+    ) * 2
+    graded = review.grading_text(text)
+    assert "Steps for Reading" not in graded  # a heading isn't part of a sentence
+    assert "- Signal word.\n" in graded and "- Supplier contact details.\n" in graded
+    punctuated = text.replace("word\n", "word.\n").replace("statements\n", "statements.\n")
+    punctuated = punctuated.replace("handling\n", "handling.\n").replace("details\n", "details.\n")
+    assert review.grade(text) == review.grade(punctuated)  # the list reads as its items
+    old = scripts.fkgl(review.prose(text))  # the previous reading: heading joined, list run on
+    assert review.grade(text) < old
+
+
+def test_the_vocabulary_floor_keeps_short_dense_sentences_untuned():
+    dense = "Organisational accountability necessitates comprehensive documentation procedures. " * 8
+    floor = review.vocabulary_floor(dense)
+    assert floor and review.grade(dense) <= floor + 1  # its sentences are short: only words lift the grade
+    stacked = (
+        "Employers that keep chemicals on site must make the safety data sheet available to every worker on "
+        "every shift, which means keeping a copy where the work happens and replacing it when the supplier "
+        "sends a new version. "
+    ) * 4
+    assert review.grade(stacked) > review.vocabulary_floor(stacked) + 1  # long sentences: unpacking helps
+    assert review.stacked_sentences(stacked)
+
+
+def test_tuning_that_repeats_the_subject_down_a_paragraph_is_refused():
+    section = (
+        "## Storage\n\nEmployers that keep chemicals on site must make the safety data sheet available to every "
+        "worker on every shift, which means keeping a copy where the work happens and replacing it when the "
+        "supplier sends a new version of the sheet.\n"
+    )
+    choppy = (
+        "## Storage\n\nThe employer keeps chemicals on site. The employer makes the sheet available. The employer "
+        "keeps a copy where the work happens. The employer replaces it when the supplier sends a new version of "
+        "the safety data sheet to every worker on every shift.\n"
+    )
+    assert review.opener_run(choppy) == 4 and review.opener_run(section) == 1
+
+    def call(name, ctx):
+        assert "which means keeping a copy" in ctx["stacked"]
+        return choppy
+
+    with pytest.raises(ValueError, match="same subject"):
+        review.tune_unit(section, 1, 9, "US", call)
+
+
+def test_structural_scan_findings_reach_the_report_not_the_rewrite():
+    findings = review._deslop_findings(
+        {
+            "findings": [
+                {
+                    "id": "banned-A:utilize",
+                    "severity": "medium",
+                    "count": 2,
+                    "examples": [{"text": "utilize"}],
+                    "fix": "Use 'use' unless the condition applies.",
+                },
+                {"id": "curly-quotes", "severity": "low", "count": 3},
+            ]
+        },
+        {"findings": [{"id": "flat-sentence-rhythm", "value": 0.2, "fix": "Vary it."}]},
+        {},
+    )
+    assert any("banned-A:utilize" in f and "→ Use 'use'" in f for f in findings)
+    assert not any("curly-quotes" in f or "flat-sentence" in f for f in findings)
+    assert review._structure_notes({"findings": [{"id": "flat-sentence-rhythm", "value": 0.2}]}) == [
+        "flat-sentence-rhythm=0.2"
+    ]
+    candidates = review._clarity_candidates({"term_drift": {"SDS": 9, "safety data sheet": 4, "MSDS": 0}})
+    assert any("SDS ×9" in c and "safety data sheet ×4" in c for c in candidates)

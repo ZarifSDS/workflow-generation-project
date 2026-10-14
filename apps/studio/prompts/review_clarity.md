@@ -14,7 +14,7 @@ Read the whole article and fix these defect types. Start with referents, because
 1. Unresolved referent: for every this/that/it/these/those and every bare abstract noun ("the process", "the standard", "the results"), point at the exact earlier noun. If you can't, name the thing.
 2. Audience-mismatched jargon: a correct term the stated reader would stop at; gloss it in place.
 3. Term drift: one name per load-bearing concept; don't rotate synonyms.
-4. Person or voice break: a paragraph that switches between narrating ("employers…") and commanding the reader; keep one.
+4. Person or voice break: a paragraph that switches between narrating ("employers…") and commanding the reader for no reason; keep one. The house pattern is not a break: state the rule about the entity, then land it on the reader ("Employers must keep the sheet for 30 years. Put it where your auditor will look first.").
 5. Repeated syntactic frame: the same construction four or more times ("X is what keeps…"); convert most to plain subject-verb, keep at most one.
 6. Register drift: an intro, closing or summary block in a different voice from the body, or a closing that sells harder than the body.
 7. Metaphor standing in for a plain word: replace it with the plain thing unless it earns its place.

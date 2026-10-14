@@ -112,8 +112,69 @@ def graded(heading):
     return heading_name(heading).lower() not in NOT_GRADED
 
 
+def grading_text(text):
+    """Prose as it is graded: headings left out and list items ended with a full stop. A heading without
+    punctuation used to join the next sentence and an unpunctuated list became one long "sentence", so list
+    sections read 2-4 grades high and were queued for tuning (docs/sop-audit.md, phase 7)."""
+    text = re.sub(r"(?m)^#{1,6}\s.*$", "", prose(text))
+    return re.sub(r"(?m)^(\s*(?:[-*+]|\d+[.)])\s+.*?[^.!?:;\s])[ \t]*$", r"\1.", text)
+
+
 def grade(text):
-    return scripts.fkgl(prose(text))
+    return scripts.fkgl(grading_text(text))
+
+
+NATURAL_SENTENCE = 15  # words: a natural average; tuning below it means uniformly short sentences
+
+
+def vocabulary_floor(text):
+    """The grade a section's own words allow at a natural sentence length: FKGL = 0.39 x words per sentence
+    + 11.8 x syllables per word - 15.59, with 15 words a sentence. EHS prose runs at about 1.7 syllables a
+    word, so a target of 9 is out of reach without the banned uniform short sentences; the skill allows a
+    grade or two above target where the terms require it. Tuning aims at max(target, floor)."""
+    m = scripts.metrics_module()
+    words = re.findall(r"[A-Za-z]+(?:'[A-Za-z]+)?", m.strip_markdown(grading_text(text)))
+    if len(words) < 30:
+        return None
+    per_word = sum(m.count_syllables(w) for w in words) / len(words)
+    return round(0.39 * NATURAL_SENTENCE + 11.8 * per_word - 15.59, 1)
+
+
+STACKED_WORDS = 25  # a sentence this long usually stacks clauses
+
+
+def stacked_sentences(text, limit=6):
+    """The sentences worth unpacking: the longest ones over STACKED_WORDS words, in reading order."""
+    m = scripts.metrics_module()
+    found = [
+        s for s in m.split_sentences(m.strip_markdown(grading_text(text))) if len(s.split()) > STACKED_WORDS
+    ]
+    keep = set(sorted(found, key=lambda s: -len(s.split()))[:limit])
+    return [s for s in found if s in keep]
+
+
+ARTICLES = {"the", "a", "an", "this", "that", "these", "those", "each", "every"}
+PRONOUNS = {"it", "they", "you", "we", "he", "she", "its", "their", "your"}
+
+
+def opener_run(text):
+    """The longest run of consecutive sentences in one paragraph that open with the same subject words
+    ("The operator… The operator… The operator…", the tuning tell from run 19)."""
+    m = scripts.metrics_module()
+    longest = 0
+    for paragraph in re.split(r"\n\s*\n", grading_text(text)):
+        openers = []
+        for sentence in m.split_sentences(m.strip_markdown(paragraph)):
+            words = [w.lower() for w in re.findall(r"[A-Za-z']+", sentence)]
+            subject = next((w for w in words if w not in ARTICLES), "")
+            # A pronoun callback ("It… It…") is the connected style the tuning prompt asks for, not the tell.
+            openers.append("" if subject in PRONOUNS else subject)
+        run = 1
+        longest = max(longest, 1 if openers else 0)
+        for previous, current in zip(openers, openers[1:], strict=False):
+            run = run + 1 if current and current == previous else 1
+            longest = max(longest, run)
+    return longest
 
 
 def unit_rows(text, target=None):
@@ -148,7 +209,7 @@ def article_text(text):
 def article_metrics(text):
     """Whole-article FKGL and sentence-length distribution, from the ehs-seo-blog metrics script."""
     m = scripts.metrics_module()
-    sentences = m.split_sentences(m.strip_markdown(prose(article_text(text))))
+    sentences = m.split_sentences(m.strip_markdown(grading_text(article_text(text))))
     value, words, _ = m.fkgl(sentences)
     distribution = m.length_distribution(sentences) or {}
     return {
@@ -289,8 +350,19 @@ def tune_unit(text, index, target, region, call):
         raise ValueError(f"“{heading_name(heading)}” isn't article prose, so it isn't tuned.")
     original = (heading + body).strip()
     before = grade(original)
+    stacked = stacked_sentences(original)
     edited = (
-        call("review_wordlevel", {"section": original, "grade": before, "target": target, "region": region})
+        call(
+            "review_wordlevel",
+            {
+                "section": original,
+                "grade": before,
+                "target": target,
+                "region": region,
+                "stacked": "\n".join(f"- {s}" for s in stacked)
+                or "- (none over 25 words: unpack only where a clause stacks)",
+            },
+        )
         or ""
     ).strip()
     if heading and not edited.startswith("#"):
@@ -298,6 +370,10 @@ def tune_unit(text, index, target, region, call):
     ok, reason = accept_rewrite(original, edited, min_ratio=0.8)
     if not ok:
         raise ValueError(f"The rewrite wasn't used ({reason}).")
+    # Refused when it repeats a subject down a paragraph ("The operator… The operator…"), the flat
+    # unpacking run 19 produced, unless the original already did.
+    if (run := opener_run(edited)) >= 3 and run > opener_run(original):
+        raise ValueError(f"The rewrite opens {run} sentences in a row with the same subject (choppy).")
     after = grade(edited)
     if before is not None and after is not None:
         if after >= before:
@@ -367,6 +443,9 @@ def run_sequence(text, brief, call):
 
     # 2. Deslop rewrite.
     findings = _deslop_findings(lexical, structure, redundancy)
+    # deslop: "structural and substantive surfaced as inline comments for the author", never applied by the
+    # rewrite (forcing variance there is the banned equalising move). They go to the report.
+    structural = _structure_notes(structure)
     _rewrite_pass(
         result,
         call,
@@ -378,7 +457,8 @@ def run_sequence(text, brief, call):
             or "(the scanners found nothing; check for the rewrite rules by reading)"
         },
         "Deslop notes",
-        f"{len(findings)} scanner finding(s) addressed with the deslop rewrite rules.",
+        f"{len(findings)} scanner finding(s) addressed with the deslop rewrite rules."
+        + (" For the author, not applied: " + "; ".join(structural) + "." if structural else ""),
     )
 
     # 3. Clarity-review rewrite.
@@ -423,17 +503,32 @@ def run_sequence(text, brief, call):
 
 
 def _deslop_findings(lexical, structure, redundancy):
+    """The lexical and redundancy findings the rewrite acts on, each with the scanner's own fix (a class-A
+    replacement and its condition, or a class-B "no substitute": a synonym swap is the failure mode).
+    Low-severity findings (curly quotes, the tricolon count the script itself calls high-false-positive)
+    are left out, as deslop's default --min-severity is medium. Structural findings are not here."""
     findings = []
     for finding in lexical.get("findings") or []:
+        if finding.get("severity") == "low":
+            continue
         examples = "; ".join(e.get("text", "").strip() for e in (finding.get("examples") or [])[:4])
+        fix = " ".join(str(finding.get("fix") or "").split())
         findings.append(
             f"- {finding.get('id')} ({finding.get('severity')}, {finding.get('count')}×): {examples}"
+            + (f" → {fix[:220]}" if fix else "")
         )
-    for finding in (structure.get("findings") or [])[:6]:
-        findings.append(f"- structure: {finding.get('id', '')} {finding.get('message', '') or finding}"[:240])
     for finding in (redundancy.get("findings") or [])[:6]:
         findings.append(f"- repeated across sections: {str(finding)[:200]}")
     return findings
+
+
+def _structure_notes(structure):
+    """structure_scan's findings as short notes for the author ("id=value"), never rewrite instructions."""
+    notes = []
+    for finding in (structure.get("findings") or [])[:6]:
+        value = finding.get("value")
+        notes.append(f"{finding.get('id', 'structure')}" + (f"={value}" if value is not None else ""))
+    return notes
 
 
 def _clarity_candidates(frames):
@@ -444,8 +539,17 @@ def _clarity_candidates(frames):
         candidates.append(f"- vague noun “{item.get('match')}”: {item.get('sentence', '')[:200]}")
     for item in (frames.get("frames_over_threshold") or [])[:6]:
         candidates.append(f"- repeated sentence frame: {str(item)[:200]}")
-    for item in (frames.get("term_variants") or frames.get("terms") or [])[:6]:
-        candidates.append(f"- possible term drift: {str(item)[:200]}")
+    # frame_scan reports term usage under "term_drift" ({term: count}); the old keys never existed, so this
+    # was never passed on (phase 7). Two or more of the brief's terms in use is a one-name-per-concept prompt.
+    used = {term: n for term, n in (frames.get("term_drift") or {}).items() if n}
+    if len(used) >= 2:
+        candidates.append(
+            "- names in use for related concepts (keep one name per concept): "
+            + ", ".join(f"{term} ×{n}" for term, n in sorted(used.items(), key=lambda kv: -kv[1])[:6])
+        )
+    for item in (frames.get("orphan_possessives") or [])[:4]:
+        text = item.get("sentence", item) if isinstance(item, dict) else item
+        candidates.append(f"- possessive with no owner in the sentence: {str(text)[:200]}")
     for item in (frames.get("mixed_person_paragraphs") or [])[:4]:
         candidates.append(f"- mixed person in one paragraph near line {item.get('line')}")
     return candidates
@@ -510,28 +614,47 @@ def _rewrite_pass(result, call, number, name, prompt, context, notes_heading, su
         )
 
 
+def _keyed_units(text):
+    """[((name, occurrence), (heading, body))] for the units of a text."""
+    seen, keyed = {}, []
+    for unit in section_units(text):
+        name = heading_name(unit[0])
+        seen[name] = seen.get(name, 0) + 1
+        keyed.append(((name, seen[name]), unit))
+    return keyed
+
+
 def _auto_tune(result, call, brief, target):
-    order = sorted(
-        (
-            (value, name)
-            for name, value in section_grades(result.text)
-            if value and value > target + TUNE_TOLERANCE
-        ),
-        reverse=True,
-    )
+    # Each section aims at max(target, its vocabulary floor): a section held up only by its terms isn't
+    # tuned, because the only way under that floor is uniformly short sentences (phase 7).
+    order, floored = [], []
+    for key, (heading, body) in _keyed_units(result.text):
+        value = grade(heading + body) if graded(heading) else None
+        if not value:
+            continue
+        floor = vocabulary_floor(heading + body)
+        aim = max(target, floor) if floor else target
+        if value > aim + TUNE_TOLERANCE:
+            order.append((value, key, aim))
+        elif value > target + TUNE_TOLERANCE:
+            floored.append(f"{key[0]} {value} (vocabulary floor {floor})")
+    order.sort(reverse=True)
     changed, skipped = [], []
-    for _, name in order[:MAX_TUNED_SECTIONS]:
-        names = [heading_name(h) for h, _ in section_units(result.text)]
-        if name not in names:
+    for _, key, aim in order[:MAX_TUNED_SECTIONS]:
+        # By name and occurrence, looked up afresh: two H3s with one name used to tune the wrong one, and a
+        # tuned section can change how the long sections split into units.
+        name = key[0]
+        index = next((i for i, (k, _) in enumerate(_keyed_units(result.text)) if k == key), None)
+        if index is None:
             continue
         try:
-            result.text, before, after = tune_unit(
-                result.text, names.index(name), target, brief.get("region", ""), call
-            )
+            result.text, before, after = tune_unit(result.text, index, aim, brief.get("region", ""), call)
             changed.append(f"{name}: {before} → {after}")
         except ValueError as error:
             skipped.append(f"{name}: {error}")
-    summary = "; ".join(changed) if changed else f"No section more than {TUNE_TOLERANCE:g} above the target."
+    summary = "; ".join(changed) if changed else f"No section more than {TUNE_TOLERANCE:g} above its aim."
+    if floored:
+        summary += " Left at their vocabulary floor (the terms set it): " + "; ".join(floored[:4]) + "."
     if skipped:
         summary += " Not changed: " + "; ".join(skipped[:4])
     if len(order) > MAX_TUNED_SECTIONS:

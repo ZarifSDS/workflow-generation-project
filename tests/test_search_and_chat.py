@@ -35,8 +35,12 @@ RANKING_HTML = """<html><head><script type="application/ld+json">{"@type": "FAQP
 LONG_ARTICLE = (
     "# Title\n\nIntro sentence that is short.\n\n"
     "## Big section\n\n" + "Opening words for the section. " * 40 + "\n\n"
+    # Long, stacked sentences (about 30 words): above the vocabulary floor, so tuning has syntax to unpack.
     "### First part\n\n" + "Notwithstanding the aforementioned considerations, organisational accountability "
-    "necessitates comprehensive documentation procedures. " * 8 + "\n\n"
+    "necessitates comprehensive documentation procedures, which employers implement whenever operational "
+    "circumstances change, because regulatory authorities scrutinise organisational documentation. "
+    * 5
+    + "\n\n"
     "### Second part\n\n" + "Keep it simple. Short words help. " * 15 + "\n\n"
     "## Small section\n\n" + "A few plain words here for the reader to see. " * 3 + "\n"
 )

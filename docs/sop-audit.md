@@ -279,6 +279,22 @@ Each change was proven three ways: tests with the audit's correct sentences (no 
 
 **Replay result:** the same texts fire. Pointer findings went from 8 to 10 (up to three per text). The four link-only blocks are now advisories, and each sits on a sentence the pointer check still blocks. Nothing real was lost.
 
+### Phase 7 (done): the edit step
+
+- **Grading only prose.** `review.grading_text` leaves headings out and ends list items with a full stop before FKGL. A heading used to join the first sentence and an unpunctuated list read as one long sentence, so list sections measured 2-4 grades high. This also changes the per-section grades shown on article steps, to the correct values.
+- **The vocabulary floor.** `review.vocabulary_floor` is FKGL at a natural 15-word sentence with the section's own syllables per word. Tuning aims at max(target, floor). Since FKGL is 0.39 × words per sentence plus a vocabulary term, this means a section is tuned only when its sentences are long. A section held up by its terms is left alone, and the report names it ("left at their vocabulary floor"), because the only way under the floor is uniformly short sentences, the move the skill bans.
+  - On runs 18-20 the drafts would have had 8 to 14 sections tuned; now 2 to 9.
+  - The ones left alone are mostly lists (Key Takeaways, "The 16 SDS Sections Explained") whose grade comes from their words.
+- **Targeted tuning.** The model gets the section's sentences over 25 words to unpack, may open with a pronoun or callback whose antecedent is in the sentence before, and must not open consecutive sentences with the same noun phrase.
+  - A rewrite that creates a run of three or more sentences opening with the same subject, where the original had none, is refused (`review.opener_run`; pronoun callbacks don't count).
+  - Units are matched by name and occurrence, looked up afresh after each edit.
+- **Deslop and clarity inputs.**
+  - Structural scan findings go to the report as notes for the author, not into the rewrite, as deslop says.
+  - Lexical findings carry the scanner's own fix guidance; low-severity ones are left out (deslop's default severity floor).
+  - The deslop prompt keeps a regulator's enumerated list intact, keeps a negation where the negative is the information, and allows about two uses of each emphasizer.
+  - The clarity prompt allows the house pattern of a rule stated about the entity and then landed on the reader.
+  - frame_scan's `term_drift` and `orphan_possessives` are read under their real keys.
+
 Phases 1 and 2 matter most: phase 1 makes misfires measurable offline, and phase 2 removes the largest class by construction.
 
 ## Decisions for the owner

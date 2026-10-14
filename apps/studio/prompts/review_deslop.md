@@ -13,8 +13,9 @@ The deslop scanners reported these findings on the article (lexical, structural 
 Apply the deslop rewrite rules:
 - Copula restoration: "serves as", "stands as", "represents", "functions as" → "is".
 - Delete significance-inflation clauses outright ("plays a pivotal role in", "underscores the importance of"); don't paraphrase them.
-- Collapse tricolons to the one or two items that carry content.
-- Unfold negative parallelism ("not X, but Y", "it's not just X") into the positive claim alone.
+- Collapse a stylistic tricolon to the one or two items that carry content. A list a statute, standard or regulator enumerates keeps the source's count and every item ("labels, safety data sheets and training" are HazCom's three elements): never shorten it.
+- Unfold negative parallelism ("not X, but Y", "it's not just X") into the positive claim alone, except where the negative is the information ("an SDS does not expire").
+- Emphasizers ("clearly", "critical", "essential") are allowed about twice each in the article; cut only the uses beyond that, never all of them on sight.
 - Drop present-participle tails (", highlighting the…", ", ensuring that…") that add no information.
 - At most one hedge per sentence.
 - Cut meta narration ("in this section", "as mentioned above", "let's look at"). Keep the intro's scope sentence with "this article".
