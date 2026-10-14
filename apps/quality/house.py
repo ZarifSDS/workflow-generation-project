@@ -13,11 +13,36 @@ import re
 
 from .review import heading_name, split_sections
 
+# Tolerant of spacing and case: run 20's model wrote "[ SRC: url ]", which a strict pattern let through to
+# publishing. `mechanical_fix` also normalises them to the canonical form.
 MARKER_PATTERNS = {
-    "VERIFY": re.compile(r"\[VERIFY\]"),
-    "SRC": re.compile(r"\[SRC:[^\]]*\]"),
-    "VISUAL": re.compile(r"\[VISUAL:[^\]]*\]"),
+    "VERIFY": re.compile(r"\[\s*VERIFY\s*(?::[^\]]*)?\]", re.I),
+    "SRC": re.compile(r"\[\s*SRC\s*:[^\]]*\]", re.I),
+    "VISUAL": re.compile(r"\[\s*VISUAL\s*:[^\]]*\]", re.I),
 }
+LOOSE_MARKER = re.compile(r"\[\s*(VERIFY|SRC|VISUAL|HERO)\s*(?::\s*([^\]]*?))?\s*\]", re.I)
+
+
+def normalise_markers(text):
+    """`[ SRC: url ]`, `[verify]` and the like become `[SRC: url]`, `[VERIFY]`. Returns (text, count)."""
+
+    def canonical(match):
+        kind, value = match.group(1).upper(), match.group(2)
+        if (kind == "VERIFY") == (value is not None):
+            return match.group(0)  # "[VERIFY: note]" or a bare "[SRC]": not a shape to guess at
+        return "[VERIFY]" if kind == "VERIFY" else f"[{kind}: {value.strip()}]"
+
+    count = 0
+
+    def replace(match):
+        nonlocal count
+        new = canonical(match)
+        count += new != match.group(0)
+        return new
+
+    return LOOSE_MARKER.sub(replace, text), count
+
+
 HERO_LINE = re.compile(r"(?m)^[ \t]*\[HERO:[^\]]*\][ \t]*\n?")
 EMOJI = re.compile("[\U0001f300-\U0001faff\U00002600-\U000027bf\U0001f1e6-\U0001f1ff️]")
 THEMATIC_BREAK = re.compile(r"(?m)^[ \t]*(?:-{3,}|\*{3,}|_{3,})[ \t]*\n?")
@@ -36,6 +61,9 @@ def mechanical_fix(text):
 
     # Dashes: number ranges take a hyphen; elsewhere a comma (the house style allows a comma, colon,
     # parentheses or a new sentence; a comma is the safe mechanical choice).
+    text, n = normalise_markers(text)
+    if n:
+        counts["markers normalised"] = n
     text = count("dashes", r"(\d)\s*[–—]\s*(\d)", r"\1-\2", text)
     # In a heading or a one-line title a dash separates a topic from its qualifier: a colon reads right.
     text = count("dashes", r"(?m)^(#{1,6}\s+[^\n–—]+?)\s*[–—]\s*", r"\1: ", text)
@@ -57,6 +85,10 @@ def mechanical_fix(text):
     text = count("hero cues", HERO_LINE, "", text)
     # Models sometimes bold a link as **[text]**(url), which Markdown doesn't read as a link at all.
     text = count("broken bold links", r"\*\*\[([^\]\n]+)\]\*\*\(", r"[**\1**](", text)
+    # ...or as [text][https://url], a reference-style shape that doesn't link either (run 20).
+    text = count("broken links", r"\[([^\]\n]+)\]\[((?:https?|wagtail)://[^\]\s]+)\]", r"[\1](\2)", text)
+    # A link whose target is only [VERIFY] links nowhere: keep the words and the marker.
+    text = count("links to [VERIFY]", r"\[([^\]\n]+)\]\(\s*\[VERIFY\]\s*\)", r"\1 [VERIFY]", text)
     text = re.sub(r"\n{3,}", "\n\n", text).strip() + "\n"
     return text, counts
 
@@ -73,7 +105,7 @@ def find_markers(text):
 
 def strip_sources(text):
     """Remove `[SRC: url]` markers (after the sources were checked) without leaving stray spaces."""
-    text = re.sub(r"[ \t]*\[SRC:[^\]]*\]", "", text)
+    text = re.sub(r"[ \t]*" + MARKER_PATTERNS["SRC"].pattern, "", normalise_markers(text)[0], flags=re.I)
     return re.sub(r" +([,.;:!?])", r"\1", text)
 
 

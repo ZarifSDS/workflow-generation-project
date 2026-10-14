@@ -23,13 +23,50 @@ def clean(text):
     return cleaned, {"invisible_removed": invisible, "spaces_normalised": spaces}
 
 
+METADATA_LABEL_LINE = re.compile(
+    r"^[ \t]*(?:[-*][ \t]+)?\**(meta[ \t]+title|meta[ \t]+description|slug|tags?|excerpt)\**[ \t]*:\**"
+    r"[ \t]*(.*?)[ \t]*$",
+    re.I,
+)
+LABEL_KIND = {
+    "meta title": "title",
+    "meta description": "meta",
+    "slug": "slug",
+    "tag": "tags",
+    "tags": "tags",
+}
+
+
+def strip_metadata_lines(article):
+    """Metadata a model wrote into the article's head ("Tags: …", "Excerpt: …" under the H1) would publish as
+    intro text. Lines before the first `## ` heading that are only such a label are taken out.
+    Returns (article, {kind: [values]})."""
+    head, sep, body = article.partition("\n## ")
+    found, kept = {}, []
+    for line in head.splitlines():
+        match = METADATA_LABEL_LINE.match(line)
+        if match and match.group(2):
+            label = " ".join(match.group(1).lower().split())
+            found.setdefault(LABEL_KIND.get(label, "excerpt"), []).append(match.group(2).strip().strip('"'))
+        else:
+            kept.append(line)
+    if not found:
+        return article, {}
+    head = re.sub(r"\n{3,}", "\n\n", "\n".join(kept)).strip()
+    return head + sep + body, found
+
+
 def split_metadata(markdown):
     """Separate a draft's '## Metadata options' section; return (article, {kind: [options]})."""
     match = re.search(r"^##\s+Metadata options\s*$", markdown, re.M | re.I)
     if not match:
-        return markdown.strip(), {}
+        article, stray = strip_metadata_lines(markdown.strip())
+        return article, {kind: items[:5] for kind, items in stray.items()}
     article, meta = markdown[: match.start()].strip(), markdown[match.end() :]
+    article, stray = strip_metadata_lines(article)
     found = {"title": [], "meta": [], "slug": [], "tags": [], "excerpt": []}
+    for kind, items in stray.items():
+        found[kind].extend(items)
     section = None
     for line in meta.splitlines():
         stripped = line.strip()

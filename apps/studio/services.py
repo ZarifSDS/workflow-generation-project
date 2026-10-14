@@ -1,6 +1,8 @@
 """State changes for runs and steps. Views and the background task call these."""
 
 import logging
+import re
+import unicodedata
 
 from django.conf import settings
 from django.db import transaction
@@ -399,18 +401,44 @@ def review_count():
 
 @transaction.atomic
 def set_metadata_selection(run, selected_ids):
-    options = run.metadata_options.all()
+    """Save the ticked options. Refused (nothing changes) if a ticked option is over its kind's limit, since
+    an over-long title or description is cut off in search results; the editor adds a shorter one."""
+    options = list(run.metadata_options.all())
+    over = [o for o in options if o.pk in selected_ids and o.too_long]
+    if over:
+        raise ValueError(
+            "Not saved: "
+            + "; ".join(
+                f"the {o.get_kind_display().lower()} has {len(o.text)} of {o.limit} characters" for o in over
+            )
+            + ". Choose a shorter option or add your own."
+        )
     for option in options:
         option.selected = option.pk in selected_ids
     MetadataOption.objects.bulk_update(options, ["selected"])
 
 
+def clean_metadata_text(kind, text):
+    """An editor's own option gets the house mechanics the model's options get (no dashes or curly quotes);
+    a slug becomes lower-case words joined by hyphens."""
+    text = " ".join((text or "").split())
+    if kind == MetadataOption.Kind.SLUG:
+        ascii_text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode()
+        return re.sub(r"[^a-z0-9]+", "-", ascii_text.lower()).strip("-")
+    return house.mechanical_fix(text)[0].strip() if text else ""
+
+
 def add_own_metadata(run, kind, text):
-    text = " ".join(text.split())
+    text = clean_metadata_text(kind, text)
     if not text:
         raise ValueError("Type an option before adding it.")
-    if len(text) > 500:
-        raise ValueError("Keep the option under 500 characters.")
+    limit = MetadataOption.LIMITS[kind]
+    if len(text) > limit:
+        label = MetadataOption.Kind(kind).label.lower()
+        raise ValueError(f"Keep the {label} within {limit} characters (this one has {len(text)}).")
+    if kind != MetadataOption.Kind.TITLE:
+        # One choice per kind except titles (extra titles are A/B options): the new one replaces the old.
+        run.metadata_options.filter(kind=kind, selected=True).update(selected=False)
     return MetadataOption.objects.create(
         run=run, kind=kind, text=text, source=StepVersion.Source.EDIT, selected=True
     )

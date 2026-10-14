@@ -87,8 +87,8 @@ a list of the product, where it was used and when.
 
 ## What Counts as an Exposure Record?
 
-An exposure record is any document that identifies a chemical and where it was used. Our
-[SDS management guide](https://sdsmanager.com/us/sds-management-articles/sds-guide/) explains the categories.
+An exposure record is any document that identifies a chemical and where it was used. The [SDS management
+guide](https://sdsmanager.com/us/sds-management-articles/sds-guide/) lists the record categories OSHA names.
 
 ## Do Safety Data Sheets Expire?
 
@@ -610,6 +610,18 @@ def test_draft_guard_keeps_links_and_negations_but_allows_rewording():
     assert not sop._guard("draft", GOOD_DRAFT, flipped)[0]
 
 
+def test_a_draft_heading_may_be_reworded_in_place_but_not_dropped():
+    # Run 20: the check asked for the keyword in an H2 and every revision doing it was refused as a rename.
+    renamed = GOOD_DRAFT.replace(
+        "## What Counts as an Exposure Record?", "## What Counts as an SDS Exposure Record?"
+    )
+    assert sop._guard("draft", GOOD_DRAFT, renamed)[0]
+    dropped = GOOD_DRAFT.replace("## What Counts as an Exposure Record?\n", "")
+    assert not sop._guard("draft", GOOD_DRAFT, dropped)[0]
+    plan = "## Search Intent\n\nInformational, how-to.\n\n## H1 Options\n\n1. One\n"
+    assert not sop._guard("outline", plan, plan.replace("## Search Intent", "## Intent"))[0]
+
+
 def test_broken_bold_links_are_repaired():
     from apps.quality import house
 
@@ -651,11 +663,11 @@ def test_allowed_urls_come_from_the_inputs(brief):
 
 def test_an_edit_revision_may_drop_an_invented_url():
     invented = GOOD_DRAFT.replace(
-        "(https://sdsmanager.com/us/sds-management-articles/sds-guide/) explains the categories.",
-        "(https://sdsmanager.com/library) explains the categories.",
+        "(https://sdsmanager.com/us/sds-management-articles/sds-guide/) lists the record categories",
+        "(https://sdsmanager.com/library) lists the record categories",
     )
     cleaned = invented.replace(
-        "[SDS management guide](https://sdsmanager.com/library) explains the categories.", ""
+        "[SDS management\nguide](https://sdsmanager.com/library) lists the record categories OSHA names.", ""
     )
     assert not sop._guard("review_edit", invented, cleaned)[0]
     assert sop._guard("review_edit", invented, cleaned, droppable=["https://sdsmanager.com/library"])[0]
@@ -765,3 +777,148 @@ def test_link_carrier_sentences_are_blocked():
         "To manage changes, see the management-of-change resource.",
     )
     assert any("point at another page" in f for f in blocking(sop.check("draft", see, CTX)))
+
+
+def test_the_reviser_is_told_the_length_floor():
+    words = len(GOOD_DRAFT.split())
+    rule = sop.length_rule("draft", GOOD_DRAFT, {**CTX, "wordcount": words + 500})
+    assert f"Keep at least {int(words * 0.9)}" in rule
+    assert "never shorten it" in rule
+    assert "never shorten it" not in sop.length_rule("draft", GOOD_DRAFT, {**CTX, "wordcount": 10})
+    assert "guide" not in sop.length_rule("outline", GOOD_DRAFT, {**CTX, "wordcount": 5000})
+    messages = sop.prompting.render("sop_revise", {"length_rule": rule, "findings": "1. x"})
+    assert "Keep at least" in messages[1]["content"]
+
+
+def test_headings_carry_the_keyword_as_a_natural_variant():
+    pk = "how to read a safety data sheet"
+    assert sop.carries_keyword("How to Read an SDS Quickly in the Field", pk)
+    assert sop.carries_keyword("How to Read Safety Data Sheets", pk)
+    assert sop.carries_keyword("How To Read A Safety Data Sheet: Core Steps", pk)
+    assert not sop.carries_keyword("The 16 SDS Sections Explained", pk)
+    assert sop.carries_keyword("Which SDS Retention Requirements Apply?", "SDS retention requirements")
+    assert sop.first_h2_answers("How to Read an SDS in Five Steps", pk)
+    assert not sop.first_h2_answers("What Is an SDS and Why It Matters", pk)
+    assert sop.first_h2_answers("What Are the SDS Retention Rules?", "SDS retention requirements")
+    variant = GOOD_DRAFT.replace("Under OSHA?", "Under OSHA? (Retention Rules)")
+    assert not any("carries the primary keyword" in f for f in blocking(sop.check("draft", variant, CTX)))
+
+
+def test_the_first_body_h2_should_answer_the_query():
+    ctx = {**CTX, "pkeyword": "how to read a safety data sheet"}
+    text = GOOD_DRAFT.replace(
+        "## What Are the SDS Retention Requirements Under OSHA?", "## What Is an SDS and Why It Matters"
+    )
+    found = [str(f) for f in sop.check("draft", text, ctx)]
+    assert any("doesn't answer the primary query" in f and f.startswith("[advise]") for f in found)
+
+
+def test_keyword_stuffed_headings_are_blocked():
+    # Run 20's revision appended the keyword to every H2.
+    stuffed = GOOD_DRAFT
+    for heading in ("What Counts as an Exposure Record?", "Do Safety Data Sheets Expire?"):
+        stuffed = stuffed.replace(f"## {heading}", f"## {heading.rstrip('?')} for SDS Retention Requirements")
+    stuffed = stuffed.replace(
+        "## Keep Every SDS Where Your Auditor Can Find It", "## Keep SDS Retention Requirements Auditable"
+    )
+    assert any("is in 4 headings" in f for f in blocking(sop.check("draft", stuffed, CTX)))
+    assert not any("headings; keep it" in f for f in blocking(sop.check("draft", GOOD_DRAFT, CTX)))
+
+
+def test_reference_style_url_links_are_repaired():
+    fixed, counts = sop.house.mechanical_fix("See the [JSA guide][https://sdsmanager.com/us/jsa/] first.\n")
+    assert "[JSA guide](https://sdsmanager.com/us/jsa/)" in fixed and counts["broken links"] == 1
+
+
+def test_relative_and_marker_link_targets_are_blocked_and_verify_links_unwrapped():
+    ctx = {**CTX, "allowed_urls": set()}
+    found = blocking(sop.check_sourced_urls("Use the [training page](/resources/training) first.", ctx))
+    assert any("'/resources/training'" in f for f in found)
+    fixed, counts = sop.house.mechanical_fix("Pair it with a [job safety analysis]([VERIFY]) review.\n")
+    assert "a job safety analysis [VERIFY] review." in fixed and counts["links to [VERIFY]"] == 1
+    assert not blocking(sop.check_sourced_urls("Read [Section 8](#section-8).", ctx))
+
+
+def test_the_reviser_sees_the_allowed_links_on_article_steps_only():
+    base = {"related_articles": "- [JSA](https://sdsmanager.com/us/jsa/)", "product_pages": "- EHS"}
+    assert "https://sdsmanager.com/us/jsa/" in sop.link_sources("draft", base)
+    assert "never write a URL from memory" in sop.link_sources("review_edit", base)
+    assert sop.link_sources("outline", base) == ""
+
+
+def test_spaced_markers_are_normalised_and_still_hold_publishing():
+    # Run 20 wrote "[ SRC: url ]", which the strict marker pattern let through to publishing.
+    text = "## Rules\n\nA fact [ SRC: https://www.osha.gov/x ] and a claim [ verify ]. Keep [VERIFY: date].\n"
+    kinds = [m["kind"] for m in sop.house.find_markers(text)]
+    assert kinds.count("SRC") == 1 and kinds.count("VERIFY") == 2
+    fixed, counts = sop.house.mechanical_fix(text)
+    assert "[SRC: https://www.osha.gov/x]" in fixed and "a claim [VERIFY]." in fixed
+    assert "[VERIFY: date]" in fixed and counts["markers normalised"] == 2
+    assert sop.house.strip_sources("A fact [ SRC: https://www.osha.gov/x ].") == "A fact."
+
+
+def test_a_blog_close_must_link_a_product_page():
+    close = "## Keep Every SDS Where Your Auditor Can Find It"
+    body = GOOD_DRAFT.split(close, 1)[1].split("\n## ", 1)[0]
+    unlinked = GOOD_DRAFT.replace(body, "\n\nPaper binders go missing.\n\n**Start Free Trial**\n")
+    assert any("links no product page" in f for f in blocking(sop.check("draft", unlinked, CTX)))
+    article = GOOD_DRAFT.replace(
+        body,
+        "\n\nKeep a [retention log](https://sdsmanager.com/us/sds-management-articles/sds-retention/).\n",
+    )
+    assert any("links an article" in f for f in blocking(sop.check("draft", article, CTX)))
+    assert not any("product page" in f for f in blocking(sop.check("draft", GOOD_DRAFT, CTX)))
+
+
+def test_regulation_subsections_must_come_from_the_inputs_or_carry_verify():
+    ctx = {**CTX, "allowed_citations": {"1910.1200(g)(8)", "1910.1200(h)"}}
+    text = (
+        "## Rules\n\nEmployers keep sheets accessible under 1910.1200(g)(8). Training is required by "
+        "29 CFR 1910.1200 (c)(1). The format follows 1910.1200(g). "
+        "Updates follow § 1910.1200(g)(5) [VERIFY].\n"
+    )
+    found = blocking(sop.check_citations(text, ctx))
+    assert len(found) == 1 and "1910.1200 (c)(1)" in found[0]
+    assert sop.check_citations(text, CTX) == []  # no inputs known: nothing to compare against
+    as_logged = str(sop.check_citations(text, ctx)[0])  # what the loop reads back
+    assert sop.INVENTED_CITATION.match(as_logged).group(1) == "1910.1200 (c)(1)"
+
+
+def test_a_comma_between_topic_and_qualifier_in_a_heading_is_blocked():
+    text = GOOD_DRAFT.replace("## Do Safety Data Sheets Expire?", "## Worked Example, Acetone SDS")
+    assert any("Worked Example, Acetone SDS" in f for f in blocking(sop.check("draft", text, CTX)))
+    listed = GOOD_DRAFT.replace("## Do Safety Data Sheets Expire?", "## Gloves, Goggles and Respirators")
+    assert not any("with a comma" in f for f in blocking(sop.check("draft", listed, CTX)))
+    assert not any("with a comma" in f for f in blocking(sop.check("draft", GOOD_DRAFT, CTX)))
+
+
+def test_the_skills_link_and_flow_scripts_run_as_checks():
+    text = GOOD_DRAFT.replace(
+        "Keep the version in use at the time of exposure.",
+        "Keep it in [SDS software](https://sdsmanager.com/us/) and [EHS](https://sdsmanager.com/us/ehs-software/).",
+    )
+    found = [str(f) for f in sop.check_skill_scripts(text)]
+    assert any(f.startswith("[block] two links in one sentence (link_check)") for f in found)
+    assert any("sdsmanager.com links; one per section" in f for f in found)
+    opener = GOOD_DRAFT.replace(
+        "## Do Safety Data Sheets Expire?\n",
+        "## Do Safety Data Sheets Expire?\n\n### Shelf Life\n\nThis covers it.\n",
+    )
+    assert any(
+        f.endswith("(editorial_flow_check)") and f.startswith("[advise]")
+        for f in map(str, sop.check_skill_scripts(opener))
+    )
+    assert not [f for f in sop.check_skill_scripts(GOOD_DRAFT) if f.severity == "block"]
+
+
+def test_a_pointer_sentence_may_take_its_link_with_it():
+    url = "https://sdsmanager.com/us/sds-management-articles/job-safety-analysis/"
+    pointer = f"For more details, see our article on [job safety analysis]({url})."
+    text = GOOD_DRAFT.replace(
+        "Keep the version in use at the time of exposure.",
+        "Keep the version in use at the time of exposure. " + pointer,
+    )
+    match = sop.LINK_CARRIER.search(text)
+    assert match and url in match.group(0)  # the sentence runs past the dots inside the URL
+    assert not sop._guard("draft", text, text.replace(" " + pointer, ""))[0]
+    assert sop._guard("draft", text, text.replace(" " + pointer, ""), droppable=[url])[0]

@@ -3,7 +3,7 @@ from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 
-from .. import permissions, services
+from .. import permissions, services, sheetrow
 from ..forms import BriefForm, autopilot_config, parse_step_config, preset_from_brief, step_rows
 from ..models import AudienceProfile, BriefPreset, ContentBrief, ContentType, Region
 from .common import StudioPage
@@ -44,8 +44,9 @@ class BriefWizardView(StudioPage):
             {"url": "", "label": self.page_title},
         ]
 
-    def get_context_data(self, form=None, **kwargs):
+    def get_context_data(self, form=None, sheet_row="", **kwargs):
         context = super().get_context_data(**kwargs)
+        context["sheet_row"] = sheet_row
         initial = {}
         if not self.brief and self.request.GET.get("type") in ContentType.values:
             initial["content_type"] = self.request.GET["type"]
@@ -71,9 +72,29 @@ class BriefWizardView(StudioPage):
         )
         return context
 
+    def fill_from_row(self, request):
+        """Re-render the wizard with a pasted Guest Post Plan row filled in (nothing is saved)."""
+        pasted = request.POST.get("sheet_row", "")
+        try:
+            row = sheetrow.parse(pasted)
+        except sheetrow.SheetRowError as error:
+            messages.error(request, str(error))
+            return self.render_to_response(self.get_context_data(sheet_row=pasted))
+        initial = row.initial()
+        profile = AudienceProfile.objects.filter(region=row.region or Region.US).first()
+        if self.brief is None and profile:
+            initial = {"audience": profile.audience, "fkgl": profile.reading_grade, **initial}
+        messages.success(request, "Filled the brief from the sheet row. Check it, then save or start a run.")
+        for warning in row.warnings:
+            messages.warning(request, warning)
+        form = BriefForm(instance=self.brief, initial=initial)
+        return self.render_to_response(self.get_context_data(form=form))
+
     def post(self, request, *args, **kwargs):
-        form = BriefForm(request.POST, instance=self.brief)
         action = request.POST.get("action", "start")
+        if action == "fill_from_row":
+            return self.fill_from_row(request)
+        form = BriefForm(request.POST, instance=self.brief)
         if not form.is_valid():
             messages.error(request, "Some fields need attention.")
             return self.render_to_response(self.get_context_data(form=form))

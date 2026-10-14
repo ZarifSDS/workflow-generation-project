@@ -40,7 +40,7 @@
         <aside class="s-stack s-stack--base">
             <h2 class="s-section">Search preview</h2>
             <div class="s-serp">
-                <span class="s-serp__url">sdsmanager.com › blog › {% if selected.slug %}{{ selected.slug.text }}{% else %}(choose a slug){% endif %}</span>
+                <span class="s-serp__url">{% for crumb in preview_crumbs %}{{ crumb }} › {% endfor %}{% if selected.slug %}{{ selected.slug.text }}{% else %}(choose a slug){% endif %}</span>
                 <span class="s-serp__title">{% if selected.title %}{{ selected.title.text }}{% else %}Choose a title{% endif %}</span>
                 <span class="s-serp__desc">{% if selected.meta %}{{ selected.meta.text }}{% else %}Choose a meta description.{% endif %}</span>
             </div>

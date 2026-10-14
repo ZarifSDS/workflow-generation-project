@@ -57,5 +57,5 @@ Mistakes competitors and readers often make on this topic, especially rules borr
 Compare the brief with the overlapping sdsmanager.com articles above and any of our pages in the search results. Verdict: no overlap, or the overlapping URL with route (a) differentiate the angle, (b) update the existing article instead, or (c) merge. When an overlapping article exists, say which subtopics it already covers in depth, so the outline can keep those short and link to it.
 
 ## Questions for the Requester
-Anything the brief leaves unclear that would change the article (angle, region nuance, product to point to, a term with two meanings). Up to five numbered questions with your assumed answer for each, or "None."
+Anything the brief leaves unclear that would change the article (angle, region nuance, product to point to, a term with two meanings). Up to five numbered questions with your assumed answer for each, or "None." Write each as one numbered line, `1. The question? Assumed answer: your assumption.` (the studio shows these to the requester as a form).
 

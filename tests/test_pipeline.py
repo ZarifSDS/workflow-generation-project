@@ -370,6 +370,22 @@ def test_split_metadata_without_section_returns_article():
     assert article == "# Title\n\nBody" and options == {}
 
 
+def test_metadata_lines_under_the_h1_are_taken_out_of_the_article():
+    # Run 19: the model wrote these under the H1, where they would have published as intro text.
+    text = (
+        "# How to Read an SDS\n\nTags: SDS, safety training  \n**Excerpt:** A practical guide.\n\n"
+        "A new operator reaches for a solvent.\n\n## Key Takeaways\n\n- Tags: stay in the body below.\n\n"
+        "## Metadata options\n\n### Excerpt\n\n1. Another excerpt.\n"
+    )
+    article, options = textclean.split_metadata(text)
+    assert article.startswith("# How to Read an SDS\n\nA new operator reaches")
+    assert "- Tags: stay in the body below." in article
+    assert options["tags"] == ["SDS, safety training"]
+    assert options["excerpt"] == ["A practical guide.", "Another excerpt."]
+    article, options = textclean.split_metadata("# T\n\nSlug: how-to-read-sds\n\nBody\n")
+    assert article == "# T\n\nBody" and options == {"slug": ["how-to-read-sds"]}
+
+
 @respx.mock
 def test_fetch_respects_robots_and_skips_login_pages(settings):
     respx.get("https://site.example/robots.txt").mock(

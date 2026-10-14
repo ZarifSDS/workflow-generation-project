@@ -70,6 +70,25 @@
                                 <a class="button button-small button-secondary" href="{% url 'studio:run_export' run.pk 'outline' %}" download>Download the headings-only outline</a>
                             </div>
                         {% endif %}
+                        {% if requester_questions %}
+                            <section class="s-box" aria-labelledby="questions-head">
+                                <h3 class="s-section" id="questions-head">Questions for you</h3>
+                                {% if can_edit %}
+                                    <p class="s-muted s-m0">The research left these open. Each box holds the answer the model assumed; change it where it's wrong, or clear it to keep the assumption. Your answers go into the research, so the outline and the draft use them.</p>
+                                    <form class="s-stack" method="post">{% csrf_token %}
+                                        <input type="hidden" name="step" value="{{ step.key }}">
+                                        <input type="hidden" name="base_version" value="{{ version.number }}">
+                                        {% for q in requester_questions %}
+                                            <label for="answer-{{ forloop.counter }}">{{ forloop.counter }}. {{ q.question }}</label>
+                                            <textarea id="answer-{{ forloop.counter }}" name="answer" rows="2">{{ q.assumed }}</textarea>
+                                        {% endfor %}
+                                        <div><button class="button button-secondary" type="submit" name="action" value="answer_questions">Save my answers</button></div>
+                                    </form>
+                                {% else %}
+                                    <ol class="s-m0">{% for q in requester_questions %}<li>{{ q.question }}{% if q.assumed %} <span class="s-muted">{% if q.answered %}Answered{% else %}Assumed{% endif %}: {{ q.assumed }}</span>{% endif %}</li>{% endfor %}</ol>
+                                {% endif %}
+                            </section>
+                        {% endif %}
                         {% if exports %}
                             <section class="s-box" aria-labelledby="exports-head">
                                 <h3 class="s-section" id="exports-head">Export</h3>
@@ -389,7 +408,7 @@
                     <p class="s-muted s-m0">Now: {% model_label step.provider step.model %}</p>
                     <form class="s-stack" method="post">{% csrf_token %}
                         <input type="hidden" name="step" value="{{ step.key }}">
-                        <label for="regen-model">Regenerate with</label>
+                        <label for="regen-model">{% if step.status == "pending" or step.status == "queued" %}Run with{% else %}Regenerate with{% endif %}</label>
                         <select id="regen-model" name="model">
                             {% for group, items in model_groups %}
                                 <optgroup label="{{ group }}">
@@ -400,7 +419,12 @@
                         <label for="regen-note">Note for the model (optional)</label>
                         <textarea id="regen-note" name="note" rows="2" {% if hero %}aria-describedby="regen-note-help" placeholder="e.g. people wearing nitrile gloves"{% else %}placeholder="e.g. add a section on state plans"{% endif %}></textarea>
                         {% if hero %}<p class="s-muted s-m0 s-small" id="regen-note-help">Start the note with <code>Headline:</code> to change only the headline, e.g. <code>Headline: **SDS Retention:** | How Long to Keep Them</code>. The same photo is reused.</p>{% endif %}
-                        <div><button class="button button-secondary" type="submit" name="action" value="regenerate">Regenerate</button></div>
+                        {% if step.status == "pending" or step.status == "queued" %}
+                            <div><button class="button button-secondary" type="submit" name="action" value="regenerate">Use this model when it runs</button></div>
+                            <p class="s-muted s-m0 s-small">This step hasn't run yet. It starts once the step before it is approved.</p>
+                        {% else %}
+                            <div><button class="button button-secondary" type="submit" name="action" value="regenerate">Regenerate</button></div>
+                        {% endif %}
                     </form>
                 </section>
             {% endif %}

@@ -11,7 +11,7 @@ from django.utils.text import slugify
 from apps.ai import catalog
 from apps.quality import house, review
 
-from .. import assistant, diffing, permissions, services
+from .. import assistant, diffing, permissions, requester, services
 from ..models import ChatMessage, GenerationRun, StepRun
 from . import editor_api
 from .common import StudioPage
@@ -155,6 +155,9 @@ class RunWorkspaceView(StudioPage):
             if step and step.key in assistant.ARTICLE_STEPS and kind != "image"
             else None,
             sop=(version.metrics or {}).get("sop") if version else None,
+            requester_questions=requester.parse(version.content)
+            if version and step.key == "research"
+            else [],
             hero=_hero(version) if kind == "image" else None,
             article_page=getattr(self.run, "article_page", None) if step and step.key == "publish" else None,
             exports=_export_links(self.run)
@@ -236,6 +239,16 @@ class RunWorkspaceView(StudioPage):
                     messages.success(request, f"Saved your edit as version {saved.number}.")
                 else:
                     messages.info(request, "Nothing changed, so no new version was saved.")
+            elif action == "answer_questions":
+                content = requester.apply_answers(step.latest_version.content, request.POST.getlist("answer"))
+                saved = services.save_edit(step, request.user, content, base_version=base_version)
+                messages.success(
+                    request,
+                    f"Saved your answers as version {saved.number}. Approve the research to use them in the "
+                    "outline and the draft."
+                    if saved
+                    else "Nothing changed, so no new version was saved.",
+                )
             elif action == "regenerate":
                 services.request_regenerate(step, request.POST.get("model", ""), request.POST.get("note", ""))
                 messages.success(request, _queued_message(step, "is queued with the chosen model."))

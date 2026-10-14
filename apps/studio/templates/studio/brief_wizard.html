@@ -2,6 +2,21 @@
 {% load static studio_tags %}
 
 {% block main_content %}
+{# A form of its own, so Enter in the brief's fields never triggers it. #}
+<form method="post" class="studio">
+    {% csrf_token %}
+    <details class="s-disclosure s-stack--bottom"{% if sheet_row %} open{% endif %}>
+        <summary>Guest post from the brief sheet: paste a row</summary>
+        <div class="s-stack--top">
+            <label for="sheet_row">Copy the article's row from the Guest Post Plan sheet (with the header row above it if you like) and paste it here. It fills the guest-post fields; check them before you start.</label>
+            <textarea id="sheet_row" name="sheet_row" rows="3" spellcheck="false">{{ sheet_row }}</textarea>
+            <div class="s-row-actions s-stack--top">
+                <button class="button button-secondary" type="submit" name="action" value="fill_from_row">Fill the brief from this row</button>
+            </div>
+        </div>
+    </details>
+</form>
+
 <form method="post" class="studio" novalidate data-studio-wizard>
     {% csrf_token %}
     {{ presets|json_script:"studio-presets" }}

@@ -1039,10 +1039,49 @@ def test_own_metadata_and_limits(brief):
     option = services.add_own_metadata(run, "title", "  A   title\nwith   gaps  ")
     assert option.text == "A title with gaps" and option.selected and option.source == "edit"
     assert not option.too_long and option.limit == 60
-    long_title = services.add_own_metadata(run, "title", "x" * 61)
-    assert long_title.too_long
+    with pytest.raises(ValueError, match="within 60 characters \\(this one has 61\\)"):
+        services.add_own_metadata(run, "title", "x" * 61)
     assert MetadataOption(kind="excerpt", text="y" * 401).too_long
     assert not MetadataOption(kind="meta", text="z" * 160).too_long
+
+
+def test_own_metadata_gets_house_mechanics_and_replaces_a_single_choice(brief):
+    run = services.create_run(brief, {})
+    title = services.add_own_metadata(run, "title", "SDS Retention – What to Keep")
+    assert title.text == "SDS Retention: What to Keep"
+    slug = services.add_own_metadata(run, "slug", "  SDS Retention: Rules & Exposure Records ")
+    assert slug.text == "sds-retention-rules-exposure-records"
+    first = services.add_own_metadata(run, "meta", "First description.")
+    second = services.add_own_metadata(run, "meta", "Second description.")
+    first.refresh_from_db()
+    assert second.selected and not first.selected  # one meta description selected, not two
+    another = services.add_own_metadata(run, "title", "Another Title")
+    title.refresh_from_db()
+    assert title.selected and another.selected  # extra titles stay as A/B options
+
+
+def test_selecting_an_over_limit_option_is_refused(brief):
+    run = services.create_run(brief, {})
+    long_meta = MetadataOption.objects.create(run=run, kind="meta", text="z" * 170)
+    short = MetadataOption.objects.create(run=run, kind="meta", text="Fine.", selected=True)
+    with pytest.raises(ValueError, match="170 of 160 characters"):
+        services.set_metadata_selection(run, {long_meta.pk})
+    short.refresh_from_db()
+    assert short.selected  # nothing changed
+
+
+def test_metadata_screen_previews_the_real_path_and_explains_a_refusal(admin_client, brief):
+    run = services.create_run(brief, {})
+    MetadataOption.objects.create(run=run, kind="slug", text="sds-retention", selected=True)
+    long_meta = MetadataOption.objects.create(run=run, kind="meta", text="z" * 170)
+    url = reverse("studio:metadata", args=[run.pk])
+    page = admin_client.get(url).content.decode()
+    assert f"sdsmanager.com › {brief.region.lower()} › sds-management-articles › sds-retention" in page
+    response = admin_client.post(url, {"action": "save", "choice_meta": str(long_meta.pk)}, follow=True)
+    assert "170 of 160 characters" in response.content.decode()
+    brief.content_type, brief.site_domain = "outbound", "https://www.example-safety.com/blog/"
+    brief.save()
+    assert "example-safety.com › sds-retention" in admin_client.get(url).content.decode()
 
 
 def test_own_metadata_longer_than_the_column_is_refused_cleanly(brief):

@@ -29,7 +29,7 @@ from apps.ai.types import ProviderError
 from apps.quality import house
 from apps.quality import review as quality_review
 
-from . import prompting
+from . import prompting, textclean
 
 STEPS = ("site_crawl", "research", "outline", "draft", "review_edit", "localise")
 ARTICLE_STEPS = ("draft", "review_edit", "localise")
@@ -54,8 +54,10 @@ LINK_CARRIER = re.compile(
     r"|learn more (?:about|in|from)"
     r"|read (?:our|the) [^.\n]{0,40}?(?:guide|article|post)"
     r"|check out (?:our|the)"
-    r")\b[^.\n]*[.!?]"
+    # To the sentence's end: a period inside a URL or "e.g." (no space after it) doesn't end it.
+    r")\b(?:[^.!?\n]|[.!?](?=\S))*[.!?]"
 )
+LINKED_URL = re.compile(r"(?:https?|wagtail)://[^\s)\]]+")
 COVERAGE_FRAMING = re.compile(r"(?i)\b(?:covers|you(?:'ll| will) learn|this article|explains how)\b")
 POINTER_START = re.compile(r"(?i)^(?:that|this|these|those|the same|it)\b")
 GENERIC_CLOSE = {
@@ -256,6 +258,47 @@ def check_research(text, ctx):
     return findings
 
 
+ARTICLE_PATH = re.compile(r"/(?:sds-management-articles|blog|articles?|resources|lead-magnets?)/")
+MAX_KEYWORD_HEADINGS = 3  # the skill: the keyword in "two or three headings", never forced
+KEYWORD_FILLER = {"a", "an", "the", "of", "for", "in", "on", "and", "your", "my", "our"}
+
+
+def _stem(word):
+    return word[:-1] if len(word) > 3 and word.endswith("s") else word
+
+
+def _keyword_words(pk):
+    """The keyword's words, each set also with its multi-word runs as acronyms ("safety data sheet" -> "sds").
+    Returns a list of word sets; a heading matching any of them carries the keyword."""
+    words = [w for w in re.findall(r"[a-z0-9]+", pk.lower()) if w not in KEYWORD_FILLER]
+    variants = [words]
+    for size in range(len(words), 1, -1):
+        for start in range(len(words) - size + 1):
+            acronym = "".join(w[0] for w in words[start : start + size])
+            variants.append(words[:start] + [acronym] + words[start + size :])
+    return [{_stem(w) for w in variant} for variant in variants]
+
+
+def carries_keyword(heading, pk, share=1.0):
+    """Whether a heading carries the primary keyword: verbatim, or every word of it (or `share` of them) in
+    any order, with acronyms and plurals ("How to Read an SDS Quickly" carries "how to read a safety data
+    sheet"). Exact-match demands made models force the phrase into headings (run 20)."""
+    heading, pk = (heading or "").lower(), (pk or "").lower().strip()
+    if not pk or pk in heading:
+        return bool(pk)
+    words = {_stem(w) for w in re.findall(r"[a-z0-9]+", heading)}
+    return any(variant and len(variant & words) >= share * len(variant) for variant in _keyword_words(pk))
+
+
+def first_h2_answers(heading, pk):
+    """The answer-first rule, checked loosely: for a "how to X" keyword the first body H2 names the action X;
+    otherwise it carries at least half the keyword."""
+    match = re.match(r"how to (\w+)", (pk or "").lower())
+    if match:
+        return _stem(match.group(1)) in {_stem(w) for w in re.findall(r"[a-z0-9]+", (heading or "").lower())}
+    return carries_keyword(heading, pk, share=0.5)
+
+
 def _headings_only(text):
     body = _section_body(text, "Headings-Only Outline") or ""
     lines = []
@@ -314,11 +357,20 @@ def check_outline(text, ctx):
         h1_options = (_section_body(text, "H1 Options") or "").lower()
         if pk not in h1_options and pk not in lines[0].lower():
             findings.append(Finding("block", f"no H1 option carries the primary keyword '{ctx['pkeyword']}'"))
-        if not any(pk in line.lower() for line in lines[1:]):
+        if not any(carries_keyword(line[3:], pk) for line in lines[1:]):
             findings.append(
                 Finding(
                     "advise",
                     "no H2 or H3 carries the primary keyword; fine if none reads naturally (never force)",
+                )
+            )
+        if body_h2s and not first_h2_answers(body_h2s[0][3:], pk):
+            findings.append(
+                Finding(
+                    "advise",
+                    f"the first body H2 '{body_h2s[0][3:].strip()}' doesn't answer the primary query "
+                    f"'{ctx['pkeyword']}' (answer-first rule); lead with the answer unless the ranking pages "
+                    "show a reason not to",
                 )
             )
     if re.search(r"(?m)^#{1,3}\s+\S", _section_body(text, "Headings-Only Outline") or ""):
@@ -392,8 +444,40 @@ def check_article(text, ctx, *, metadata=True):
                     Finding("block", f"Key Takeaways bullet leans on another bullet: '{item[:80]}'")
                 )
     headings = re.findall(r"(?m)^#{2,3}\s+(.+)$", text)
-    if pk and not any(pk in h.lower() for h in headings):
-        findings.append(Finding("block", "no H2 or H3 carries the primary keyword"))
+    if pk and not any(carries_keyword(h, pk) for h in headings):
+        findings.append(
+            Finding("block", "no H2 or H3 carries the primary keyword, even as a natural variant")
+        )
+    for heading in [*h1s[:1], *headings]:
+        # One comma and no list word: a topic and its qualifier ("Worked Example, Acetone SDS"), which the
+        # house style separates with a colon. A comma in a heading only lists items.
+        if heading.count(",") == 1 and not re.search(r"(?i)\b(?:and|or)\b|&", heading):
+            findings.append(
+                Finding(
+                    "block",
+                    f"the heading '{heading.strip()}' joins a topic and its qualifier with a comma; "
+                    "use a colon (house style)",
+                )
+            )
+    stuffed = [h for h in headings if carries_keyword(h, pk)] if pk else []
+    if len(stuffed) > MAX_KEYWORD_HEADINGS:
+        # Run 20: told to put the keyword in a heading, the model appended it to every H2.
+        findings.append(
+            Finding(
+                "block",
+                f"the primary keyword is in {len(stuffed)} headings; keep it in two or three where it reads "
+                "naturally and restore the others to plain topic headings",
+            )
+        )
+    body_names = [n for n in names if n.lower() not in ("key takeaways", "frequently asked questions")]
+    if pk and body_names and not first_h2_answers(body_names[0], pk):
+        findings.append(
+            Finding(
+                "advise",
+                f"the first body H2 '{body_names[0]}' doesn't answer the primary query '{ctx['pkeyword']}' "
+                "(answer-first rule)",
+            )
+        )
     faq_body, faq_items = _faq(text)
     if faq_body is None:
         findings.append(Finding(shape, "no `## Frequently Asked Questions` section"))
@@ -436,6 +520,22 @@ def check_article(text, ctx, *, metadata=True):
                     "heading naming the reader's task and outcome",
                 )
             )
+    if ctx.get("content_type") == "seo_blog" and body_names:
+        # The blog close is gap → action → one product page (run 20 closed on a "Start Free Trial" label
+        # with no link at all). An article or lead magnet is never the CTA target.
+        close_links = INTERNAL_LINK.findall(_section_body(text, body_names[-1]) or "")
+        if not close_links:
+            findings.append(
+                Finding(
+                    "block",
+                    f"the closing section '{body_names[-1]}' links no product page; link the one product "
+                    "page the conclusion plan names, in the sentence that offers it",
+                )
+            )
+        elif all(ARTICLE_PATH.search(link) for link in close_links):
+            findings.append(
+                Finding("block", "the close links an article; the CTA links a product page, never an article")
+            )
     if ctx.get("content_type") == "seo_blog":
         if _section_body(text, "References") is None:
             findings.append(Finding("advise", "no `## References` section"))
@@ -450,6 +550,7 @@ def check_article(text, ctx, *, metadata=True):
     if any(b - a == 1 for a, b in zip(linked, linked[1:], strict=False)):
         findings.append(Finding("block", "sdsmanager.com anchors sit in two adjacent sections"))
     findings += check_sourced_urls(text, ctx)
+    findings += check_citations(text, ctx)
     for anchor in ctx.get("anchors") or []:
         url = anchor.get("url", "")
         if url and (n := text.count(f"]({url}")) != 1:
@@ -498,7 +599,59 @@ def check_article(text, ctx, *, metadata=True):
         if short:
             # A note for the log only: the options live outside the text, so no revision can act on it.
             findings.append(Finding("note", "fewer than three metadata options for: " + ", ".join(short)))
+    return findings + check_skill_scripts(text)
+
+
+MAX_FLOW_PROMPTS = 6  # the flow check's prompts go to the reviewer; more than a handful drowns the rubric
+
+
+def check_skill_scripts(text):
+    """The skill's own deterministic link and flow checks (vendored `link_check.py` and
+    `editorial_flow_check.py`). Link placement the skill bans blocks; the flow check's output is, in its
+    own words, review prompts and not rewrite instructions, so it advises."""
+    from apps.quality import scripts
+
+    findings = []
+    try:
+        links = scripts.run_json("links", text)
+        flow = scripts.run_json("flow", text)
+    except (scripts.ScriptError, OSError, ValueError) as error:
+        return [Finding("note", f"the skill's link and flow checks didn't run: {error}")]
+    banned = (
+        ("two_links_one_sentence", "two links in one sentence"),
+        ("consecutive_links", "two links back to back in one paragraph"),
+        ("link_only_sentences", "a sentence that is little more than its link"),
+    )
+    for key, label in banned:
+        for item in (links.get(key) or [])[:2]:
+            findings.append(Finding("block", f"{label} (link_check): '{_one_line(item)}'"))
+    for heading, count in links.get("sections_over_one_internal") or []:
+        findings.append(
+            Finding("block", f"'{heading}' has {count} sdsmanager.com links; one per section (link_check)")
+        )
+    prompts = []
+    for item in flow.get("scope_sentence_directly_after_statistic") or []:
+        prompts.append(f"the scope sentence follows a statistic: '{_one_line(item['scope_sentence'])}'")
+    geo = flow.get("h3_geo") or {}
+    for item in geo.get("opener_flags") or []:
+        prompts.append(f"H3 '{item['heading']}': {item['reason']}")
+    if geo.get("majority_flag"):
+        prompts.append("broad 'what is' content: most genuine subquery H3s should be question-shaped")
+    for item in flow.get("possible_unintroduced_definite_nouns") or []:
+        prompts.append(f"'{item['noun']}' may not be introduced before: '{_one_line(item['sentence'])}'")
+    for item in flow.get("incomplete_abstract_assertions") or []:
+        prompts.append(f"an abstract assertion with no explanation: '{_one_line(item['sentence'])}'")
+    for item in flow.get("contextless_example_openers") or []:
+        prompts.append(f"an example opens before its concept: '{_one_line(item['sentence'])}'")
+    for item in flow.get("possible_prose_list_duplication") or []:
+        prompts.append(f"prose and list may repeat each other near line {item['line']}")
+    findings += [Finding("advise", f"{p} (editorial_flow_check)") for p in prompts[:MAX_FLOW_PROMPTS]]
     return findings
+
+
+def _one_line(text, limit=110):
+    text = " ".join(str(text or "").split())
+    return text if len(text) <= limit else text[: limit - 1] + "…"
 
 
 def check_site_crawl(text, ctx):
@@ -536,7 +689,51 @@ def context_from(step):
         "anchors": list(brief.anchors or []),
         "metadata_counts": counts if step.key == "draft" else {},
         "allowed_urls": allowed_urls(step),
+        "allowed_citations": allowed_citations(step) if step.key in ARTICLE_STEPS else None,
     }
+
+
+# A regulation reference down to its subsection: "1910.1200(g)(8)", "29 CFR 1910.1200 (b)", "§ 1904.7(a)".
+CITATION = re.compile(r"(?<![\d.])(\d{3,4}\.\d{1,4})\s?((?:\([a-z0-9]{1,4}\))+)", re.I)
+
+
+def _citation(match):
+    return (match.group(1) + match.group(2)).lower()
+
+
+def allowed_citations(step):
+    """Subsection references the step's inputs carry. An article may cite those (or a parent of one) only;
+    run 20 cited 1910.1200(c)(1), the definitions paragraph, for training, and nothing caught it."""
+    return {_citation(m) for source in _input_sources(step) for m in CITATION.finditer(source or "")}
+
+
+def check_citations(text, ctx):
+    allowed = ctx.get("allowed_citations")
+    if allowed is None:
+        return []
+    findings, seen = [], set()
+    for line in text.splitlines():
+        for sentence in re.split(r"(?<=[.!?])\s+(?=[A-Z\[*])", line):
+            if MARKER_VERIFY.search(sentence):
+                continue
+            for match in CITATION.finditer(sentence):
+                cite = _citation(match)
+                if cite in seen or any(source.startswith(cite) for source in allowed):
+                    continue
+                seen.add(cite)
+                findings.append(
+                    Finding(
+                        "block",
+                        f"the regulation reference {match.group(0).strip()} isn't in the research or the "
+                        "search results; cite only subsections the inputs give, or keep the claim and add "
+                        "[VERIFY] after the sentence",
+                    )
+                )
+    return findings
+
+
+INVENTED_CITATION = re.compile(r"\[block\] the regulation reference (.+?) isn't in the research")
+MARKER_VERIFY = re.compile(r"\[\s*VERIFY\s*(?::[^\]]*)?\]", re.I)
 
 
 URL = re.compile(r"(?:https?|wagtail)://[^\s)\]\"'>]+")
@@ -547,10 +744,16 @@ def allowed_urls(step):
     """Every URL the step was given: the internal index and product registry, the brief's anchors, the search
     results and the approved research and outline. A URL in an article that isn't among them was invented
     (the skill's "URLs only from results" rule); `wagtail://…?id=` links come from the editor and are kept."""
+    return {url.rstrip(".,;:") for source in _input_sources(step) for url in URL.findall(source or "")}
+
+
+def _input_sources(step):
+    """The texts a step worked from: the internal index, product registry, brief anchors and notes, the
+    search results and the approved research and outline."""
     from . import houseref
 
     run, brief = step.run, step.run.brief
-    sources = [
+    return [
         houseref.related_articles_block(brief),
         houseref.product_pages_block(brief.region),
         " ".join(a.get("url", "") for a in (brief.anchors or [])),
@@ -559,7 +762,6 @@ def allowed_urls(step):
         prompting.approved_output(run, "outline"),
         brief.notes or "",
     ]
-    return {url.rstrip(".,;:") for source in sources for url in URL.findall(source or "")}
 
 
 def check_sourced_urls(text, ctx):
@@ -587,7 +789,19 @@ def check_sourced_urls(text, ctx):
                 "the product pages or the research, or drop the link",
             )
         )
+    for target in sorted(set(RELATIVE_LINK.findall(text))):
+        findings.append(
+            Finding(
+                "block",
+                f"the link target '{target}' is a bare path or a marker, not a page from the inputs "
+                "(invented URL); use a full URL from the index or the product pages, or drop the link",
+            )
+        )
     return findings
+
+
+# A Markdown link whose target is a site-relative path or a marker: never a page the inputs gave (run 20).
+RELATIVE_LINK = re.compile(r"\]\((/[^)\s]*|\[[A-Z]+[^)]*\])\)")
 
 
 def check(step_key, text, ctx):
@@ -689,8 +903,14 @@ def _guard(step_key, before, after, droppable=()):
         )
         if lost > max(unfolded, 0):
             return False, "it dropped a negation (no, not, never…), which can reverse a claim"
-    kept = {_norm(name) for name, _ in _sections(after)}
-    lost = [name for name, _ in _sections(before) if name and _norm(name) not in kept]
+    names_before = [name for name, _ in _sections(before) if name]
+    names_after = [name for name, _ in _sections(after) if name]
+    kept = {_norm(name) for name in names_after}
+    lost = [name for name in names_before if _norm(name) not in kept]
+    if lost and step_key == "draft" and len(names_after) == len(names_before):
+        # An article heading may be reworded in place (the keyword into an H2, a colon for a comma): the
+        # checks ask for exactly that (run 20). Count and order stay; plan section names stay fixed.
+        lost = []
     if lost:
         return False, "it dropped or renamed the section(s) " + ", ".join(f"'{n}'" for n in lost[:4])
     if len(re.findall(r"(?m)^#{1,3}\s+.+$", after)) < len(re.findall(r"(?m)^#{1,3}\s+.+$", before)):
@@ -747,6 +967,38 @@ def _strip_fences(text):
     return match.group(1).strip() if match else text
 
 
+def length_rule(step_key, text, ctx):
+    """The length the reviser must keep. Revisions tended to trim (run 19 ended 250 words under the guide and
+    two revisions per step were refused for removing too much), so the floor is stated, not left implied."""
+    words = len((text or "").split())
+    floor = int(words * 0.9)
+    rule = (
+        f"\nLength: the output is about {words} words. Keep at least {floor}: cut only what a finding names, "
+        "and where a finding removes a sentence, keep the fact it carried."
+    )
+    target = ctx.get("wordcount")
+    if step_key in ARTICLE_STEPS and target:
+        if _words(text) < target:
+            rule += f" The article is already under its guide of {target} words, so never shorten it."
+        else:
+            rule += f" The guide is {target} words."
+    return rule + "\n"
+
+
+def link_sources(step_key, base):
+    """For an article, the only pages a revision may link. Run 20's reviser, asked for more internal links
+    without this list, invented a new sdsmanager.com URL every round and put [VERIFY] where a link went."""
+    if step_key not in ARTICLE_STEPS:
+        return ""
+    return (
+        "\nLinks: link only to pages listed here (or already linked in the output), with their URLs exactly "
+        "as given. If no listed page fits a finding that asks for a link, leave the text without one; never "
+        "write a URL from memory and never put [VERIFY] inside a link.\n\n"
+        f"Internal articles:\n{base.get('related_articles') or '(none)'}\n\n"
+        f"Product pages:\n{base.get('product_pages') or '(none)'}\n"
+    )
+
+
 def run_loop(step, text, call, max_rounds=None):
     """The review-revise loop. `call(prompt_name, context, task)` returns (text, "provider/model")."""
     max_rounds = settings.STUDIO_SOP_MAX_ROUNDS if max_rounds is None else max_rounds
@@ -767,6 +1019,11 @@ def run_loop(step, text, call, max_rounds=None):
         result.text, fixed = normalise_fixed_headings(result.text)
         if fixed:
             current.fixes["fixed component headings"] = fixed
+        if step.key in ARTICLE_STEPS:
+            # "Tags: …" / "Excerpt: …" lines under the H1 would publish as intro text.
+            result.text, stray = textclean.strip_metadata_lines(result.text)
+            if stray:
+                current.fixes["metadata lines taken out of the article"] = sum(map(len, stray.values()))
         checks = check(step.key, result.text, ctx)
         current.checks = [str(f) for f in checks]
         reply, reviewer = call(
@@ -797,6 +1054,8 @@ def run_loop(step, text, call, max_rounds=None):
                 **base,
                 "step_label": step.label,
                 "findings": "\n".join(f"{i}. {f}" for i, f in enumerate(to_fix, 1)),
+                "length_rule": length_rule(step.key, result.text, ctx),
+                "link_sources": link_sources(step.key, base),
                 "previous_rejection": (
                     f"\nYour previous revision was not used because {rejection}. Keep every section and "
                     "heading of the output below, and change only what the findings name.\n"
@@ -809,7 +1068,10 @@ def run_loop(step, text, call, max_rounds=None):
         )
         revised = _strip_fences(revised)
         invented = [m.group(1) for m in (INVENTED_URL.match(str(f)) for f in checks) if m]
-        ok, reason = _guard(step.key, result.text, revised, droppable=invented)
+        invented += [m.group(1) for m in (INVENTED_CITATION.match(str(f)) for f in checks) if m]
+        # A pointer sentence is cut, never reworded, so its link may go with it (run 20 deadlocked here).
+        carried = [url for m in LINK_CARRIER.finditer(result.text) for url in LINKED_URL.findall(m.group(0))]
+        ok, reason = _guard(step.key, result.text, revised, droppable=invented + carried)
         if not ok:
             # The next round reviews the unchanged text and tells the model why its revision was refused.
             current.revision = f"not used ({reason})"

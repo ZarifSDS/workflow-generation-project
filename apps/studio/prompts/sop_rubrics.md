@@ -22,8 +22,8 @@ voice-and-style). Where a rubric and a skill disagree, the skill is right and th
 - The Keyword Table holds the primary and secondary keywords, the autocomplete and related terms worth targeting, the regional term where it differs, each with intent and a planned placement.
 - Anchor Opportunities names internal pages (published articles, product pages) and external primary sources, with anchor text and a target section, using only URLs that appear in the inputs.
 - Questions Searchers Ask are real searcher questions, marked body or FAQ.
-- Sources are tiered and each has a use; URLs only from the inputs. Edition years and figures are not stated from memory: where the current edition or value isn't confirmed by an input, the claim carries [VERIFY].
-- Every claim carries its source and a status; everything not "primary read" carries [VERIFY]; enumerated lists carry their item count.
+- Sources are tiered and each has a use; URLs only from the inputs. A source named without a URL is correct when no input gives its URL: never ask for one, and never count a missing URL as a finding. Edition years and figures are not stated from memory: where the current edition or value isn't confirmed by an input, the claim carries [VERIFY].
+- Every claim carries its source (a named document or page is enough) and a status; everything not "primary read" carries [VERIFY], which settles it: a claim marked [VERIFY] needs nothing more; enumerated lists carry their item count.
 - Cannibalization names the overlapping sdsmanager.com article (or "no overlap") and the route, and says which subtopics it already covers in depth.
 - Questions for the Requester lists what would change the article, each with an assumed answer, or "None."
 - No invented regulations, figures or URLs anywhere.
@@ -113,6 +113,7 @@ voice-and-style). Where a rubric and a skill disagree, the skill is right and th
 ### Formatting and house style
 
 - Title Case for every heading (house style, not a tell); zero em and en dashes anywhere (ranges as "10-15" or "10 to 15"); straight quotes only; no thematic breaks; no emoji.
+- A heading or title that pairs a topic with its qualifier separates them with a colon ("Worked Example: Acetone SDS"), never a comma; a comma in a heading only lists items.
 - Bold sparingly: about one bolded phrase per 150 words, only for a defined term on first use, a threshold or a warning; never every occurrence, never mechanically across parallel sentences, never source or brand names. Bold-label lists ("Label: text") only where a list has genuine labels, never stamped across every list; other bullets are plain sentences or short noun phrases with varied length and grammar. Benefit tails ("so [outcome]") on at most a third of a list's bullets, never as a trailing "-ing" clause.
 - Paragraphs run to 3-4 lines, fewer where the idea is done sooner; split where the controlling idea changes, never mid-idea; uniform paragraph size is noted, not blocking.
 - The format follows the information: prose for reasoning, bullets for parallel items, numbers for sequence, a table for comparison or fields; no forced alternation. A table only where structured data would take three or more sentences as prose and the relationships matter (not for two columns and under four rows, not for sequences, not for one varying attribute); every table has a bold caption above it, is introduced in the preceding paragraph, and stays within five columns.

@@ -20,6 +20,8 @@ SCRIPTS = {
     "metrics": VENDOR / "ehs_seo_blog/scripts/metrics.py",
     "prose": VENDOR / "ehs_seo_blog/scripts/prose_signals.py",
     "sweep": VENDOR / "ehs_seo_blog/scripts/mechanical_sweep.py",
+    "links": VENDOR / "ehs_seo_blog/scripts/link_check.py",
+    "flow": VENDOR / "ehs_seo_blog/scripts/editorial_flow_check.py",
 }
 
 

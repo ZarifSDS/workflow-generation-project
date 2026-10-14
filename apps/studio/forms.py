@@ -55,8 +55,10 @@ class BriefForm(forms.ModelForm):
         self.fields["preset"].required = False
         self.fields["preset"].empty_label = "No preset"
         self.fields["preset"].label = "Start from a preset"
-        if self.instance.pk:
+        # A pasted sheet row (initial) wins over the saved brief's values.
+        if self.instance.pk and "skeywords_text" not in self.initial:
             self.fields["skeywords_text"].initial = "\n".join(self.instance.skeywords or [])
+        if self.instance.pk and "anchors_text" not in self.initial:
             self.fields["anchors_text"].initial = "\n".join(
                 f"{a.get('text', '')} | {a.get('url', '')}" for a in (self.instance.anchors or [])
             )

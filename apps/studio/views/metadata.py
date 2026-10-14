@@ -1,3 +1,5 @@
+from urllib.parse import urlparse
+
 from django.contrib import messages
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
@@ -44,7 +46,15 @@ class MetadataView(StudioPage):
             for kind in MetadataOption.Kind.values
         }
         title = selected["title"].text if selected["title"] else ""
+        brief = self.run.brief
+        if brief.content_type == "outbound" and (brief.site_domain or brief.site):
+            host = urlparse(brief.site_domain).netloc or brief.site
+            crumbs = [host.removeprefix("www.")]
+        else:
+            # Where sdsmanager.com publishes articles (the internal index's URLs).
+            crumbs = ["sdsmanager.com", brief.region.lower(), "sds-management-articles"]
         context.update(
+            preview_crumbs=crumbs,
             run=self.run,
             groups=groups,
             selected=selected,
@@ -72,6 +82,9 @@ class MetadataView(StudioPage):
                 value = request.POST.get(f"choice_{kind}")
                 if value and value.isdigit():
                     ids.add(int(value))
-            services.set_metadata_selection(self.run, ids)
-            messages.success(request, "Saved your selection.")
+            try:
+                services.set_metadata_selection(self.run, ids)
+                messages.success(request, "Saved your selection.")
+            except ValueError as error:
+                messages.error(request, str(error))
         return redirect("studio:metadata", pk=self.run.pk)

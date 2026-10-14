@@ -2,6 +2,27 @@
 
 Read this first in a new session. Then `docs/development.md` (code map, how-tos, process), `docs/sop.md` (the SOP and the autopilot) and `docs/tools-and-processes.md`. Also see `docs/roadmap.md`, `docs/workflow.md`, `docs/ui-ux-plan.md`, `docs/security.md`, `docs/providers.md`, `docs/model-eval.md` and `AGENTS.md`.
 
+## Session of 2026-10-14 (10:20 GMT+6 on): backend smoothing, then the SOP audit
+
+**User direction this session:** the remaining text problems (wrong citations, flat tone, lenient reviews) are model reasoning; don't keep trying free models. Smooth the backend instead; a paid model is checked at demo time. Then audit the SOP against the five skills (`ehs-seo-blog-optimized`, `ehs-outbound-blog`, `deslop`, `clarity-review`, `sds-hero-stock`, with their references and data) to reduce or eliminate misfires by design rather than by endless stress tests.
+
+**Runs this session (brief 16, gpt-oss:120b writer):** run 20 with nemotron-3-ultra as SOP reviewer (held at review_edit after four draft regenerations on successive fixes), run 21 with gemma4:31b (held at research: the reviewer read "URLs only from the inputs" as "every source needs a URL"; rubric clarified). nemotron: concrete first-round findings, then PASS with zero findings while blocks and stuffed headings remained; gemma4: loops on rubric ambiguity. The SOP reviewer default is back to the built-in (gpt-oss:120b); no TaskDefault row.
+
+**Fixed (all with tests; suite 452 passed, ruff clean; share mode rebuilt on it):**
+- Reviser told the length floor (`sop.length_rule`) and, on article steps, the only pages it may link (`sop.link_sources`); it reinvented URLs every round without the list.
+- Draft revisions may reword a heading in place (count and order kept); the keyword checks asked for exactly that and every such revision was refused.
+- Keyword in headings matched loosely (`sop.carries_keyword`: acronyms like SDS, plurals, any order); stuffing (keyword in > 3 headings) blocks; first body H2 must answer the query (advisory, `first_h2_answers`). Exact match had made the model append the keyword to every H2.
+- Links in pointer sentences and flagged regulation references are droppable by a revision (the guard deadlocked on them); `LINK_CARRIER` now reads past the dots inside URLs.
+- New blocks: a link to a bare path or a marker (`RELATIVE_LINK`); a regulation subsection (`1910.1200(c)(1)`) not in the research or search results unless its sentence carries `[VERIFY]` (`check_citations`); a blog close with no product-page link, or linking an article; a heading that joins topic and qualifier with a comma (house style: colon; `_rules.md` and the rubric now say so too).
+- Mechanical fixes: `[text][url]` and `[text]([VERIFY])` repaired; markers with spaces or lower case normalised, and **the publish guard now reads them** (`[ SRC: url ]` used to pass Final cleanup and Publish); `Tags:`/`Excerpt:` lines under the H1 taken out of the article (`textclean.strip_metadata_lines`, in the draft split and in the loop).
+- The skill's `link_check.py` and `editorial_flow_check.py` vendored and run on every article round (`sop.check_skill_scripts`): banned link placements block, flow prompts advise (at most six).
+- **Guest-post intake from the sheet:** "Guest post from the brief sheet: paste a row" on the wizard (`apps/studio/sheetrow.py`), tested on every row of the real sheet: header-or-not, multi-line anchors, URLs split by spaces or lines, missing `https://`, ranges, placeholders, host linking rules in the anchor cell (moved to notes), region from URLs/notes.
+- **Questions for the Requester as a form** on a research step waiting for review (`apps/studio/requester.py`): answers are written into the research as "Answer from the requester:" lines and saved as an edited version, so the outline and draft read them. Parser handles every shape gpt-oss wrote in runs 17-21; the research prompt now pins `1. Question? Assumed answer: …`.
+- Metadata screen: own options get house mechanics (dash to colon), slugs normalised, over-limit own options refused, saving a selection with an over-limit option refused with a message, adding your own meta/slug/tags/excerpt now replaces the previous choice (two were selected before), and the search preview shows the real path (`sdsmanager.com › us › sds-management-articles › slug`, or the host for a guest post).
+- The model panel on a step that hasn't run yet says "Run with … / Use this model when it runs".
+
+**Still open from the audit list:** item 4 (one grade/checks panel per step, scan counts with what-to-do copy, send-back model list with durations) and sectional drafting / re-branding library images. The SOP audit's findings are recorded below once done.
+
 ## Session of 2026-10-14 (03:45–07:50 GMT+6): what changed and where it stands
 
 The user's brief for this session: audit the studio against how they actually brief work in Claude Code (their two prompts for `/ehs-seo-blog-optimized` and `/ehs-outbound-blog`, plus `/deslop`, `/clarity-review`, `/sds-hero-stock`), stress-test everything without publishing to sdsmanager.com, and build the one-shot "SOP agent": a self-reviewing mode that keeps the per-step review mechanism but lets the model review its own output against the SOP at each step and loop until the content meets it. Stop conditions were the clock (07:50 GMT+6), context, credits, or "the best I can produce"; then update this handoff, commit and push (the backup under `D:\backups` untouched).

@@ -63,6 +63,8 @@ Open **New brief**. Start from a preset if one fits (for example "SDS Manager bl
 | Localise to | Only if you want the optional Localise step: the region of the variant |
 | Notes | Anything the models should know: angle, sources to use, things to avoid, the host's requirements for a guest post |
 
+**Guest post from the brief sheet.** Rather than typing a guest post's brief, open **Guest post from the brief sheet: paste a row** at the top of the page. Copy the article's row from the Guest Post Plan sheet (with the header row above it if you like), paste it and choose **Fill the brief from this row**. It fills the content type, title (kept word for word), primary and supporting keywords, the site and its URL, the anchors paired with their backlink URLs in order, the word count, the region (from the backlink URLs or the language note) and the notes: the host's requirements, the placement type, keyword volume, a word-count range and the reference guest post to read first. Nothing is saved until you save or start the run. Messages above the form list every guess or gap, for example an anchor with no URL in the sheet (the form then asks for it; the sheet's Link Targets tab lists each product's URL), a range read as its lower number, or an anchor cell that holds the host's linking rule instead of anchors (that rule goes into the notes).
+
 Then choose how the run proceeds:
 
 - **Review each step** (default): every step waits for your approval. Tick **SOP self-review** on any step you still want checked and revised by the reviewer model before you see it.
