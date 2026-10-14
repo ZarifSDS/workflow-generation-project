@@ -45,7 +45,14 @@ NEGATION = re.compile(
     r"shouldn't|mustn't|didn't|hasn't|haven't)\b",
     re.I,
 )
-UNFOLDABLE_NEGATION = re.compile(r"\bnot (?:just|only|merely)\b|\bnot\b[^.!?\n]{0,80}?\bbut\b", re.I)
+# Negations a rewrite may remove because removing them is the fix: "not just X but Y", "not X but Y", and
+# deslop's negative parallelism ("isn't about paperwork, it's about protecting workers"), the same pattern
+# its lexical scan flags as the strongest machine-prose tell.
+UNFOLDABLE_NEGATION = re.compile(
+    r"\bnot (?:just|only|merely)\b|\bnot\b[^.!?\n]{0,80}?\bbut\b"
+    r"|\b(?:isn't|is not|aren't|are not|it's not|wasn't)\b[^.!?\n]{0,70}?\b(?:it's|but|rather)\b",
+    re.I,
+)
 
 
 @dataclass
@@ -172,13 +179,32 @@ def _headings(text):
     return re.findall(r"(?m)^#{1,3}\s+.+$", text)
 
 
+# What a number counts, when it says so: the unit stays with the number through a rewrite. Any other word
+# after a number is free ("1910.1200 requires" may become "Under 1910.1200, employers must…"): protecting
+# the next word refused every agent-and-verb rewrite after a regulation number (docs/sop-audit.md).
+UNITS = (
+    r"%|percent|per cent|ppm|ppb|mg/m3|mg/kg|mg|kg|g|lb|lbs|oz|t|tonnes?|tons?|m|cm|mm|km|ft|feet|foot|"
+    r"inch(?:es)?|metres?|meters?|litres?|liters?|l|ml|gallons?|°[CF]|degrees?|years?|months?|weeks?|days?|"
+    r"hours?|hrs?|"
+    r"minutes?|mins?|seconds?|employees?|workers?|people|persons?|sites?|chemicals?|sections?|items?|steps?|"
+    r"pages?|violations?|citations?|times|x"
+)
+NUMBER_WITH_UNIT = re.compile(rf"\d+(?:[.,:/-]\d+)*(?:\([a-z0-9]+\))*(?:\s?(?:{UNITS})\b|\s?%)?", re.I)
+# A number written out keeps its unit too: "thirty years" turned into "ten years" passed every guard.
+NUMBER_WORDS = (
+    r"one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|"
+    r"seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|"
+    r"million|half|dozen"
+)
+WORD_NUMBER_WITH_UNIT = re.compile(rf"\b(?:{NUMBER_WORDS})(?:[- ](?:{NUMBER_WORDS}))*\s(?:{UNITS})\b", re.I)
+
+
 def protected_spans(text):
-    """Things a rewrite must never change: numbers with what they count, section and regulation
+    """Things a rewrite must never change: numbers with the unit they count, section and regulation
     references, URLs, acronyms (agencies, statutes) and markers."""
     flat = re.sub(r"\s+", " ", text)
-    spans = set(
-        re.findall(r"\d+(?:[.,:/-]\d+)*(?:\([a-z0-9]+\))*(?:\s?%| (?!the\b|and\b|or\b|of\b)[A-Za-z]+)?", flat)
-    )
+    spans = {m.group(0).strip() for m in NUMBER_WITH_UNIT.finditer(flat)}
+    spans |= {m.group(0).strip().lower() for m in WORD_NUMBER_WITH_UNIT.finditer(flat)}
     spans |= set(
         re.findall(
             r"\b(?:Section|Regulation|Part|Article|Schedule|Rule|Subpart|Appendix)\s+[\dA-Z][\w.()-]*", flat
@@ -190,9 +216,10 @@ def protected_spans(text):
     return spans
 
 
-def protected_ok(before, after):
+def protected_ok(before, after, negation_allowance=0):
     """(ok, reason): every protected span survives, and no negation is lost (unfolding a 'not X but Y'
-    into the positive claim may remove its 'not')."""
+    into the positive claim may remove its 'not'; `negation_allowance` more may go when a finding's fix is
+    exactly that, e.g. a bare "No," FAQ opener rewritten to mirror the question)."""
     missing = sorted(protected_spans(before) - protected_spans(after))
     if missing:
         shown = ", ".join(f"“{span}”" for span in missing[:5])
@@ -200,12 +227,12 @@ def protected_ok(before, after):
     lost = len(NEGATION.findall(before)) - len(NEGATION.findall(after))
     # Only an unfoldable "not X but Y" that actually disappeared may account for a lost negation.
     unfolded = len(UNFOLDABLE_NEGATION.findall(before)) - len(UNFOLDABLE_NEGATION.findall(after))
-    if lost > max(unfolded, 0):
+    if lost > max(unfolded, 0) + negation_allowance:
         return False, "it dropped a negation (no, not, never…), which can reverse a claim"
     return True, ""
 
 
-def accept_rewrite(before, after, min_ratio=0.75):
+def accept_rewrite(before, after, min_ratio=0.75, negation_allowance=0):
     """A rewrite is kept only if it keeps every heading, most of the words and every protected fact."""
     after = (after or "").strip()
     if not after:
@@ -214,7 +241,7 @@ def accept_rewrite(before, after, min_ratio=0.75):
         return False, "headings were dropped"
     if len(after.split()) < min_ratio * len(before.split()):
         return False, "too much text was removed"
-    return protected_ok(before, after)
+    return protected_ok(before, after, negation_allowance)
 
 
 _accept_rewrite = accept_rewrite  # older name, used by the chat
@@ -409,22 +436,62 @@ def _clarity_candidates(frames):
     return candidates
 
 
+def accept_by_section(before, after, min_ratio=0.75):
+    """Accept a whole-article rewrite section by section: a section whose rewrite changed a protected fact or
+    lost a negation goes back to its original, the others keep their edits. One refused span used to throw
+    away every section's edits (docs/sop-audit.md). Falls back to the whole-article test when the rewrite
+    changed the section structure. Returns (text, reverted [(section name, reason)]), or (None, reason)."""
+    after = (after or "").strip() + "\n"
+    old, new = split_sections(before), split_sections(after)
+    if [heading_name(h) for h, _ in old] != [heading_name(h) for h, _ in new]:
+        ok, reason = accept_rewrite(before, after, min_ratio)
+        return (after, []) if ok else (None, reason)
+    if len(after.split()) < min_ratio * len(before.split()):
+        return None, "too much text was removed"
+    kept, reverted = [], []
+    for (heading, body), (new_heading, new_body) in zip(old, new, strict=True):
+        if (heading + body).strip() == (new_heading + new_body).strip():
+            kept.append((heading, body))
+            continue
+        # Facts and negations are judged per section; length only for the whole article, because deslop's
+        # cuts are legitimately large in a short section ("cutting beats rewording").
+        ok, reason = protected_ok(heading + body, new_heading + new_body)
+        if ok:
+            kept.append((new_heading, new_body))
+        else:
+            kept.append((heading, body))
+            reverted.append((heading_name(heading), reason))
+    if reverted and len(reverted) == sum(1 for o, n in zip(old, new, strict=True) if o != n):
+        return None, "every changed section " + reverted[0][1].removeprefix("it ")
+    return join_sections(kept), reverted
+
+
 def _rewrite_pass(result, call, number, name, prompt, context, notes_heading, summary):
     before = result.text
     reply = call(prompt, {"article": before, **context}) or ""
     after, notes = split_notes(reply, notes_heading)
+    text, reverted = accept_by_section(before, after)
+    if text is None:
+        notes = [f"(not applied: the rewrite was refused) {note}" for note in notes]
+    elif reverted:
+        notes.append(
+            "Sections kept as they were: "
+            + "; ".join(f"{section} ({reason})" for section, reason in reverted[:4])
+            + ". Edits described above for those sections were not applied."
+        )
     if notes_heading == "Deslop notes":
         result.questions = notes
     else:
         result.clarity_edits = notes
-    ok, reason = accept_rewrite(before, after)
-    if ok:
-        result.text = after.strip() + "\n"
+    if text is not None:
+        result.text = text.strip() + "\n"
         detail = f" {len(notes)} note(s)." if notes else ""
-        _record(result, number, name, after.strip() != before.strip(), summary + detail, notes=notes)
+        if reverted:
+            detail += f" {len(reverted)} section(s) kept as they were (a protected fact or negation changed)."
+        _record(result, number, name, text.strip() != before.strip(), summary + detail, notes=notes)
     else:
         _record(
-            result, number, name, False, f"Rewrite not used ({reason}); text left unchanged.", notes=notes
+            result, number, name, False, f"Rewrite not used ({reverted}); text left unchanged.", notes=notes
         )
 
 

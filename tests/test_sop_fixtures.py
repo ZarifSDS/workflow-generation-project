@@ -63,7 +63,8 @@ def test_fixture_b_every_planted_defect_is_caught(path):
 
 
 def test_fixture_a_approved_articles_raise_no_blocks():
-    paths = fixtures("a")
+    # a/ is committed (published articles); a_local/ is git-ignored (approved but unpublished guest posts).
+    paths = fixtures("a") + fixtures("a_local")
     if not paths:
         pytest.skip("No Fixture A article yet: add an owner-approved article to tests/fixtures/sop/a/")
     failures = {}

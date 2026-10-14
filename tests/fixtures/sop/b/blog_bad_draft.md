@@ -27,7 +27,7 @@ checks:
   - "contains a link"                                     # link inside an FAQ answer
   - "is generic"                                          # "## Conclusion"
   - "links no product page"                               # close without a product link
-  - "headings; keep it in two or three"                   # keyword in more than three headings
+  - "tacked onto the end of"                              # "… for How to Read a Safety Data Sheet" x3
   - "isn't in the inputs (invented URL)"                  # sdsmanager.com URL not in the inputs
   - "is a bare path or a marker"                          # (/resources/training)
   - "isn't in the research or the search results"         # 1910.1200(c)(1), unsourced
@@ -64,7 +64,7 @@ A safety data sheet is a document. It lists the hazards of a product. It tells y
 
 In this section, we will look at the order a supervisor reads a sheet in. Start with Section 1 to match the product name to the container label. Then read Section 2 for the signal word and the pictograms. Training on these sheets is required by 29 CFR 1910.1200(c)(1). Teams that train this way cut incidents by 47%.
 
-## How to Read a Safety Data Sheet for Storage Rules
+## Storage Rules for How to Read a Safety Data Sheet
 
 Section 7 gives the storage conditions and the incompatible materials. For more details, see our [SDS retention guide](https://sdsmanager.com/us/sds-management-articles/sds-retention/). Keep [SDS software](https://sdsmanager.com/us/ehs-software/) and the [OSHA HazCom page](https://www.osha.gov/hazcom) open while you plan a store.
 
@@ -72,11 +72,11 @@ Section 7 gives the storage conditions and the incompatible materials. For more 
 
 The acetone sheet lists a flash point well below room temperature in Section 9. The [annotated acetone sheet](https://sdsmanager.com/us/made-up-page/) and the [training page](/resources/training) show the same values.
 
-## How to Read a Safety Data Sheet Without Missing Section 16
+## Section 16 Checks for How to Read a Safety Data Sheet
 
 Section 16 gives the revision date, so you can tell whether the sheet is current under 1910.1200(g)(8).
 
-## How to Read a Safety Data Sheet for a New Hire
+## New Hire Training for How to Read a Safety Data Sheet
 
 Walk a new starter through Sections 2, 4 and 8 on the first day, with a real container in hand.
 

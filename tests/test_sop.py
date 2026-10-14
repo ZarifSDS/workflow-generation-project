@@ -1,6 +1,8 @@
 """The SOP self-review (apps/studio/sop.py, docs/sop.md): deterministic checks, the review-revise loop,
 autopilot runs and the UI around them. No real provider calls."""
 
+import re
+
 import pytest
 from django.conf import settings
 from django.urls import reverse
@@ -232,7 +234,11 @@ def test_draft_checks_adjacent_anchors_and_brief_anchors():
         "Keep the version in use at the time of exposure.",
         "Keep the version in use at the time of exposure, see [the archive](https://sdsmanager.com/us/x/).",
     )
-    assert any("adjacent" in f for f in blocking(sop.check("draft", text, CTX)))
+    # A guest-post rule: approved blogs (Fixture A) link in adjacent sections.
+    assert any(
+        "adjacent" in f for f in blocking(sop.check("draft", text, {**CTX, "content_type": "outbound"}))
+    )
+    assert not any("adjacent" in f for f in blocking(sop.check("draft", text, CTX)))
     ctx = {
         **CTX,
         "content_type": "outbound",
@@ -813,16 +819,23 @@ def test_the_first_body_h2_should_answer_the_query():
     assert any("doesn't answer the primary query" in f and f.startswith("[advise]") for f in found)
 
 
-def test_keyword_stuffed_headings_are_blocked():
+def test_keyword_tacked_onto_headings_is_blocked_but_natural_use_is_not():
     # Run 20's revision appended the keyword to every H2.
     stuffed = GOOD_DRAFT
-    for heading in ("What Counts as an Exposure Record?", "Do Safety Data Sheets Expire?"):
+    for heading in (
+        "What Counts as an Exposure Record?",
+        "Do Safety Data Sheets Expire?",
+        "Keep Every SDS Where Your Auditor Can Find It",
+    ):
         stuffed = stuffed.replace(f"## {heading}", f"## {heading.rstrip('?')} for SDS Retention Requirements")
-    stuffed = stuffed.replace(
-        "## Keep Every SDS Where Your Auditor Can Find It", "## Keep SDS Retention Requirements Auditable"
+    assert any("tacked onto the end of 3 headings" in f for f in blocking(sop.check("draft", stuffed, CTX)))
+    assert not any("tacked onto" in f for f in blocking(sop.check("draft", GOOD_DRAFT, CTX)))
+    # The keyword opening many headings is natural (the approved JSA article does it 17 times).
+    natural = GOOD_DRAFT.replace(
+        "## What Counts as an Exposure Record?", "## SDS Retention Requirements for Labs"
     )
-    assert any("is in 4 headings" in f for f in blocking(sop.check("draft", stuffed, CTX)))
-    assert not any("headings; keep it" in f for f in blocking(sop.check("draft", GOOD_DRAFT, CTX)))
+    natural = natural.replace("## Do Safety Data Sheets Expire?", "## SDS Retention Requirements and Expiry")
+    assert not any("tacked onto" in f for f in blocking(sop.check("draft", natural, CTX)))
 
 
 def test_reference_style_url_links_are_repaired():
@@ -938,3 +951,187 @@ def test_a_pointer_sentence_may_take_its_link_with_it():
     assert match and url in match.group(0)  # the sentence runs past the dots inside the URL
     assert not sop._guard("draft", text, text.replace(" " + pointer, ""))[0]
     assert sop._guard("draft", text, text.replace(" " + pointer, ""), droppable=[url])[0]
+
+
+# ---- Phase 2 (docs/sop-audit.md): findings carry a level and permissions; the loop re-checks ----
+
+
+class ScriptedCall:
+    """A `call` for run_loop: reviewer replies and revisions in order, recording what was sent."""
+
+    def __init__(self, verdicts, revisions):
+        self.verdicts, self.revisions, self.sent = list(verdicts), list(revisions), []
+
+    def __call__(self, prompt_name, context, task):
+        self.sent.append((prompt_name, context))
+        if prompt_name == "sop_review":
+            verdict = self.verdicts.pop(0) if self.verdicts else "PASS"
+            # "REVISE3" returns three findings.
+            count = int(verdict[6:] or 1) if verdict.startswith("REVISE") else 0
+            findings = "\n".join(f"{i}. Section {i} · a rubric line · a fix" for i in range(1, count + 1))
+            verdict = "REVISE" if count else verdict
+            return f"VERDICT: {verdict}\n\n## Findings\n{findings or 'None.'}", "fake/reviewer"
+        return self.revisions.pop(0), "fake/writer"
+
+
+@pytest.fixture
+def draft_step(brief, monkeypatch):
+    monkeypatch.setattr(sop, "context_from", lambda step: dict(CTX))
+    return services.create_run(brief, {}).steps.get(key="draft")
+
+
+NO_FAQ = (
+    "### Do You Need to Keep an SDS for a Discontinued Product?\n\n"
+    "An SDS for a discontinued product stays in the archive for 30 years after the last use."
+)
+
+
+def test_the_fix_a_finding_asks_for_is_allowed_bare_no_faq(draft_step):
+    bare = GOOD_DRAFT.replace(
+        NO_FAQ,
+        "### Can an SDS Be Thrown Away When a Product Is Discontinued?\n\n"
+        "No, it stays in the archive for 30 years after the last use.",
+    )
+    # Mirroring the subject drops the "No".
+    fixed = bare.replace("No, it stays", "An SDS for a discontinued product stays")
+    assert any("bare Yes/No" in f for f in blocking(sop.check("draft", bare, CTX)))
+    assert not any("bare Yes/No" in f for f in blocking(sop.check("draft", fixed, CTX)))
+    call = ScriptedCall(["REVISE", "PASS"], [fixed])
+    result = sop.run_loop(draft_step, bare, call, max_rounds=2)
+    assert result.passed, result.rounds[0].revision
+    assert result.rounds[0].revision == "applied" and "No, an SDS" not in result.text
+    # Without the finding's permission the same edit is a lost negation.
+    assert not sop._guard("draft", bare, fixed)[0]
+
+
+def test_a_yes_or_no_that_mirrors_the_question_is_fine():
+    # The approved WHS article (Fixture A): "Yes," followed by the question's own subject.
+    mirrored = GOOD_DRAFT.replace(
+        NO_FAQ,
+        "### Does WHS Risk Management Apply to Volunteers?\n\n"
+        "Yes, WHS risk management applies to volunteers the same way it applies to paid workers.",
+    )
+    assert not any("bare Yes/No" in f for f in blocking(sop.check("draft", mirrored, CTX)))
+    bare = mirrored.replace("Yes, WHS risk management applies to volunteers", "Yes, a PCBU owes the duty")
+    assert any("bare Yes/No" in f for f in blocking(sop.check("draft", bare, CTX)))
+
+
+def test_a_revision_that_introduces_new_blocks_is_refused(draft_step):
+    comma = GOOD_DRAFT.replace("## Do Safety Data Sheets Expire?", "## Worked Example, SDS Expiry")
+    worse = comma.replace("## Worked Example, SDS Expiry", "## Worked Example: SDS Expiry").replace(
+        "Keep the version in use at the time of exposure.",
+        "Keep the version in use at the time of exposure. In this section, we look at expiry.",
+    )
+    call = ScriptedCall(["REVISE", "REVISE"], [worse, worse])
+    result = sop.run_loop(draft_step, comma, call, max_rounds=2)
+    assert "introduced new problems: meta narration" in result.rounds[0].revision
+    assert not result.passed and "In this section" not in result.text
+
+
+def test_structural_blocks_go_back_to_the_step_not_to_the_reviser(draft_step):
+    no_takeaways = re.sub(r"## Key Takeaways\n\n(?:- .*\n)+\n", "", GOOD_DRAFT)
+    assert "Key Takeaways" not in no_takeaways
+    call = ScriptedCall(["PASS"], [])
+    result = sop.run_loop(draft_step, no_takeaways, call, max_rounds=2)
+    assert not result.passed and result.route == "send_back"
+    assert any("Key Takeaways" in f for f in result.routed)
+    assert [name for name, _ in call.sent] == ["sop_review"]  # nothing went to a line reviser
+
+
+def test_send_back_regenerates_the_draft_once_and_keeps_the_better_result(draft_step, monkeypatch):
+    no_takeaways = re.sub(r"## Key Takeaways\n\n(?:- .*\n)+\n", "", GOOD_DRAFT)
+    notes = []
+
+    def regenerate(step):
+        notes.append(step.regenerate_note)
+        return executors.StepOutput(content=GOOD_DRAFT, provider="fake", model="writer")
+
+    monkeypatch.setattr(executors, "EXECUTORS", {**executors.EXECUTORS, "draft": regenerate})
+    monkeypatch.setattr(sop, "run_loop", _loop_with(ScriptedCall(["PASS"] * 4, [])))
+    output = sop.apply(
+        draft_step, executors.StepOutput(content=no_takeaways, provider="fake", model="writer")
+    )
+    log = output.extra_metrics["sop"]
+    assert log["sent_back"] and log["passed"] and "## Key Takeaways" in output.content
+    assert "Key Takeaways" in notes[0] and draft_step.regenerate_note == ""
+
+
+def _loop_with(call):
+    real = sop.run_loop
+
+    def run(step, text, _call, max_rounds=None):
+        return real(step, text, call, max_rounds=2)
+
+    return run
+
+
+def test_the_best_round_is_kept_on_a_hold(draft_step):
+    comma = GOOD_DRAFT.replace("## Do Safety Data Sheets Expire?", "## Worked Example, SDS Expiry")
+    reworded = comma.replace("Keep the version in use", "Keep the sheet version in use")
+    # Round 1: one block, one reviewer finding. The revision keeps the block and round 2 has three findings.
+    call = ScriptedCall(["REVISE1", "REVISE3"], [reworded])
+    result = sop.run_loop(draft_step, comma, call, max_rounds=1)
+    assert not result.passed and result.best_round == 1
+    assert "Keep the version in use" in result.text  # round 1's text, not the worse revision
+    # When the later round is no worse, the later text stands.
+    call = ScriptedCall(["REVISE1", "REVISE1"], [reworded])
+    result = sop.run_loop(draft_step, comma, call, max_rounds=1)
+    assert result.best_round is None and "Keep the sheet version in use" in result.text
+
+
+def test_near_miss_plan_section_names_are_matched_and_sub_labels_stay_bold():
+    plan = (
+        "## Search Intent\n\nHow-to.\n\n## Keyword & Anchor Map\n\n| a | b | c |\n\n"
+        "## Cannibalisation\n\nNo overlap.\n\n## Claims\n\n**Regulatory claims**\n\n- one\n"
+    )
+    text, count = sop.canonical_section_names(plan, sop.RESEARCH_SECTIONS + sop.OUTLINE_SECTIONS)
+    assert "## Keyword and Anchor Map" in text and "## Cannibalization" in text and count == 2
+    promoted, n = sop.normalise_plan_headings(plan, sop.RESEARCH_SECTIONS)
+    assert "**Regulatory claims**" in promoted and n == 0
+    assert sop.normalise_plan_headings("**Search Intent**\n\nHow-to.\n", sop.RESEARCH_SECTIONS)[1] == 1
+
+
+def test_findings_carry_the_permissions_their_fix_needs():
+    url = "https://sdsmanager.com/us/made-up/"
+    text = GOOD_DRAFT.replace("(https://sdsmanager.com/us/ehs-software/)", f"({url})")
+    found = sop.check("draft", text, {**CTX, "allowed_urls": {"https://sdsmanager.com/us/ehs-software/"}})
+    invented = next(f for f in found if "isn't in the inputs" in f.text and url in f.text)
+    assert invented.allows["drop_urls"] == [url] and invented.level == "line"
+    merged = sop.permissions(found)
+    assert url in merged["drop_urls"]
+    takeaways = sop.check("draft", re.sub(r"## Key Takeaways\n\n(?:- .*\n)+\n", "", GOOD_DRAFT), CTX)
+    assert any(f.level == "structural" for f in takeaways)
+
+
+def test_the_reverse_outline_compares_the_article_with_the_approved_plan():
+    plan = sop.outline_plan(GOOD_OUTLINE)
+    assert plan["planned_h2s"] and "Key Takeaways" not in plan["planned_h2s"]
+    # GOOD_OUTLINE and GOOD_DRAFT were written separately (the check rightly reports the outline's
+    # "How Long Do You Keep Safety Data Sheets?" as missing), so plan from the draft's own sections here.
+    assert sop.check_reverse_outline(GOOD_DRAFT, {**CTX, **plan})
+    own = [
+        n
+        for n, _ in sop._sections(GOOD_DRAFT)[1:]
+        if n not in ("Key Takeaways", "Frequently Asked Questions")
+    ]
+    ctx = {**CTX, "planned_h2s": [n for n in own if n != "References"]}
+    assert sop.check_reverse_outline(GOOD_DRAFT, ctx) == []
+    first = ctx["planned_h2s"][0]
+    dropped = re.sub(rf"## {re.escape(first)}\n\n(?:.*\n)+?(?=## )", "", GOOD_DRAFT)
+    found = [str(f) for f in sop.check_reverse_outline(dropped, ctx)]
+    assert any("missing from the article" in f and first in f for f in found)
+    assert all(f.startswith("[advise]") for f in found)
+
+
+def test_a_plan_that_says_no_product_fits_lets_the_close_go_unlinked():
+    assert not sop.outline_plan(GOOD_OUTLINE)["no_product"]
+    honest = GOOD_OUTLINE.replace(
+        "Product: https://sdsmanager.com/us/ehs-software/.", "No registry product fits this gap honestly."
+    )
+    assert sop.outline_plan(honest)["no_product"]
+    close = "## Keep Every SDS Where Your Auditor Can Find It"
+    body = GOOD_DRAFT.split(close, 1)[1].split("\n## ", 1)[0]
+    unlinked = GOOD_DRAFT.replace(body, "\n\nPaper binders go missing; list every product this week.\n")
+    assert any("links no product page" in f for f in blocking(sop.check("draft", unlinked, CTX)))
+    ctx = {**CTX, "no_product": True}
+    assert not any("links no product page" in f for f in blocking(sop.check("draft", unlinked, ctx)))

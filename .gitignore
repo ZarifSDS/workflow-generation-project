@@ -38,3 +38,6 @@ Thumbs.db
 /frontend/node_modules/
 /frontend/meta.json
 /apps/studio/static/studio/editor/
+
+# Fixture A guest posts not yet published: kept local (tests/fixtures/sop/README.md)
+tests/fixtures/sop/a_local/

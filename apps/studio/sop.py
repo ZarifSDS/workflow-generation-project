@@ -20,7 +20,9 @@ How it works for one step (apps.studio.tasks.execute_step calls `apply` when `st
 The whole loop is logged in the version's metrics under "sop" and shown on the run screen.
 """
 
+import difflib
 import re
+from collections import Counter
 from dataclasses import dataclass, field
 
 from django.conf import settings
@@ -104,13 +106,44 @@ INTERNAL_LINK = re.compile(r"\]\((?:https?://(?:www\.)?sdsmanager\.com[^)]*|wagt
 ANY_LINK = re.compile(r"\]\([^)]+\)")
 
 
+LEVELS = ("strategic", "structural", "line", "mechanical")
+
+
 @dataclass
 class Finding:
-    severity: str  # "block" | "advise"
+    """One deterministic finding.
+
+    `level` decides the route (docs/sop-audit.md, after the content-editing skill's hierarchy: strategy,
+    then structure, then lines): a strategic finding holds for a person; a structural one in an article is
+    not given to the line reviser but sends the step back to be regenerated from its plan; a line finding
+    is revised in place. `allows` is what its fix may change, and the guard allows exactly that:
+    `drop_urls` (links it may remove), `rename` (headings it may reword; "*" for any), `drop_negations`
+    (how many negations may go) and `drop_spans` (protected spans it may change). A fix that needs a
+    change nothing allows is refused, so a check never asks for what the guard forbids."""
+
+    severity: str  # "block" | "advise" | "note"
     text: str
+    level: str = "line"
+    allows: dict = field(default_factory=dict)
 
     def __str__(self):
         return f"[{self.severity}] {self.text}"
+
+
+def permissions(findings):
+    """The union of what a set of findings allows a revision to change."""
+    merged = {"drop_urls": set(), "rename": set(), "drop_negations": 0, "drop_spans": set()}
+    for finding in findings:
+        allows = getattr(finding, "allows", None) or {}
+        merged["drop_urls"] |= set(allows.get("drop_urls", ()))
+        merged["rename"] |= set(allows.get("rename", ()))
+        merged["drop_negations"] += int(allows.get("drop_negations", 0))
+        merged["drop_spans"] |= set(allows.get("drop_spans", ()))
+    return merged
+
+
+def _links_in(text):
+    return [url.rstrip(".,;:") for url in re.findall(r"(?:https?|wagtail)://[^\s)\]\"'>]+", text or "")]
 
 
 @dataclass
@@ -131,6 +164,14 @@ class SopResult:
     rounds: list = field(default_factory=list)
     reviewer: str = ""
     error: str = ""
+    route: str = ""  # "" | "send_back" (structural findings remain) | "hold" (a strategic finding)
+    routed: list = field(default_factory=list)  # the findings behind the route
+    best_round: int | None = None  # set when a hold keeps an earlier round's text
+    sent_back: bool = False  # the step was regenerated once with the structural findings as its note
+
+    def blocks(self):
+        last = self.rounds[-1] if self.rounds else None
+        return [c for c in (last.checks if last else []) if c.startswith("[block]")]
 
     def open_findings(self):
         last = self.rounds[-1] if self.rounds else None
@@ -143,6 +184,10 @@ class SopResult:
             "passed": self.passed,
             "reviewer": self.reviewer,
             "error": self.error,
+            "route": self.route,
+            "routed": self.routed,
+            "best_round": self.best_round,
+            "sent_back": self.sent_back,
             "rounds": [
                 {
                     "number": r.number,
@@ -169,11 +214,23 @@ class SopResult:
                 + (f"; auto-fixed {fixed}" if fixed else "")
                 + (f"; revision {r.revision}" if r.revision else "")
             )
+        if self.sent_back:
+            lines.append("- Structural findings sent the step back once: it was regenerated from its plan.")
+        if self.best_round:
+            lines.append(f"- Kept round {self.best_round}'s text: later rounds weren't better.")
         if self.passed:
             lines.append("")
             lines.append("Passed the SOP; the step continued on its own." if self.rounds else "")
         else:
-            lines += ["", "**Held for your review.** Open findings:", ""]
+            lines += ["", "**Held for your review.**"]
+            if self.route == "hold":
+                lines.append("A strategic finding needs a person before anything is revised:")
+            elif self.route == "send_back":
+                lines.append(
+                    "Structural findings remain (a missing or misplaced section): fix them in the plan or "
+                    "send the step back, rather than editing sentences."
+                )
+            lines += ["", "Open findings:", ""]
             lines += [f"- {f}" for f in self.open_findings()[:12]] or ["- (none recorded)"]
         return "\n".join(line for line in lines if line is not None).strip()
 
@@ -212,6 +269,39 @@ def _mechanics(text):
     if n := len(house.THEMATIC_BREAK.findall(text)):
         findings.append(Finding("block", f"{n} horizontal rule(s)"))
     return findings
+
+
+def _canon(name):
+    """A section name reduced for near-miss matching: "&" is "and", British -isation/-ise spellings are US,
+    and a trailing "(…)" or ":" doesn't count."""
+    name = re.sub(r"\s*\([^)]*\)\s*$|:\s*$", "", (name or "").strip())
+    name = name.replace("&", " and ").lower()
+    name = re.sub(r"isation\b", "ization", re.sub(r"ise\b", "ize", name))
+    return _norm(name)
+
+
+def canonical_section_names(text, required):
+    """Rename `##` headings that nearly match a required section ("Keyword & Anchor Map", "Cannibalisation")
+    to the required name, so a revision never has to rename one (the guard refuses renamed plan sections).
+    Returns (text, count)."""
+    wanted = {_canon(name): name for name in required}
+    count = 0
+
+    def fix(match):
+        nonlocal count
+        name = match.group(1).strip()
+        if _norm(name) in {_norm(r) for r in required}:
+            return match.group(0)
+        key = _canon(name)
+        target = wanted.get(key) or next(
+            (wanted[k] for k in wanted if difflib.SequenceMatcher(None, key, k).ratio() >= 0.88), None
+        )
+        if not target:
+            return match.group(0)
+        count += 1
+        return f"## {target}"
+
+    return re.sub(r"(?m)^##\s+(.+?)\s*$", fix, text), count
 
 
 def _missing_sections(text, required):
@@ -259,7 +349,6 @@ def check_research(text, ctx):
 
 
 ARTICLE_PATH = re.compile(r"/(?:sds-management-articles|blog|articles?|resources|lead-magnets?)/")
-MAX_KEYWORD_HEADINGS = 3  # the skill: the keyword in "two or three headings", never forced
 KEYWORD_FILLER = {"a", "an", "the", "of", "for", "in", "on", "and", "your", "my", "our"}
 
 
@@ -288,6 +377,35 @@ def carries_keyword(heading, pk, share=1.0):
         return bool(pk)
     words = {_stem(w) for w in re.findall(r"[a-z0-9]+", heading)}
     return any(variant and len(variant & words) >= share * len(variant) for variant in _keyword_words(pk))
+
+
+QUESTION_WORDS = set(
+    "does do is are can should must will would could has have need you your what how why when where who "
+    "which there any it be get to for under between with".split()
+)
+
+
+def _mirrors(question, answer):
+    """Whether an answer's opening sentence (after "Yes,"/"No,") restates the question's subject: at least
+    half the question's content words are among its first 15 words."""
+    words = [_stem(w) for w in re.findall(r"[a-z0-9']+", question.lower())]
+    content = {w for w in words if w not in QUESTION_WORDS and w not in KEYWORD_FILLER}
+    opening = {_stem(w) for w in re.findall(r"[a-z0-9']+", answer.lower())[1:16]}
+    return bool(content) and len(content & opening) >= 0.5 * len(content)
+
+
+def _tacked_on_keyword(headings, pk, minimum=3):
+    """Headings that end in the same connective plus the keyword ("… for How to Read a Safety Data Sheet",
+    "… on SDS Retention Requirements"), at least `minimum` of them: the mechanical stuffing a model produces
+    when told to put the keyword in a heading."""
+    tails = {}
+    pattern = re.compile(r"(?i)\b(?:for|on|about|in|with|of|and)\s+" + re.escape(pk) + r"\W*$")
+    for heading in headings:
+        plain = re.sub(r"\*+", "", heading).strip()
+        if pattern.search(plain) and plain.lower().strip("?.! ") != pk.lower():
+            tails.setdefault(pattern.search(plain).group(0).lower().split()[0], []).append(heading)
+    worst = max(tails.values(), key=len, default=[])
+    return worst if len(worst) >= minimum else []
 
 
 def first_h2_answers(heading, pk):
@@ -381,9 +499,10 @@ def check_outline(text, ctx):
 
 
 def _intro(text):
-    """The text between the H1 and the first H2."""
+    """The text between the H1 and the first section heading (H2, or H3 where a host uses only H3s, as the
+    approved HazCom guest post does)."""
     body = re.sub(r"(?m)^#\s+.*\n?", "", text, count=1)
-    return body.split("\n## ", 1)[0]
+    return re.split(r"(?m)^#{2,3}\s", "\n" + body, maxsplit=1)[0]
 
 
 def _sentences(text):
@@ -404,16 +523,27 @@ def check_article(text, ctx, *, metadata=True):
     pk = (ctx.get("pkeyword") or "").lower()
     h1s = re.findall(r"(?m)^#\s+(.+)$", text)
     if len(h1s) != 1:
-        findings.append(Finding("block", f"{len(h1s)} H1 heading(s); the article needs exactly one"))
-    elif pk and pk not in h1s[0].lower():
         findings.append(
-            Finding("block", f"the H1 '{h1s[0]}' doesn't carry the primary keyword '{ctx['pkeyword']}'")
+            Finding("block", f"{len(h1s)} H1 heading(s); the article needs exactly one", level="structural")
+        )
+    elif pk and pk not in h1s[0].lower():
+        # A guest post keeps the sheet's title verbatim; the outbound skill says flag a missing keyword
+        # once and never rewrite the title (both approved Fixture A guest posts lack it).
+        findings.append(
+            Finding(
+                shape,
+                f"the H1 '{h1s[0]}' doesn't carry the primary keyword '{ctx['pkeyword']}'",
+                allows={"rename": [h1s[0]]},
+            )
         )
     intro = _intro(text)
     first_100 = " ".join(quality_review.prose(intro).split()[:100]).lower()
     if pk and pk not in first_100:
         findings.append(Finding("block", "the primary keyword isn't in the first 100 words"))
-    if not re.search(r"(?i)\bthis article\b|\bwalk you through\b", intro):
+    if ctx.get("content_type") != "outbound" and not re.search(
+        r"(?i)\bthis article\b|\bwalk you through\b", intro
+    ):
+        # The scope sentence is sdsmanager.com house style; the outbound skill bans it on guest posts.
         findings.append(
             Finding("block", "the intro has no scope sentence with the literal words 'this article'")
         )
@@ -428,7 +558,11 @@ def check_article(text, ctx, *, metadata=True):
     sections = _sections(text)
     names = [name for name, _ in sections[1:]]
     if not names or names[0].lower() != "key takeaways":
-        findings.append(Finding(shape, "`## Key Takeaways` must be the first H2, right after the intro"))
+        findings.append(
+            Finding(
+                shape, "`## Key Takeaways` must be the first H2, right after the intro", level="structural"
+            )
+        )
     else:
         bullets = _items(sections[1][1])
         if not 3 <= len(bullets) <= 7:
@@ -445,8 +579,13 @@ def check_article(text, ctx, *, metadata=True):
                 )
     headings = re.findall(r"(?m)^#{2,3}\s+(.+)$", text)
     if pk and not any(carries_keyword(h, pk) for h in headings):
+        # On a guest post the outbound skill says flag the shortfall rather than bend a heading.
         findings.append(
-            Finding("block", "no H2 or H3 carries the primary keyword, even as a natural variant")
+            Finding(
+                shape,
+                "no H2 or H3 carries the primary keyword, even as a natural variant",
+                allows={"rename": ["*"]},
+            )
         )
     for heading in [*h1s[:1], *headings]:
         # One comma and no list word: a topic and its qualifier ("Worked Example, Acetone SDS"), which the
@@ -465,16 +604,19 @@ def check_article(text, ctx, *, metadata=True):
                     "block",
                     f"the heading '{heading.strip()}' joins a topic and its qualifier with a comma; "
                     "use a colon (house style)",
+                    allows={"rename": [heading.strip()]},
                 )
             )
-    stuffed = [h for h in headings if carries_keyword(h, pk)] if pk else []
-    if len(stuffed) > MAX_KEYWORD_HEADINGS:
-        # Run 20: told to put the keyword in a heading, the model appended it to every H2.
+    # Stuffing is the keyword tacked onto headings ("… Explained for How to Read a Safety Data Sheet" on
+    # every H2, run 20), not the keyword in many headings: approved articles carry it in most H2s naturally
+    # (Fixture A: the published JSA article has it in 17 headings, FAQ questions included).
+    if pk and (tacked := _tacked_on_keyword(headings, pk)):
         findings.append(
             Finding(
                 "block",
-                f"the primary keyword is in {len(stuffed)} headings; keep it in two or three where it reads "
-                "naturally and restore the others to plain topic headings",
+                f"the primary keyword is tacked onto the end of {len(tacked)} headings; restore them to "
+                "plain topic headings and keep the keyword where it reads naturally",
+                allows={"rename": tacked},
             )
         )
     body_names = [n for n in names if n.lower() not in ("key takeaways", "frequently asked questions")]
@@ -488,10 +630,11 @@ def check_article(text, ctx, *, metadata=True):
         )
     faq_body, faq_items = _faq(text)
     if faq_body is None:
-        findings.append(Finding(shape, "no `## Frequently Asked Questions` section"))
+        findings.append(Finding(shape, "no `## Frequently Asked Questions` section", level="structural"))
     else:
         if not 3 <= len(faq_items) <= 7:
-            findings.append(Finding(shape, f"{len(faq_items)} FAQ question(s); the SOP asks for 3-7"))
+            # Advisory: the published JSA article (Fixture A) carries 8 and was approved.
+            findings.append(Finding("advise", f"{len(faq_items)} FAQ question(s); the SOP asks for 3-7"))
         if ":::faq" not in faq_body:
             findings.append(
                 Finding(
@@ -503,14 +646,22 @@ def check_article(text, ctx, *, metadata=True):
             answer = answer.strip()
             if ANY_LINK.search(answer):
                 findings.append(
-                    Finding("block", f"the FAQ answer to '{question.strip()[:60]}' contains a link")
+                    Finding(
+                        "block",
+                        f"the FAQ answer to '{question.strip()[:60]}' contains a link",
+                        allows={"drop_urls": _links_in(answer)},
+                    )
                 )
-            if re.match(r"(?i)^(?:yes|no)[,.!]", answer):
+            if re.match(r"(?i)^(?:yes|no)[,.!]", answer) and not _mirrors(question, answer):
+                # A bare Yes/No is one the question's subject doesn't follow ("Yes, a PCBU owes…" to "Does
+                # WHS risk management apply…?"); "Yes, WHS risk management applies…" mirrors it (Fixture A).
+                # Mirroring "No, X isn't required" as "X isn't required" drops the "No".
                 findings.append(
                     Finding(
                         "block",
                         f"the FAQ answer to '{question.strip()[:60]}' opens with a bare Yes/No; "
                         "mirror the question's subject",
+                        allows={"drop_negations": 1 if answer.lower().startswith("no") else 0},
                     )
                 )
     body_names = [
@@ -526,13 +677,14 @@ def check_article(text, ctx, *, metadata=True):
                     "block",
                     f"the closing heading '{body_names[-1]}' is generic; the SOP wants a verb-first CTA "
                     "heading naming the reader's task and outcome",
+                    allows={"rename": [body_names[-1]]},
                 )
             )
     if ctx.get("content_type") == "seo_blog" and body_names:
         # The blog close is gap → action → one product page (run 20 closed on a "Start Free Trial" label
         # with no link at all). An article or lead magnet is never the CTA target.
         close_links = INTERNAL_LINK.findall(_section_body(text, body_names[-1]) or "")
-        if not close_links:
+        if not close_links and not ctx.get("no_product"):
             findings.append(
                 Finding(
                     "block",
@@ -542,7 +694,11 @@ def check_article(text, ctx, *, metadata=True):
             )
         elif all(ARTICLE_PATH.search(link) for link in close_links):
             findings.append(
-                Finding("block", "the close links an article; the CTA links a product page, never an article")
+                Finding(
+                    "block",
+                    "the close links an article; the CTA links a product page, never an article",
+                    allows={"drop_urls": _links_in(" ".join(close_links))},
+                )
             )
     if ctx.get("content_type") == "seo_blog":
         if _section_body(text, "References") is None:
@@ -555,13 +711,31 @@ def check_article(text, ctx, *, metadata=True):
                 )
             )
     linked = [i for i, (_, body) in enumerate(sections) if INTERNAL_LINK.search(body)]
-    if any(b - a == 1 for a, b in zip(linked, linked[1:], strict=False)):
-        findings.append(Finding("block", "sdsmanager.com anchors sit in two adjacent sections"))
+    pairs = [(a, b) for a, b in zip(linked, linked[1:], strict=False) if b - a == 1]
+    # A guest-post rule (ehs-outbound-blog): the blog skill has none, and both published Fixture A blogs
+    # link in adjacent sections.
+    if pairs and ctx.get("content_type") == "outbound":
+        # The fix moves or removes the earlier section's link; the close keeps its product link.
+        findings.append(
+            Finding(
+                "block",
+                "sdsmanager.com anchors sit in two adjacent sections: "
+                + ", ".join(f"'{sections[a][0] or 'intro'}' and '{sections[b][0]}'" for a, b in pairs[:3]),
+                allows={
+                    "drop_urls": [u for a, _ in pairs for u in _links_in(sections[a][1]) if "sdsmanager" in u]
+                },
+            )
+        )
     findings += check_sourced_urls(text, ctx)
     findings += check_citations(text, ctx)
     for anchor in ctx.get("anchors") or []:
         url = anchor.get("url", "")
-        if url and (n := text.count(f"]({url}")) != 1:
+        # Exact URL match: the landing page "/uk/" is a prefix of every module page under it (Fixture A).
+        if (
+            url
+            and (n := sum(link.rstrip("/") == url.rstrip("/") for link in re.findall(r"\]\(([^)\s]+)", text)))
+            != 1
+        ):
             findings.append(
                 Finding(
                     "block",
@@ -580,12 +754,14 @@ def check_article(text, ctx, *, metadata=True):
                 Finding("block", "a product anchor sits in the close; guest posts carry none there")
             )
     for match in LINK_CARRIER.finditer(text):
+        # A pointer sentence is cut, never reworded, so its link may go with it (run 20 deadlocked here).
         findings.append(
             Finding(
                 "block",
                 "a sentence exists only to point at another page: '"
                 + match.group(0).strip()[:90]
                 + "'; cut it, and link a noun phrase in a sentence that states the fact or the fix instead",
+                allows={"drop_urls": _links_in(match.group(0))},
             )
         )
         break
@@ -597,7 +773,11 @@ def check_article(text, ctx, *, metadata=True):
         density = text.lower().count(pk) / words  # occurrences per word, the usual SEO-tool reading
         if density > 0.025:
             findings.append(
-                Finding("block", f"primary keyword density {density:.1%}; keep it under about 2%")
+                Finding(
+                    "block",
+                    f"primary keyword density {density:.1%}; keep it under about 2%",
+                    allows={"rename": ["*"]},
+                )
             )
     target = ctx.get("wordcount")
     if target and words and not 0.6 * target <= words <= 1.7 * target:
@@ -607,7 +787,74 @@ def check_article(text, ctx, *, metadata=True):
         if short:
             # A note for the log only: the options live outside the text, so no revision can act on it.
             findings.append(Finding("note", "fewer than three metadata options for: " + ", ".join(short)))
+    findings += check_reverse_outline(text, ctx)
     return findings + check_skill_scripts(text)
+
+
+def _heading_terms(heading):
+    words = re.findall(r"[a-z0-9]+", re.sub(r"\*+", "", heading or "").lower())
+    return {_stem(w) for w in words if w not in KEYWORD_FILLER and w not in QUESTION_WORDS and len(w) > 2}
+
+
+def _section_score(planned, written):
+    """How well a written H2 covers a planned one: 1.0 for the same heading, else the share of the planned
+    heading's terms it keeps (the writer may reword a heading; it may not drop the section's subject)."""
+    if _norm(re.sub(r"^conclusion\W*", "", planned, flags=re.I)) == _norm(written) or _norm(planned) == _norm(
+        written
+    ):
+        return 1.0
+    plan, have = _heading_terms(planned), _heading_terms(written)
+    return len(plan & have) / len(plan) if plan else 0.0
+
+
+def _match_sections(planned, written, threshold=0.5):
+    """One written heading per planned one: exact matches first, then the best-scoring unused heading."""
+    matches, used = [None] * len(planned), set()
+    pairs = sorted(
+        ((_section_score(p, w), i, j) for i, p in enumerate(planned) for j, w in enumerate(written)),
+        key=lambda pair: -pair[0],
+    )
+    for score, i, j in pairs:
+        if score >= threshold and matches[i] is None and j not in used:
+            matches[i] = j
+            used.add(j)
+    return matches
+
+
+def check_reverse_outline(text, ctx):
+    """The content-editing skill's reverse outline, done by script: the article's H2s against the approved
+    outline's. A planned section with no written counterpart, or sections out of the planned order, is a
+    structural finding (it goes back to the plan, not to a line revision). Advisory until the replay over
+    stored runs shows it fires only on real gaps (docs/sop-audit.md)."""
+    planned = ctx.get("planned_h2s")
+    if not planned:
+        return []
+    written = [
+        name
+        for name, _ in _sections(text)[1:]
+        if _norm(name) not in (_norm("Key Takeaways"), _norm(FAQ_HEADING), _norm("References"))
+    ]
+    matches = _match_sections(planned, written)
+    findings = []
+    if missing := [p for p, m in zip(planned, matches, strict=True) if m is None]:
+        findings.append(
+            Finding(
+                "advise",
+                "planned section(s) missing from the article (reverse outline): "
+                + "; ".join(f"'{p}'" for p in missing[:4]),
+                level="structural",
+            )
+        )
+    found = [m for m in matches if m is not None]
+    if found != sorted(found):
+        findings.append(
+            Finding(
+                "advise",
+                "the article's sections are out of the outline's order (reverse outline)",
+                level="structural",
+            )
+        )
+    return findings
 
 
 MAX_FLOW_PROMPTS = 6  # the flow check's prompts go to the reviewer; more than a handful drowns the rubric
@@ -632,10 +879,20 @@ def check_skill_scripts(text):
     )
     for key, label in banned:
         for item in (links.get(key) or [])[:2]:
-            findings.append(Finding("block", f"{label} (link_check): '{_one_line(item)}'"))
+            # The fix removes or moves a link; the re-check of the revision makes sure it moved, not vanished
+            # where a link is required (the close, a brief anchor).
+            findings.append(
+                Finding(
+                    "block",
+                    f"{label} (link_check): '{_one_line(item)}'",
+                    allows={"drop_urls": _links_in(item)},
+                )
+            )
     for heading, count in links.get("sections_over_one_internal") or []:
+        # Advisory: both published Fixture A blogs carry two or three in a section (link_check counts H3s
+        # as sections too).
         findings.append(
-            Finding("block", f"'{heading}' has {count} sdsmanager.com links; one per section (link_check)")
+            Finding("advise", f"'{heading}' has {count} sdsmanager.com links; one per section (link_check)")
         )
     prompts = []
     for item in flow.get("scope_sentence_directly_after_statistic") or []:
@@ -698,7 +955,34 @@ def context_from(step):
         "metadata_counts": counts if step.key == "draft" else {},
         "allowed_urls": allowed_urls(step),
         "allowed_citations": allowed_citations(step) if step.key in ARTICLE_STEPS else None,
+        **(outline_plan(prompting.approved_output(step.run, "outline")) if step.key in ARTICLE_STEPS else {}),
     }
+
+
+NO_PRODUCT = re.compile(
+    r"(?i)\bno (?:registry |honest |suitable )?product\b|\bnone (?:fits|applies)\b|\bno honest fit\b"
+    r"|\bwithout (?:a )?product\b"
+)
+
+
+def outline_plan(outline):
+    """What an article is checked against from its approved outline: the planned body H2s (the reverse
+    outline, docs/sop-audit.md) and whether the Conclusion Plan says no product honestly fits (the skill's
+    "No honest fit, no product": the close then needs no product link)."""
+    if not outline:
+        return {}
+    planned = [
+        line[3:].strip()
+        for line in _headings_only(outline)
+        if line.startswith("H2:") and _norm(line[3:]) not in (_norm("Key Takeaways"), _norm(FAQ_HEADING))
+    ]
+    return {
+        "planned_h2s": planned,
+        "no_product": bool(NO_PRODUCT.search(_section_body(outline, "Conclusion Plan") or "")),
+    }
+
+
+FAQ_HEADING = "Frequently Asked Questions"
 
 
 # A regulation reference down to its subsection: "1910.1200(g)(8)", "29 CFR 1910.1200 (b)", "§ 1904.7(a)".
@@ -734,7 +1018,8 @@ def check_citations(text, ctx):
                         "block",
                         f"the regulation reference {match.group(0).strip()} isn't in the research or the "
                         "search results; cite only subsections the inputs give, or keep the claim and add "
-                        "[VERIFY] after the sentence",
+                        "[VERIFY] before the sentence's full stop",
+                        allows={"drop_spans": [match.group(0).strip(), match.group(1)]},
                     )
                 )
     return findings
@@ -795,6 +1080,7 @@ def check_sourced_urls(text, ctx):
                 "block",
                 f"the link {url} isn't in the inputs (invented URL); use a URL from the index, "
                 "the product pages or the research, or drop the link",
+                allows={"drop_urls": [url]},
             )
         )
     for target in sorted(set(RELATIVE_LINK.findall(text))):
@@ -887,15 +1173,20 @@ def base_related(step):
     return houseref.related_articles_block(step.run.brief)
 
 
-def _guard(step_key, before, after, droppable=()):
-    """Whether a revision may replace the text. An edited or localised article keeps every protected span
-    (the skill's rule for rewriting approved prose). A draft is still being written, so its revision only has
-    to keep the sections, most of the words, every link and every negation. `droppable` lists URLs the checks
-    flagged as invented: a revision may remove those even where spans are protected."""
-    for url in droppable:
-        before = before.replace(url, "")
+def _guard(step_key, before, after, droppable=(), allows=None):
+    """Whether a revision may replace the text: the fixed invariants, minus exactly what the findings sent
+    to the reviser allow (`allows`, from `permissions()`; `droppable` is the older name for drop_urls).
+
+    An edited or localised article keeps every protected span (the skill's rule for rewriting approved
+    prose). A draft is still being written, so its revision only has to keep the sections, most of the
+    words, every link and every negation. A plan keeps its section names (the SOP's required sections)."""
+    allows = allows or permissions([])
+    for span in sorted({*droppable, *allows["drop_urls"], *allows["drop_spans"]}, key=len, reverse=True):
+        before = before.replace(span, "")
     if step_key in ("review_edit", "localise"):
-        return quality_review.accept_rewrite(before, after)
+        ok, reason = quality_review.accept_rewrite(before, after, negation_allowance=allows["drop_negations"])
+        if not ok:
+            return ok, reason
     after = (after or "").strip()
     if not after:
         return False, "empty output"
@@ -909,21 +1200,33 @@ def _guard(step_key, before, after, droppable=()):
         unfolded = len(quality_review.UNFOLDABLE_NEGATION.findall(before)) - len(
             quality_review.UNFOLDABLE_NEGATION.findall(after)
         )
-        if lost > max(unfolded, 0):
+        if lost > max(unfolded, 0) + allows["drop_negations"]:
             return False, "it dropped a negation (no, not, never…), which can reverse a claim"
     names_before = [name for name, _ in _sections(before) if name]
     names_after = [name for name, _ in _sections(after) if name]
     kept = {_norm(name) for name in names_after}
     lost = [name for name in names_before if _norm(name) not in kept]
-    if lost and step_key == "draft" and len(names_after) == len(names_before):
-        # An article heading may be reworded in place (the keyword into an H2, a colon for a comma): the
-        # checks ask for exactly that (run 20). Count and order stay; plan section names stay fixed.
+    renamable = {_norm(name) for name in allows["rename"]}
+    if "*" in allows["rename"] and step_key in ARTICLE_STEPS:
+        lost = []  # a finding asks for headings to be reworded (keyword placement, stuffing, density)
+    lost = [name for name in lost if _norm(name) not in renamable]
+    if lost and step_key in ARTICLE_STEPS and len(names_after) == len(names_before):
+        # An article heading may be reworded in place when count and order stay (run 20); plan section
+        # names stay fixed (near misses are matched mechanically by canonical_section_names).
         lost = []
     if lost:
         return False, "it dropped or renamed the section(s) " + ", ".join(f"'{n}'" for n in lost[:4])
     if len(re.findall(r"(?m)^#{1,3}\s+.+$", after)) < len(re.findall(r"(?m)^#{1,3}\s+.+$", before)):
         return False, "sections were dropped"
     return True, ""
+
+
+def introduced(before_checks, after_checks):
+    """Kinds of blocking finding a revision added, or made more frequent: the whack-a-mole run 20 showed (a
+    new invented URL every round). A revision that introduces any is refused."""
+    count = Counter(check_kind(f) for f in before_checks if f.severity == "block")
+    after = Counter(check_kind(f) for f in after_checks if f.severity == "block")
+    return sorted(kind for kind, n in after.items() if n > count.get(kind, 0))
 
 
 FIXED_HEADINGS = (
@@ -943,14 +1246,22 @@ FIXED_HEADINGS = (
 BOLD_LABEL_LINE = re.compile(r"(?m)^[ \t]*\*\*([^*\n]{3,80}?)\**:?\*\*[ \t]*:?[ \t]*$")
 
 
-def normalise_plan_headings(text):
+def normalise_plan_headings(text, required=None):
     """Plans sometimes come back with bold labels instead of headings ("**Search Intent**"). A line that is
     only a bold label becomes a `## ` heading, so the section checks, the reviewer and the exports read it.
-    Lines that carry `H2:`/`H3:` plan markers are left to the headings-only parser. Returns (text, count)."""
+    Lines that carry `H2:`/`H3:` plan markers are left to the headings-only parser. With `required`, only a
+    label that names a required section is promoted: a sub-label inside a section ("**Regulatory claims**"
+    under Claims) would otherwise split it and empty it. Returns (text, count)."""
+    wanted = {_canon(name) for name in required or ()}
 
     def heading(match):
         label = match.group(1).strip().rstrip(":")
         if re.match(r"(?i)^H[1-4]\s*:", label):
+            return match.group(0)
+        key = _canon(label)
+        if wanted and not (
+            key in wanted or any(difflib.SequenceMatcher(None, key, k).ratio() >= 0.88 for k in wanted)
+        ):
             return match.group(0)
         return f"## {label}"
 
@@ -1007,15 +1318,26 @@ def link_sources(step_key, base):
     )
 
 
+BOLD_HEADING = re.compile(r"(?m)^(#{1,6})\s+\*\*(.+?)\*\*[ \t]*$")
+
+
 def normalise(step_key, text):
     """Everything a script fixes better than a model, run before every check round (and by the replay
     harness, so it measures exactly what the loop sees). Returns (text, {fix: count})."""
     # House mechanics: dashes, curly quotes, emoji, rules, spacing, markers, broken links.
     text, fixes = house.mechanical_fix(text)
+    # "## **Key Takeaways**": the CMS and Google Docs exports bold every heading; a heading is bold already.
+    text, bolded = BOLD_HEADING.subn(r"\1 \2", text)
+    if bolded:
+        fixes["bold removed from headings"] = bolded
     if step_key in PLAN_STEPS:
-        text, promoted = normalise_plan_headings(text)
+        required = RESEARCH_SECTIONS if step_key == "research" else OUTLINE_SECTIONS
+        text, promoted = normalise_plan_headings(text, required)
         if promoted:
             fixes["bold labels made headings"] = promoted
+        text, renamed = canonical_section_names(text, required)
+        if renamed:
+            fixes["section names matched to the SOP"] = renamed
     text, fixed = normalise_fixed_headings(text)
     if fixed:
         fixes["fixed component headings"] = fixed
@@ -1047,6 +1369,7 @@ def run_loop(step, text, call, max_rounds=None):
     result = SopResult(text=text, passed=False)
     inputs = _inputs_for(step)
     rejection = ""
+    best = None  # (score, text, round number)
     for number in range(1, max_rounds + 2):
         current = Round(number)
         result.rounds.append(current)
@@ -1067,14 +1390,29 @@ def run_loop(step, text, call, max_rounds=None):
         )
         result.reviewer = reviewer
         current.verdict, current.findings, current.suggestions = parse_verdict(reply)
-        blocking = [str(f) for f in checks if f.severity == "block"]
+        block_findings = [f for f in checks if f.severity == "block"]
+        blocking = [str(f) for f in block_findings]
+        # Keep the best text seen: fewest blocks, then fewest reviewer findings (a later round can be worse).
+        score = (len(blocking), len(current.findings))
+        if best is None or score <= best[0]:
+            best = (score, result.text, number)
         if current.verdict == "PASS" and not blocking:
             result.passed = True
             break
+        # Route by level (docs/sop-audit.md): strategy and structure aren't fixed by a line revision.
+        if strategic := [f for f in block_findings if f.level == "strategic"]:
+            result.route, result.routed = "hold", [str(f) for f in strategic]
+            current.revision = "not revised: a strategic finding needs a person"
+            break
+        structural = [f for f in block_findings if f.level == "structural" and step.key in ARTICLE_STEPS]
+        result.route, result.routed = ("send_back", [str(f) for f in structural]) if structural else ("", [])
+        line_blocks = [f for f in block_findings if f not in structural]
         if number > max_rounds:
             break
+        if not line_blocks and not current.findings:
+            break  # only structural blocks are left: they go back to the step, not to the reviser
         # Blocking checks always go; a handful of reviewer findings keeps the revision targeted.
-        to_fix = blocking + current.findings[:MAX_FINDINGS_PER_REVISION]
+        to_fix = [str(f) for f in line_blocks] + current.findings[:MAX_FINDINGS_PER_REVISION]
         revised, _ = call(
             "sop_revise",
             {
@@ -1093,12 +1431,23 @@ def run_loop(step, text, call, max_rounds=None):
             },
             None,
         )
-        revised = _strip_fences(revised)
-        invented = [m.group(1) for m in (INVENTED_URL.match(str(f)) for f in checks) if m]
-        invented += [m.group(1) for m in (INVENTED_CITATION.match(str(f)) for f in checks) if m]
-        # A pointer sentence is cut, never reworded, so its link may go with it (run 20 deadlocked here).
-        carried = [url for m in LINK_CARRIER.finditer(result.text) for url in LINKED_URL.findall(m.group(0))]
-        ok, reason = _guard(step.key, result.text, revised, droppable=invented + carried)
+        # The revision gets the same mechanics before it is compared, so a model's "10–15" against the fixed
+        # "10-15" isn't a changed fact; then the guard allows exactly what the findings sent allow.
+        revised, _ = normalise(step.key, _strip_fences(revised))
+        ok, reason = _guard(step.key, result.text, revised, allows=permissions(line_blocks))
+        if ok:
+            revised_checks = check(step.key, revised, ctx)
+            if new := introduced(checks, revised_checks):
+                ok, reason = False, "it introduced new problems: " + "; ".join(new[:2])
+            elif (
+                current.verdict == "PASS"
+                and blocking
+                and (sorted(str(f) for f in revised_checks if f.severity == "block") == sorted(blocking))
+            ):
+                # The reviewer is satisfied and the revision didn't move a single block: more rounds won't.
+                current.revision = "applied; the blocks it was asked to fix remain, so the loop stopped"
+                result.text = revised.strip() + "\n"
+                break
         if not ok:
             # The next round reviews the unchanged text and tells the model why its revision was refused.
             current.revision = f"not used ({reason})"
@@ -1110,7 +1459,32 @@ def run_loop(step, text, call, max_rounds=None):
             continue
         current.revision, rejection = "applied", ""
         result.text = revised.strip() + "\n"
+    if not result.passed and best and best[2] != len(result.rounds):
+        # Hold on the best round's text, not the last one.
+        result.text, result.best_round = best[1], best[2]
     return result
+
+
+SEND_BACK_STEPS = ("draft", "localise")  # steps that regenerate from an approved plan or text
+
+
+def _send_back(step, output, sop, call, executors):
+    note = (
+        "Your last attempt had these structural problems. Follow the approved outline's sections and order:\n"
+        + "\n".join(f"- {finding.removeprefix('[block] ')}" for finding in sop.routed)
+    )
+    original = step.regenerate_note
+    step.regenerate_note = f"{original}\n\n{note}".strip()
+    try:
+        retry = executors.EXECUTORS[step.key](step)
+    finally:
+        step.regenerate_note = original
+    second = run_loop(step, retry.content, call)
+    second.sent_back = True
+    if (len(second.blocks()), not second.passed) <= (len(sop.blocks()), not sop.passed):
+        return retry, second
+    sop.sent_back = True
+    return output, sop
 
 
 def apply(step, output):
@@ -1125,6 +1499,10 @@ def apply(step, output):
 
     try:
         sop = run_loop(step, output.content, call)
+        if sop.route == "send_back" and step.key in SEND_BACK_STEPS:
+            # A structural defect isn't fixed by editing sentences: regenerate the step once from its plan
+            # with the findings as the note, and keep whichever result is better.
+            output, sop = _send_back(step, output, sop, call, executors)
     except (ProviderError, executors.StepError) as error:
         sop = SopResult(text=output.content, passed=False, error=executors.friendly_error(error))
     output.content = sop.text

@@ -196,3 +196,20 @@ def test_edit_round_dry_run(tmp_path):
     record = next(iter(results["b1-sds-retention"].values()))
     assert record["status"] == "ok" and record["calls"] >= 2
     assert "Review sequence report" in (run_dir / record["file"]).read_text()
+
+
+def test_a_refused_section_reverts_alone_and_the_other_edits_stay():
+    # One changed fact used to throw away the whole deslop pass (docs/sop-audit.md).
+    outcome = review.run_sequence(ARTICLE, BRIEF, FakeEditor(change_fact=True))
+    assert "In this article" not in outcome.text  # the intro's edit is kept
+    assert "thirty years" in outcome.text and "ten years" not in outcome.text  # the fact's section reverted
+    assert any("kept as they were" in note for note in outcome.questions)
+
+
+def test_a_number_protects_its_unit_not_the_next_word():
+    assert review.protected_ok(
+        "Section 1910.1200 requires training.", "Under Section 1910.1200, employers must train workers."
+    )[0]
+    assert review.protected_ok("Workers in 2024 reported it.", "In 2024, workers reported it.")[0]
+    assert not review.protected_ok("Keep it for 30 years.", "Keep it for 30 months.")[0]
+    assert not review.protected_ok("Limit exposure to 50 ppm.", "Limit exposure to 5 ppm.")[0]

@@ -167,6 +167,41 @@ The agent then guides the workflow instead of looping on one step: it decides pe
 - What the replay settled: the comma rule's 11 distinct headings are all real topic-qualifier commas ("Worked Example, Acetone SDS"). Narrowing it for questions, digit groups and headings that already have a colon changed no firing.
 - It also found a prompt-induced artifact: a heading containing the literal `++underlined text++`, copied from `_rules.md`'s list of spans to keep. That goes to phase 4 (mechanical fix plus clearer wording in the rule).
 
+### Phase 2 (done): findings carry a level and permissions; Fixture A calibrated the checks
+
+- **Findings carry permissions.** Each `sop.Finding` has a `level` and an `allows` dict:
+  - `drop_urls` for invented URLs, pointer sentences, FAQ links, link-check placements and an article in the close;
+  - `rename` for the keyword-in-heading, comma, generic-close and tacked-on-keyword checks;
+  - `drop_negations` for a bare "No," FAQ opener;
+  - `drop_spans` for an unsourced citation.
+  The guard (`sop._guard`, `review.accept_rewrite`) allows exactly the union of what the findings sent allow (`sop.permissions`).
+- **Every revision is normalised and re-checked.** One that adds firings of any check is refused as "it introduced new problems" (`sop.introduced`). The loop stops when the reviewer passes and the blocks didn't move, and on a hold it keeps the best round's text.
+- **Routing by level.** Structural blocks in an article (Key Takeaways missing or misplaced, no FAQ, H1 count) aren't sent to the line reviser. The draft and the localised variant are regenerated once, inline, with them as the regenerate note, and the better result is kept (`sop._send_back`). A strategic finding holds without a revision (no check produces one yet; the reviewer will in phase 5).
+- **Reverse outline** (`sop.check_reverse_outline`, advisory, structural): planned H2s missing from the draft, or out of order, against the approved outline. On runs 18-21 it fires once, on a real change (run 20 replaced the outline's "What Is an SDS and Why It Matters" with an answer-first H2).
+- **Plans.** Near-miss section names are matched to the required ones mechanically (`canonical_section_names`). Bold labels become sections only when they name a required section, so "**Regulatory claims**" inside Claims no longer splits it.
+- **Edit step.** Rewrites are accepted section by section (`review.accept_by_section`): a section that changed a fact or lost a negation reverts alone, and the notes say which. A number protects its unit, not the next word ("1910.1200 requires" can become "Under 1910.1200, employers must"). Numbers written out are protected too: "thirty years" turning into "ten years" used to pass. Deslop's negative parallelism may unfold.
+- **Fixture A** (owner's picks; tests/fixtures/sop/):
+  - the published JSA (US) and WHS (AU) blogs, committed;
+  - three approved guest posts (life sciences, UK risk registers, HazCom training), kept in `a_local/`, which is git-ignored because they aren't published.
+
+  They raised 21 blocks before calibration and raise none now:
+
+  | Check that misfired | Calibration |
+  |---|---|
+  | Keyword "stuffing" (the JSA blog has it in 17 headings) | Blocks only the tacked-on shape from run 20: the same connective plus keyword ending three or more headings |
+  | FAQ count (the JSA blog has 8) | Advisory |
+  | Adjacent sdsmanager.com sections | Guest posts only: both blogs do it (owner decision 2, answered by the data) |
+  | More than one internal link per section | Advisory |
+  | Bare Yes/No | Blocks only when the answer doesn't restate the question's subject: "Yes, WHS risk management applies…" is fine |
+  | Guest posts: keyword in the H1, the "this article" sentence, keyword in a heading | Not required |
+  | Anchor counted twice | Counted by exact URL: the landing page `/uk/` is a prefix of module pages |
+  | Intro of an H3-only article read as the whole text | The intro ends at the first H2 or H3 |
+  | Bold-wrapped headings from the CMS and Docs exports | Stripped in `normalise` |
+  | Blog close with no product link | Allowed when the outline's Conclusion Plan says no product fits |
+
+- **Replay of runs 18-21:** 44 blocks became 40. The four removed are exactly the miscalibrated kinds.
+- **Live-site finding:** the published WHS article links `/au/sds-management-articles/how-to-build-a-risk-register/`, which returns 404 (one of the not-live slugs).
+
 Phases 1 and 2 matter most: phase 1 makes misfires measurable offline, and phase 2 removes the largest class by construction.
 
 ## Decisions for the owner
