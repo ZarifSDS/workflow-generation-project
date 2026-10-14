@@ -2,7 +2,10 @@
 
 Copied unchanged from the author's Claude Code skills (`~/.claude/skills/`) on 2026-10-13, so the
 Content Studio's checks behave exactly like the manual workflow. Do not edit these files here:
-update the skill, then copy the file again.
+update the skill, then copy the file again and record it with `python -m apps.quality.vendor_manifest
+--write`. `MANIFEST.json` lists every file with its source and hash; `tests/test_vendor.py` fails on an
+unrecorded change and, where the skills are installed, on a copy that has fallen behind its skill. The two
+deliberate forks (`sds_hero_stock/lama.py`, the trimmed `internal-article-links.md`) are marked there.
 
 | Folder | Skill | Scripts |
 |---|---|---|

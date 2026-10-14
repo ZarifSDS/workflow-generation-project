@@ -295,6 +295,27 @@ Each change was proven three ways: tests with the audit's correct sentences (no 
   - The clarity prompt allows the house pattern of a rule stated about the entity and then landed on the reader.
   - frame_scan's `term_drift` and `orphan_possessives` are read under their real keys.
 
+### Phase 8 (done): the hero and the vendored code
+
+- **16:9 before anything else.** `hero.to_16_9` centre-crops every generated photo to exactly 16:9 before the vision check, so the subject box matches what is branded. The image model returns 1440x816, which left a flat grey stripe beside a full-height subject; the square fallback is cropped too.
+- **The mirror fill and the upscale warning.** The mirror fill is used only when there is no right-hand pad. The upscale warning reads reframe's number (it only printed the warning on the fill path, so it never fired).
+- **Holds where nothing was checked.** A failed or unparseable vision check, a missing `readable_text` or `safety_issues` key, or no usable subject box now adds an `Unchecked:` flag, and the hero holds. These used to pass as clean.
+- **Placeholders don't hold.** "None", "no readable text" and "No issues found" are no longer findings. A real issue that starts with "no" ("no gloves while handling drums") still is.
+- **The headline is the article's H1**, as the skill says, with the meta title and the topic as fallbacks.
+- **Headline markup** splits only at a colon followed by a space ("ISO 45001:2018" stays whole).
+- **Re-vendored `hero_compose.py` and `svgify.py`**, which were two versions behind (one colour per line, a 4-line headline switching at line 3). The script's "recoloured" note becomes a flag.
+- **Vendor manifest** (`apps/quality/vendor/MANIFEST.json`, `apps/quality/vendor_manifest.py`): every vendored file with its source in the skills folder and its SHA-256, with `lama.py` and the trimmed internal index recorded as deliberate forks. `tests/test_vendor.py` fails when a vendored file changes without the manifest, and, where the skills are installed, when a copy falls behind its skill. `python -m apps.quality.vendor_manifest` reports drift.
+
+**Still open from the hero audit** (no live hero was run in this session):
+- **Guest posts:** the hero and publish steps still treat a guest post as an sdsmanager.com article. It is branded with the SDS Manager logo and publishes to an `ArticlePage`; it should skip the branding and export instead.
+- **Outputs and templates:** the WebP and layered-SVG outputs are discarded, and the page template serves the 1440 PNG.
+- **The vision check:** safety items carry no severity, and text is held on wherever it sits, even under the veil.
+- **Photo prompts** differ from the measured spec in small ways (subject at about two-thirds instead of 62%, no skew correction).
+
+## Where the audit stands
+
+Phases 0-8 are done. Every change was calibrated on Fixture A (the owner's five approved articles, zero blocks), Fixture B (every planted defect caught) and the replay of stored runs. On the latest versions of runs 18-21 blocking findings fell from 44 to 22, and every one left is a real defect. Nothing in this audit was proven on a live model run, by the owner's direction (free models aren't the measure; a paid model is checked at demo time). The first live runs, a blog and a guest post, are the next proof: read the SOP panel and the hold notes against this document.
+
 Phases 1 and 2 matter most: phase 1 makes misfires measurable offline, and phase 2 removes the largest class by construction.
 
 ## Decisions for the owner

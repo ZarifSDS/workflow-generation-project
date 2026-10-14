@@ -9,6 +9,7 @@ from the skill (docs/setup.md). Without them the photo is kept and branding is s
 
 import ast
 import importlib.util
+import io
 import json
 import re
 import subprocess
@@ -66,7 +67,9 @@ def headline_markup(title, region="US", pkeyword=""):
     title = " ".join(title.split())
     if "**" in title:
         return title
-    lead, colon, rest = title.partition(":")
+    # A colon followed by a space separates topic and qualifier; "ISO 45001:2018" keeps its colon.
+    parts = re.split(r":\s+", title, maxsplit=1)
+    lead, colon, rest = (parts[0], ":", parts[1]) if len(parts) == 2 else (title, "", "")
     if colon and lead.strip() and rest.strip():
         if region == "EU":
             return f"{lead.strip()}: | **{rest.strip()}**"
@@ -142,8 +145,10 @@ def _reframe(source, tmp, vision, flags, metrics):
     if result.returncode == 2:
         # A narrow strip sits under the fully opaque edge of the veil, so a copied fill can't show
         # there. The user accepted the skill's mirror fill for that case (2026-10-13).
-        fill_share = _dict_in(result.stdout).get("fill_share", 1)
-        if fill_share <= MIRROR_MAX_FILL:
+        info = _dict_in(result.stdout)
+        fill_share = info.get("fill_share", 1)
+        # The mirror fill covers the left pad only; with a right pad it would leave a flat grey stripe.
+        if fill_share <= MIRROR_MAX_FILL and not info.get("pad_right"):
             result = _run("reframe.py", *args, "--fill", "mirror")
             mirrored = fill_share
     if result.returncode == 0:
@@ -156,7 +161,8 @@ def _reframe(source, tmp, vision, flags, metrics):
                 f"The left {mirrored:.0%} of the frame is a mirrored fill, under the opaque part of the "
                 "veil. Check the left edge for repeated shapes."
             )
-        if "WARNING: upscaled" in result.stdout:
+        # From the numbers: reframe.py prints its upscale warning only on the fill path, never otherwise.
+        if float(info.get("upscale") or 0) > 1.6:
             flags.append(
                 f"The reframed crop is upscaled {info.get('upscale')}x and may look soft. "
                 "Regenerate with the subject smaller in the frame."
@@ -228,7 +234,32 @@ def _compose(photo, markup, subject_left, person, tmp, metrics, flags):
             "Headline contrast is low: a darker or busier part of the photo sits behind the text. "
             "Regenerate with a calmer, brighter left side."
         )
+    # The skill's one-colour-per-line rule recolours a word that wrapped onto the other colour's line.
+    if note := next((ln for ln in result.stdout.splitlines() if ln.startswith("NOTE: recoloured")), ""):
+        flags.append(note.removeprefix("NOTE: ").strip())
     return out, ""
+
+
+def to_16_9(data):
+    """The photo centre-cropped to exactly 16:9 (image bytes in, PNG bytes out; unchanged when it already
+    is). The image model returns 1440x816; reframe.py then can't fit a full-height subject in the width and
+    leaves a flat grey stripe on the right. The vision check runs on the cropped photo, so the subject box
+    it reports matches what is branded."""
+    from PIL import Image
+
+    with Image.open(io.BytesIO(data)) as image:
+        width, height = image.size
+        if abs(width / height - 16 / 9) < 0.003:
+            return data
+        if width / height > 16 / 9:
+            new_w = round(height * 16 / 9)
+            box = ((width - new_w) // 2, 0, (width - new_w) // 2 + new_w, height)
+        else:
+            new_h = round(width * 9 / 16)
+            box = (0, (height - new_h) // 2, width, (height - new_h) // 2 + new_h)
+        out = io.BytesIO()
+        image.convert("RGB").crop(box).save(out, format="PNG")
+        return out.getvalue()
 
 
 def brand(photo, markup, vision=None):

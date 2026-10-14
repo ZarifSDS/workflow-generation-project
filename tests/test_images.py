@@ -300,3 +300,57 @@ def test_narrow_fill_strip_is_mirrored_under_the_opaque_veil(vendor):
     assert 0.6 < result.metrics["subject_left"] < 0.64
     assert any("mirrored fill" in flag for flag in result.flags)
     assert not any("branded as it is" in flag for flag in result.flags)
+
+
+# ---- Phase 8 (docs/sop-audit.md): the hero step ----
+
+
+def _blank_png(width, height):
+    import io as _io
+
+    from PIL import Image as _Image
+
+    out = _io.BytesIO()
+    _Image.new("RGB", (width, height), (200, 200, 200)).save(out, format="PNG")
+    return out.getvalue()
+
+
+def _size(data):
+    import io as _io
+
+    from PIL import Image as _Image
+
+    with _Image.open(_io.BytesIO(data)) as image:
+        return image.size
+
+
+def test_photos_are_cropped_to_exactly_16_9_before_the_vision_check():
+    from apps.quality import hero
+
+    assert _size(hero.to_16_9(_blank_png(1440, 816))) == (1440, 810)  # what the image model returns
+    assert _size(hero.to_16_9(_blank_png(1024, 1024))) == (1024, 576)  # the square fallback model
+    exact = _blank_png(1440, 810)
+    assert hero.to_16_9(exact) is exact
+
+
+def test_the_vision_check_ignores_placeholders_and_flags_what_it_left_out():
+    from apps.studio import executors
+
+    vision = executors._parse_vision(
+        '{"subject": [0.6, 0.1, 0.9, 1.0], "readable_text": ["None", "no readable text"], '
+        '"safety_issues": ["no gloves while handling drums", "No issues found"]}'
+    )
+    assert vision["readable_text"] == [] and vision["safety_issues"] == ["no gloves while handling drums"]
+    assert vision["unchecked"] == []
+    partial = executors._parse_vision('{"subject": [0.6, 0.1, 0.9, 1.0], "text": []}')
+    assert set(partial["unchecked"]) == {"readable_text", "safety_issues"}
+    assert executors.hero_needs_a_look(["Unchecked: the vision check didn't report on readable text"], True)
+
+
+def test_the_headline_splits_only_at_a_colon_followed_by_a_space():
+    from apps.quality import hero
+
+    assert hero.headline_markup("ISO 45001:2018 Explained", "US", "") == "ISO 45001:2018 Explained"
+    assert hero.headline_markup("SDS Retention: How Long to Keep Them", "US", "") == (
+        "**SDS Retention:** | How Long to Keep Them"
+    )

@@ -1,0 +1,104 @@
+{
+  "deslop/scripts/lexical_scan.py": {
+    "source": "deslop/scripts/lexical_scan.py",
+    "sha256": "d5cd298616c0b4a51fc3f374a39b4b29cb77f4a698f83c53e89ae3a28f8682d9"
+  },
+  "deslop/scripts/redundancy_scan.py": {
+    "source": "deslop/scripts/redundancy_scan.py",
+    "sha256": "326e354633cb07e13ffb9640b8bad4a92f7820cbcb6870f240e5094d2717f744"
+  },
+  "deslop/scripts/structure_scan.py": {
+    "source": "deslop/scripts/structure_scan.py",
+    "sha256": "5dbcb845c731e42bd1651a22c6493f717ddc5029d255486255719605257999db"
+  },
+  "clarity_review/scripts/frame_scan.py": {
+    "source": "clarity-review/scripts/frame_scan.py",
+    "sha256": "4c4e7b1efae5ad739eeebcfee2f40b28d5d1180eb789ffb8216a1ec77084cc8d"
+  },
+  "clean_user_facing_text/scripts/clean_text.py": {
+    "source": "clean-user-facing-text/scripts/clean_text.py",
+    "sha256": "9f78d6e4eaaebbff42fdf3f7024456e96e986f0cc8f7a7c82c26e51ab37556a0"
+  },
+  "clean_user_facing_text/scripts/common.py": {
+    "source": "clean-user-facing-text/scripts/common.py",
+    "sha256": "8af6dbea2e1f4bfa6cc5e3ff527305a3fb5a8186d45ad432207887b4dd5df75e"
+  },
+  "clean_user_facing_text/scripts/inspect_text.py": {
+    "source": "clean-user-facing-text/scripts/inspect_text.py",
+    "sha256": "2459fafa7b142634f98f72c126ed7ec24f42547ba7891c7439b902b7871c63aa"
+  },
+  "clean_user_facing_text/scripts/score_stylometry.py": {
+    "source": "clean-user-facing-text/scripts/score_stylometry.py",
+    "sha256": "57dcbd2cb1ec30a12d44ba47dac29998bf1f0f139703e0921b4642d83b0e774f"
+  },
+  "clean_user_facing_text/scripts/text_unicode.py": {
+    "source": "clean-user-facing-text/scripts/text_unicode.py",
+    "sha256": "ed86ed9715f40e306371731f97bf6f2a63f6a7719674630afac89eb3741bc6fd"
+  },
+  "ehs_seo_blog/scripts/editorial_flow_check.py": {
+    "source": "ehs-seo-blog-optimized/scripts/editorial_flow_check.py",
+    "sha256": "22e53eabb0b2a44f9320dda94ef9460b6ce8d666d716df81555151565f12ea3e"
+  },
+  "ehs_seo_blog/scripts/link_check.py": {
+    "source": "ehs-seo-blog-optimized/scripts/link_check.py",
+    "sha256": "23a77cf22dc62facae5f89f75cee1e09e2f2fbbaa84ff29397bc2054a46b1068"
+  },
+  "ehs_seo_blog/scripts/mechanical_sweep.py": {
+    "source": "ehs-seo-blog-optimized/scripts/mechanical_sweep.py",
+    "sha256": "3608d94cc1ba10dc8eb9fa2d95693eac827043ba56a514936eb7163ecb935bd6"
+  },
+  "ehs_seo_blog/scripts/metrics.py": {
+    "source": "ehs-seo-blog-optimized/scripts/metrics.py",
+    "sha256": "ebd5702f9d7835a3b5dde0e7580b36b23d53db9dd422b45088677e7923594712"
+  },
+  "ehs_seo_blog/scripts/prose_signals.py": {
+    "source": "ehs-seo-blog-optimized/scripts/prose_signals.py",
+    "sha256": "d4735dccb90d258ccff2ae76030d99ed365d996ea3a08b832e49c5e8bd4f3cf7"
+  },
+  "ehs_seo_blog/data/banned-words.json": {
+    "source": "ehs-seo-blog-optimized/data/banned-words.json",
+    "sha256": "f1b0944662888aa09a6d219dcb9e8e15dc0036fbfbce21006dc057a3b7eb715f"
+  },
+  "ehs_seo_blog/data/banned-words.tsv": {
+    "source": "ehs-seo-blog-optimized/data/banned-words.tsv",
+    "sha256": "41a7bff4d530d320f2796f2da5b2cab3b8746b5d20759ddbab77739d282ed16d"
+  },
+  "ehs_seo_blog/data/internal-article-links.md": {
+    "source": "ehs-seo-blog-optimized/data/internal-article-links.md",
+    "sha256": "e314d5bf293868b20df9a5435df92da8bd983064f0b42b53ee9e5224ae292d5e",
+    "fork": "published rows only: the skill's planned and not-live slugs are removed (public repository)"
+  },
+  "ehs_seo_blog/data/product-link-registry.json": {
+    "source": "ehs-seo-blog-optimized/data/product-link-registry.json",
+    "sha256": "01599e2cd655a36b909bb4bab1902a236e11034ed8ff1d2dfb6aa5d98690f6f9"
+  },
+  "sds_hero_stock/check_photo.py": {
+    "source": "sds-hero-stock/scripts/check_photo.py",
+    "sha256": "795a49051478f041c12e2297fa88bd1199bc837e5fb874e541ce6917c1dd0f2f"
+  },
+  "sds_hero_stock/hero_compose.py": {
+    "source": "sds-hero-stock/scripts/hero_compose.py",
+    "sha256": "48c3539a3d2ccb2a8974d45f5797a575b0513be24e4a6a55f0819984bcbb706d"
+  },
+  "sds_hero_stock/inner_logo.py": {
+    "source": "sds-hero-stock/scripts/inner_logo.py",
+    "sha256": "ce48486796848c8f5bbd22f0bb9db407ebae700314ea23c345f433ee81521387"
+  },
+  "sds_hero_stock/lama.py": {
+    "source": "sds-hero-stock/scripts/lama.py",
+    "sha256": "6982aae925035616a1f988266ad684fd648fa5fa28ce4a401939a82c466a2e29",
+    "fork": "CUDA support added for the container (studio change)"
+  },
+  "sds_hero_stock/overlay.py": {
+    "source": "sds-hero-stock/scripts/overlay.py",
+    "sha256": "2a90f6b6081665586e881441114793e2a8d0cfe0a4c144e3a35b26179e8c35a5"
+  },
+  "sds_hero_stock/reframe.py": {
+    "source": "sds-hero-stock/scripts/reframe.py",
+    "sha256": "3c3f30a0297c24bab9643b146cb20aaa2d9c9e72daba372c11838d20224b3cb5"
+  },
+  "sds_hero_stock/svgify.py": {
+    "source": "sds-hero-stock/scripts/svgify.py",
+    "sha256": "5e217381940f9c61748a438d4e0c10963a17f4a5448ee99784544ea8a5a46beb"
+  }
+}

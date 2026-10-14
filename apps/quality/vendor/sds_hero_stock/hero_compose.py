@@ -140,6 +140,26 @@ def text_right_limit(t, fade=None, amax=None):
     return min(edge - VEIL_MARGIN * W, t["text_x"] + t["max_w"], TEXT_MAX_X * W)
 
 
+def recolor_lines(lines):
+    """One colour per line, decided after wrapping (house rule, 2026-10-12):
+    - a word that lands on a line takes that line's colour, i.e. the colour most of the line's
+      characters were marked with (ties go to the line's first word), so a word moved across a
+      break never stays the old colour;
+    - a 4-line headline always switches colour at line 3: lines 1-2 one colour, lines 3-4 the other;
+    - if the markup used both colours but every line came out the same, the last line switches,
+      so the headline stays two-tone."""
+    def line_colour(line):
+        acc = sum(len(w) for w, a in line if a)
+        grey = sum(len(w) for w, a in line if not a)
+        return line[0][1] if acc == grey else acc > grey
+    cols = [line_colour(ln) for ln in lines]
+    if len(lines) == 4:
+        cols = [cols[0], cols[0], not cols[0], not cols[0]]
+    elif len(lines) > 1 and len(set(cols)) == 1 and len({a for ln in lines for _, a in ln}) == 2:
+        cols[-1] = not cols[-1]
+    return [[(w, c) for w, _ in ln] for ln, c in zip(lines, cols)]
+
+
 def fit_headline(headline, t, font_path, right_x):
     """Largest size (template size down to MIN_SCALE) that fits in MAX_LINES within right_x."""
     avail = (right_x - t["text_x"]) * S
@@ -155,7 +175,7 @@ def fit_headline(headline, t, font_path, right_x):
             widest = max(font.getlength(" ".join(w for w, _ in ln)) for ln in lines)
             if len(lines) == forced and widest <= avail:
                 return dict(font=font, scale=round(float(scale), 3), size=round(t["size"] * scale, 1),
-                            pitch=t["pitch"] * scale, lines=lines, right_x=round(right_x),
+                            pitch=t["pitch"] * scale, lines=recolor_lines(lines), right_x=round(right_x),
                             widest=round(widest / S), chars=len(text))
     for scale in np.arange(1.0, MIN_SCALE - 1e-9, -0.025):
         font = ImageFont.truetype(font_path, round(t["size"] * scale * S))
@@ -163,7 +183,7 @@ def fit_headline(headline, t, font_path, right_x):
         widest = max(font.getlength(" ".join(w for w, _ in ln)) for ln in lines)
         if len(lines) <= MAX_LINES and widest <= avail:
             return dict(font=font, scale=round(float(scale), 3), size=round(t["size"] * scale, 1),
-                        pitch=t["pitch"] * scale, lines=lines, right_x=round(right_x),
+                        pitch=t["pitch"] * scale, lines=recolor_lines(lines), right_x=round(right_x),
                         widest=round(widest / S), chars=len(text))
     font = ImageFont.truetype(font_path, round(t["size"] * MIN_SCALE * S))
     per_char = font.getlength(text) / max(len(text), 1)
@@ -211,6 +231,9 @@ def compose(photo_path, headline, out, template="A", focus_x=0.75, font_path=Non
     fit = fit_headline(headline, t, font_path, text_right_limit(t, fade, amax))
     global LAST_FIT
     LAST_FIT = {k: v for k, v in fit.items() if k not in ("font", "lines")} | {"n_lines": len(fit["lines"])}
+    marked = [a for w, a in parse_runs(headline, t["caps"]) if w != "|"]
+    final = [(w, a) for ln in fit["lines"] for w, a in ln]
+    LAST_FIT["recoloured"] = [(w, "periwinkle" if a else "grey") for (w, a), m in zip(final, marked) if a != m]
     font = fit["font"]
     draw = ImageDraw.Draw(canvas)
     space = font.getlength(" ")
@@ -267,6 +290,9 @@ if __name__ == "__main__":
     f = LAST_FIT
     print(f"headline: {f['n_lines']} lines at {f['size']}px ({f['scale']:.0%} of template), "
           f"widest line ends at x={t_end(f)} of 720, text limit x={f['right_x']}")
+    if f.get("recoloured"):
+        print("NOTE: recoloured to match their line: " + ", ".join(f"{w} -> {c}" for w, c in f["recoloured"])
+              + ". If that splits a phrase, move the line break ( | ) and rerun.")
     c = LAST_CONTRAST or {}
     print("headline contrast vs darkest 5%% of background: %s" % ", ".join(f"{k} {v}:1" for k, v in c.items()))
     if c.get("grey", 9) < 3.0 or c.get("periwinkle", 9) < 2.2:

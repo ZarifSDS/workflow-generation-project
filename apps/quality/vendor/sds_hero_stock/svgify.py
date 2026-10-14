@@ -8,7 +8,7 @@ Layers (bottom to top), all on a 1440x810 canvas:
   logo       the real SDS Manager logo paths from the site SVG
   headline   Inter Bold, outlined to paths (or live <text> with --live-text)
 
-Two kinds of input are detected automatically:
+Two kinds of input are detected automatically (--photo skips detection and forces photo mode):
   photo     a Step 1 background photo: everything above is added.
   finished  a Step 2 hero that already has Gemini's veil, logo and text: Gemini's
             logo and headline are erased (inpainted over the veil) and replaced with
@@ -242,11 +242,11 @@ def headline_layer(headline, t, font_path, live, fade=None):
 # ---------- main ----------
 
 def svgify(png, headline, out, template="A", focus_x=0.75, live=False, apply_veil=False, font=None, fade=None,
-           soften_edge=False):
+           soften_edge=False, force_photo=False):
     t = hc.TEMPLATES[template]
     font = font or next(str(f) for f in hc.FONTS if f.exists())
     src = Image.open(png).convert("RGB")
-    finished = is_finished(src.resize((W, H)))
+    finished = False if force_photo else is_finished(src.resize((W, H)))
     if finished:
         canvas = src.resize((W, H), Image.LANCZOS)  # already composed at 16:9
         canvas, erased, nlines = erase_brand(canvas)
@@ -301,6 +301,9 @@ if __name__ == "__main__":
     ap.add_argument("--subject-left", type=float, help="subject's left edge as a fraction of the width; the veil clears just past it")
     ap.add_argument("--no-person", action="store_true", help="no person where the veil fades: the veil reaches 5%% past the subject edge")
     ap.add_argument("--fade", help="explicit fade start,end as fractions of the width, e.g. 0.45,0.61")
+    ap.add_argument("--photo", action="store_true",
+                    help="treat the input as a clean background photo: skip finished-hero detection "
+                         "(a bright sky or sunrise on the left can be mistaken for a veil and get erased)")
     a = ap.parse_args()
     import overlay
     fade = (tuple(float(v) for v in a.fade.split(",")) if a.fade
@@ -309,7 +312,7 @@ if __name__ == "__main__":
     out = Path(a.out) if a.out else Path(a.out_dir) / (hc.title_filename(a.headline) + ".svg")
     try:
         svg, note, _ = svgify(png, a.headline, out, a.template, a.focus_x, a.live_text, a.apply_veil, fade=fade,
-                              soften_edge=a.soften_edge)
+                              soften_edge=a.soften_edge, force_photo=a.photo)
     except hc.HeadlineTooLong as e:
         print("FLAG: " + str(e))
         raise SystemExit(3)

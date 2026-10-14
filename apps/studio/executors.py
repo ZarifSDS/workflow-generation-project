@@ -362,10 +362,28 @@ def _parse_vision(text):
         and box[1] < box[3]
     )
     vision["subject"] = [float(v) for v in box] if valid_box else None
+    # A key the model left out means the photo wasn't checked for it: that holds the hero (it used to pass
+    # as clean). Placeholder items ("None", "no readable text") are no finding (they used to hold it).
+    vision["unchecked"] = [
+        key for key in ("readable_text", "safety_issues") if not isinstance(data.get(key), list)
+    ]
     for key in ("readable_text", "safety_issues"):
-        vision[key] = [str(item) for item in vision[key]] if isinstance(vision[key], list) else []
+        items = vision[key] if isinstance(vision[key], list) else []
+        vision[key] = [str(item).strip() for item in items if not _placeholder(item)]
     vision["person_at_left_edge"] = vision["person_at_left_edge"] is not False
     return vision
+
+
+def _placeholder(item):
+    text = str(item or "").strip().strip(".").lower()
+    # Only non-findings: "no gloves while handling drums" is a real safety issue, not a placeholder.
+    return not text or bool(
+        re.fullmatch(
+            r"none|n/?a|nothing|-+|no (?:readable |visible |legible )?(?:text|logos?|issues?|problems?"
+            r"|safety (?:issues?|problems?|concerns?)|concerns?)(?: (?:found|detected|visible|seen))?",
+            text,
+        )
+    )
 
 
 def _vision_image(data, max_width=1024):
@@ -492,7 +510,10 @@ def hero_image(step):
     run, brief = step.run, step.run.brief
     article = prompting.approved_output(run, "cleanup") or prompting.approved_output(run, "draft")
     title_option = run.metadata_options.filter(kind="title", selected=True).first()
-    title = title_option.text if title_option else brief.topic
+    # The skill's visual copy is the article's H1 (the page title), not the meta title, which is worded
+    # differently by design; the meta title and then the topic are the fallbacks.
+    h1 = re.search(r"(?m)^#\s+(.+?)\s*$", article or "")
+    title = h1.group(1).strip("* ") if h1 else (title_option.text if title_option else brief.topic)
     note = (step.regenerate_note or "").strip()
     headline_override = note[len("headline:") :].strip() if note.lower().startswith("headline:") else ""
     context = prompting.context_for(
@@ -517,6 +538,8 @@ def hero_image(step):
     for attempt in (1, 2):
         if not previous:
             photo, data, provider, model, fallback_note = _new_photo(step, image_prompt, title)
+        # Exactly 16:9 before the vision check, so its subject box matches the photo that is branded.
+        data = hero.to_16_9(data)
         vision, vision_problem = _look_at_photo(step, data, context)
         try:
             result = hero.brand(data, markup, vision)
@@ -532,9 +555,16 @@ def hero_image(step):
         photo.delete()
         image_prompt += " " + PLACE_RIGHT
 
+    # "Unchecked:" flags hold the hero: a failed or partial vision check means text and safety weren't
+    # looked at, and that used to pass as clean (the audit's H2).
     if vision_problem:
-        flags.append(f"{vision_problem} Subject position, text and safety weren't checked; look yourself.")
+        flags.append(f"Unchecked: {vision_problem} Subject position, text and safety weren't checked.")
     if vision:
+        for key in vision.get("unchecked") or []:
+            label = "readable text" if key == "readable_text" else "safety problems"
+            flags.append(f"Unchecked: the vision check didn't report on {label}; look at the photo yourself.")
+        if not vision.get("subject"):
+            flags.append("Unchecked: the vision check gave no usable subject box, so the layout was assumed.")
         flags += [f"Safety: {issue}" for issue in vision["safety_issues"]]
         flags += [f"Readable text or logo in the photo: {item}" for item in vision["readable_text"]]
     flags += result.flags
@@ -570,7 +600,9 @@ def hero_image(step):
 
 
 def hero_needs_a_look(flags, branded):
-    return not branded or any(f.startswith(("Safety:", "Readable text", "Branding failed")) for f in flags)
+    return not branded or any(
+        f.startswith(("Safety:", "Readable text", "Branding failed", "Unchecked:")) for f in flags
+    )
 
 
 def localise(step):
