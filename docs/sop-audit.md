@@ -156,6 +156,17 @@ The agent then guides the workflow instead of looping on one step: it decides pe
 | 7 | Edit step: vocabulary floor, stacked-sentence targeting, repetition test, scanner guidance, frame_scan fields | Flat prose, edit refusals |
 | 8 | Hero fixes; vendor manifest and drift test | Cause 6, hero misfires |
 
+### Phase 1 (done): the instruments and the baseline
+
+- `python manage.py sop_replay [--runs …] [--steps …] [--latest] [--out file]` (`apps/studio/replay.py`) runs `sop.normalise` and `sop.check` (exactly what the loop does before its reviewer, now one shared function) over stored versions and writes a Markdown report: firings per check (`sop.check_kind` groups findings by check), examples to read, and per-text block counts with what was auto-fixed.
+- `tests/test_sop_fixtures.py` with `tests/fixtures/sop/` (README there):
+  - Fixture B (`b/blog_bad_draft.md`) plants one defect per blocking check. All 16 are caught, and any block it doesn't declare fails the test, so a new false positive shows up at once.
+  - Five planted defects nothing deterministic catches are listed as known gaps and printed on every run: vague attribution, tidy wrap-ups, puffery outside the banned list, a local run of flat sentences, and an unsourced statistic. Deslop's lexical scan has no patterns for the first two.
+  - Fixture A (`a/`) waits for owner-approved articles. It requires zero blocks.
+- **Baseline** (latest version of each step, runs 18 to 21): 13 texts, 44 blocking findings, 7 texts with none. Every plan text is clean. The blocks sit in drafts and edits: comma-for-colon headings 24, an invented URL 6, a close with no product link 4, pointer sentences 4, adjacent anchors 2, one link per section 2, link-only sentences 1, meta narration 1.
+- What the replay settled: the comma rule's 11 distinct headings are all real topic-qualifier commas ("Worked Example, Acetone SDS"). Narrowing it for questions, digit groups and headings that already have a colon changed no firing.
+- It also found a prompt-induced artifact: a heading containing the literal `++underlined text++`, copied from `_rules.md`'s list of spans to keep. That goes to phase 4 (mechanical fix plus clearer wording in the rule).
+
 Phases 1 and 2 matter most: phase 1 makes misfires measurable offline, and phase 2 removes the largest class by construction.
 
 ## Decisions for the owner

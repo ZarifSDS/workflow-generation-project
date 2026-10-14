@@ -451,7 +451,15 @@ def check_article(text, ctx, *, metadata=True):
     for heading in [*h1s[:1], *headings]:
         # One comma and no list word: a topic and its qualifier ("Worked Example, Acetone SDS"), which the
         # house style separates with a colon. A comma in a heading only lists items.
-        if heading.count(",") == 1 and not re.search(r"(?i)\b(?:and|or)\b|&", heading):
+        # Not a question ("If an SDS Is Missing, What Should You Do?"), a number ("1,000 Chemicals") or a
+        # heading that already has its colon. The replay of runs 18-21 found 11 headings, all real cases.
+        plain = re.sub(r"\d,\d", "", heading).strip()
+        if (
+            plain.count(",") == 1
+            and not plain.endswith("?")
+            and ":" not in plain
+            and not re.search(r"(?i)\b(?:and|or)\b|&", plain)
+        ):
             findings.append(
                 Finding(
                     "block",
@@ -999,6 +1007,38 @@ def link_sources(step_key, base):
     )
 
 
+def normalise(step_key, text):
+    """Everything a script fixes better than a model, run before every check round (and by the replay
+    harness, so it measures exactly what the loop sees). Returns (text, {fix: count})."""
+    # House mechanics: dashes, curly quotes, emoji, rules, spacing, markers, broken links.
+    text, fixes = house.mechanical_fix(text)
+    if step_key in PLAN_STEPS:
+        text, promoted = normalise_plan_headings(text)
+        if promoted:
+            fixes["bold labels made headings"] = promoted
+    text, fixed = normalise_fixed_headings(text)
+    if fixed:
+        fixes["fixed component headings"] = fixed
+    if step_key in ARTICLE_STEPS:
+        # "Tags: …" / "Excerpt: …" lines under the H1 would publish as intro text.
+        text, stray = textclean.strip_metadata_lines(text)
+        if stray:
+            fixes["metadata lines taken out of the article"] = sum(map(len, stray.values()))
+    return text, fixes
+
+
+def check_kind(finding):
+    """A stable name for the check that produced a finding: its text with quoted parts, numbers and URLs
+    blanked ("the heading '…' joins a topic…"). Used to count firings per check across runs and fixtures."""
+    text = str(finding.text if isinstance(finding, Finding) else finding)
+    text = re.sub(r"^\[(?:block|advise|note)\]\s*", "", text)
+    # A quoted part may hold apostrophes ("doesn't", "SDS's"): an apostrophe between letters doesn't close it.
+    text = re.sub(r"'(?:[^'\n]|(?<=\w)'(?=\w))*'|\"[^\"]*\"|“[^”]*”", "'…'", text)
+    text = re.sub(r"(?:https?|wagtail)://\S+", "<url>", text)
+    text = re.sub(r"\b\d[\d.,%]*\b", "N", text)
+    return re.sub(r"\s+", " ", text).strip()[:90]
+
+
 def run_loop(step, text, call, max_rounds=None):
     """The review-revise loop. `call(prompt_name, context, task)` returns (text, "provider/model")."""
     max_rounds = settings.STUDIO_SOP_MAX_ROUNDS if max_rounds is None else max_rounds
@@ -1010,20 +1050,7 @@ def run_loop(step, text, call, max_rounds=None):
     for number in range(1, max_rounds + 2):
         current = Round(number)
         result.rounds.append(current)
-        # House mechanics a script fixes better than a model (dashes, curly quotes, emoji, rules, spacing).
-        result.text, current.fixes = house.mechanical_fix(result.text)
-        if step.key in PLAN_STEPS:
-            result.text, promoted = normalise_plan_headings(result.text)
-            if promoted:
-                current.fixes["bold labels made headings"] = promoted
-        result.text, fixed = normalise_fixed_headings(result.text)
-        if fixed:
-            current.fixes["fixed component headings"] = fixed
-        if step.key in ARTICLE_STEPS:
-            # "Tags: …" / "Excerpt: …" lines under the H1 would publish as intro text.
-            result.text, stray = textclean.strip_metadata_lines(result.text)
-            if stray:
-                current.fixes["metadata lines taken out of the article"] = sum(map(len, stray.values()))
+        result.text, current.fixes = normalise(step.key, result.text)
         checks = check(step.key, result.text, ctx)
         current.checks = [str(f) for f in checks]
         reply, reviewer = call(

@@ -71,6 +71,7 @@ What the first live runs showed (2026-10-14): the loop cut the reviewer's findin
 - **Wizard:** New brief → fill the brief → under Pipeline choose **Autopilot (one-shot)**. The SOP self-review column is ticked for every text step and the approval boxes are cleared; change either per step if you want to look at something anyway.
 - **Briefs list:** **Autopilot** next to a saved brief starts the same configuration with the default models.
 - **Reviewing a held step:** the run screen shows the **SOP self-review** panel (rounds, verdicts, check findings, reviewer findings, whether each revision was used). Approve, edit, send back with feedback, or regenerate as usual.
+- **Measuring a change to a check (no model calls):** `python manage.py sop_replay --latest --out var/replay.md` replays the checks over every stored run; `tests/test_sop_fixtures.py` holds Fixture A (approved articles: zero blocks) and Fixture B (planted defects: all caught). Run both before and after a change and compare. See `tests/fixtures/sop/README.md` and `docs/sop-audit.md`.
 - **Tuning the SOP:** rubrics in `apps/studio/prompts/sop_rubrics.md` (one `## step` section each), checks in `apps/studio/sop.py` (`check_*` functions; tests in `tests/test_sop.py`), reviewer and revision prompts in `prompts/sop_review.md` and `prompts/sop_revise.md`. Restart the worker after changing prompts.
 
 ## 6. Where the rubric rules come from

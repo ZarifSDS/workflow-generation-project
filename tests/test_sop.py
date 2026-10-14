@@ -890,6 +890,13 @@ def test_a_comma_between_topic_and_qualifier_in_a_heading_is_blocked():
     listed = GOOD_DRAFT.replace("## Do Safety Data Sheets Expire?", "## Gloves, Goggles and Respirators")
     assert not any("with a comma" in f for f in blocking(sop.check("draft", listed, CTX)))
     assert not any("with a comma" in f for f in blocking(sop.check("draft", GOOD_DRAFT, CTX)))
+    for fine in (
+        "If an SDS Is Missing, What Should You Do?",
+        "Managing 1,000 Chemicals Without Spreadsheets",
+        "What Is an SDS: A Short, Practical Guide",
+    ):
+        text = GOOD_DRAFT.replace("## Do Safety Data Sheets Expire?", f"## {fine}")
+        assert not any("with a comma" in f for f in blocking(sop.check("draft", text, CTX))), fine
 
 
 def test_the_skills_link_and_flow_scripts_run_as_checks():

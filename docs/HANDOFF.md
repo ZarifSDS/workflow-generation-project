@@ -23,7 +23,7 @@ Read this first in a new session. Then `docs/development.md` (code map, how-tos,
 
 **Still open from the audit list:** item 4 (one grade/checks panel per step, scan counts with what-to-do copy, send-back model list with durations) and sectional drafting / re-branding library images.
 
-**The SOP audit is in `docs/sop-audit.md`** (read it before touching sop.py): six root causes, the phased plan and the owner's open decisions. Phase 0 is done (not-live index rows removed, every `[VERIFY…]` form held, `[VERIFY]` kept inside its sentence). Next is phase 1 (Fixture A/B per check plus an offline replay harness over stored runs 17-21), then phase 2 (finding-scoped guard permissions), which removes the deadlock class by construction.
+**The SOP audit is in `docs/sop-audit.md`** (read it before touching sop.py): six root causes, the phased plan and the owner's open decisions. Phase 0 is done (not-live index rows removed, every `[VERIFY…]` form held, `[VERIFY]` kept inside its sentence). Phase 1 is done: `manage.py sop_replay` (offline replay of the checks over stored runs) and `tests/test_sop_fixtures.py` (Fixture B with 16 planted defects, all caught; Fixture A waits for the owner's approved articles); the baseline is recorded in the audit doc. Next is phase 2: findings carry a level that routes them (hold, send back, revise, script) and the permissions their fix needs, which removes the deadlock class by construction. Run the replay and the fixtures before and after every check change.
 
 ## Session of 2026-10-14 (03:45–07:50 GMT+6): what changed and where it stands
 
