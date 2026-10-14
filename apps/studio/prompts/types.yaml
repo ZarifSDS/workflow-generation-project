@@ -1,5 +1,15 @@
-# Per content-type text inserted into the step prompts: {{type_instructions}}, {{publication}},
-# {{type_conclusion}} (the conclusion rule and plan) and {{type_links}} (the linking rule).
+# Per content type: the text inserted into the step prompts and the check profile the SOP's deterministic
+# checks read (apps/studio/sop.py `profile()`), so a prompt never asks for what a check forbids
+# (docs/sop-audit.md, cause 2). Prompt keys: {{type_instructions}}, {{publication}}, {{type_conclusion}},
+# {{type_links}}, and the structure keys below (heading_case, keyword_rule, h1_options, outline_order,
+# intro_plan, faq_plan, headings_only, draft_structure, metadata). A type without a structure key uses the
+# seo_blog one. {{type_conclusion}} inside draft_structure is filled first.
+#
+# checks: key_takeaways / faq: block | advise | none (whether the component is required);
+# scope_sentence: required | forbidden | none; keyword_in_title / keyword_in_heading: block | advise;
+# product_close: required | forbidden | optional; title_verbatim: the H1 is the brief's title as given;
+# brief_anchors_only: no sdsmanager.com link but the brief's anchors; adjacent_anchors: forbidden | allowed;
+# min_internal_links: the advisory floor; close_heading: cta (verb-first CTA) | host (the host's style).
 
 seo_blog:
   label: "SEO blog article for sdsmanager.com (including pillar pages)"
@@ -18,13 +28,70 @@ seo_blog:
     brief's call to action is a button, add the button label in quotes on its own line after that
     paragraph.
   links: >
-    Use at least three sdsmanager.com links in total (the CTA link counts), each in its own section and
-    never in two adjacent sections, with natural noun-phrase anchors from the outline's keyword and
-    anchor map. Every anchor is self-justifying: write the sentence as a fact or a fix the reader
-    uses, then link the noun phrase it is about; never a sentence whose job is to point at another
-    page ("For a deeper look, refer to our guide", "see the X resource"). A product link names what
-    the tool does about the pain point just described, in the same plain register as the advice.
-    If the article can't host three naturally, flag the shortfall in the metadata section.
+    Use at least three sdsmanager.com links in total (the CTA link counts), at most one per H2 where the
+    article allows it, with natural noun-phrase anchors from the outline's keyword and anchor map. Every
+    anchor is self-justifying: write the sentence as a fact or a fix the reader uses, then link the noun
+    phrase it is about; never a sentence whose job is to point at another page ("For a deeper look,
+    refer to our guide", "see the X resource"). A product link names what the tool does about the pain
+    point just described, in the same plain register as the advice, and never sits in an introductory or
+    background section. If the article can't host three naturally, flag the shortfall in the metadata
+    section.
+  heading_case: "Write headings in Title Case."
+  keyword_rule: >
+    Keywords: the primary keyword in the H1, at least one H2, the first 100 words, and two or three
+    headings where it reads naturally. Each secondary keyword once where it fits. Never stuff keywords
+    and never tack the keyword onto a heading.
+  h1_options: >
+    Two to four reader-facing titles phrased as the searcher's query and framed from what ranks. Mark the
+    recommended one.
+  outline_order: >
+    In article order: `Intro`, `Key Takeaways`, every `H2:` and `H3:`, the conclusion's CTA heading, then
+    `Frequently Asked Questions`.
+  intro_plan: >
+    The opener (a generic example or the pain point the reader recognises; for best-X and comparison
+    intent, the reader's buying situation), why knowing this matters to the reader, the snippet answer with
+    the primary keyword, and the core contents the "this article" scope sentence will name.
+  faq_plan: >
+    Three to seven questions, "People also ask" first, that the body doesn't already answer.
+  headings_only: >
+    Plain lines only, no prose and no line for the intro (it has no heading): `H1: …`, then
+    `H2: Key Takeaways`, every body `H2:`/`H3:` in order, the conclusion's CTA heading as an `H2:`, and
+    last `H2: Frequently Asked Questions` with each question as `H3: …`.
+  draft_structure: |
+    1. `# H1`, the outline's recommended title.
+    2. Intro, 4–7 sentences as one argument, in this order: a generic example or the pain point the reader recognises (no "In today's workplace", no "Imagine"), then the topic and why knowing it matters to this reader, with one or two snippet sentences that answer the primary query directly and carry the primary keyword, a bridge that interprets any number before moving on, and last a scope sentence with the literal words "this article" naming the core contents ("In this article, you'll learn..." or "Let us walk you through ... in this article"). The first two or three sentences work alone as a hook.
+    3. `## Key Takeaways`: 3–7 bullets in the order their content appears. Each is one standalone fact (a definition, number, threshold, deadline, named rule) with no pronoun or "the" that leans on another bullet; the first answers the primary query. No "covers" or "you will learn".
+    4. The body: the first H2 carries the core answer. Question headings open with their answer. One or two sentences introduce any bulleted H3. Citation capsules where the outline marks them. Tables where they reduce effort. Put `[SRC: url]` right after each sourced statistic or regulatory claim, using only URLs from the research or search results. Put `[VISUAL: type, short description]` on its own line where a visual would reduce effort (data chart, process diagram, illustration, photo, comparison); a run of more than about 1,500 words without one is usually a gap.
+    5. {{type_conclusion}}
+    6. `## Frequently Asked Questions` with 3–7 questions in this form (one `###` question per item, a blank line, then the answer):
+
+    ## Frequently Asked Questions
+
+    :::faq
+    ### The question a reader would ask?
+
+    The answer's first sentence answers directly and repeats the question's wording; two or three sentences.
+    :::
+
+    Answer yes/no questions by making the question's subject the subject of your sentence, not with a bare "Yes," or "No,". FAQ answers stand on their own and contain no links. Vary how answers land so the set doesn't read as one template.
+
+    7. `## References`: a numbered list of the sources cited, with their URLs when you have them.
+  metadata: |
+    ### Meta Titles
+    - 40–60 characters, primary keyword near the front, not a question, worded differently from the H1
+  checks:
+    key_takeaways: block
+    faq: block
+    scope_sentence: required
+    keyword_in_title: block
+    keyword_in_heading: block
+    product_close: required
+    title_verbatim: false
+    brief_anchors_only: false
+    adjacent_anchors: allowed
+    min_internal_links: 3
+    close_heading: cta
+    references: advise
 
 outbound:
   label: "Guest post for a third-party website"
@@ -46,6 +113,50 @@ outbound:
     No two anchors sit in adjacent sections (H3s count), the first sits in the first 30% of the article,
     none sits in the close, and no sentence is only a link. Add no other sdsmanager.com links. Link
     primary sources (regulators, standards) where they support a claim.
+  heading_case: >
+    Write headings in the site profile's heading case (sentence case unless the host uses Title Case).
+  keyword_rule: >
+    Keywords: the title is the brief's, kept word for word. Put the primary keyword in the intro and in
+    a heading only where it reads naturally; if it doesn't fit, say so once at the end and never bend a
+    heading to carry it. Each supporting keyword once where it fits. Never stuff keywords.
+  h1_options: >
+    One line: the brief's title, kept word for word (only its case may follow the host's heading case).
+    Don't propose alternatives.
+  outline_order: >
+    In article order: `Intro`, every `H2:` and `H3:` in the host's structure, and the close in the host's
+    style. No Key Takeaways, FAQ or References unless the site profile or the notes show the host uses
+    them.
+  intro_plan: >
+    The topic stated directly and then the pain point (or the pain point and then the topic), then the
+    core content stated as content. No "this article" or "this guide" sentence and no table of contents.
+  faq_plan: >
+    Only if the site profile or the notes show the host uses FAQ blocks: three to seven questions people
+    search for. Otherwise one line: "None: the host doesn't use FAQ blocks."
+  headings_only: >
+    Plain lines only, no prose and no line for the intro: `H1: …` (the brief's title), then every body
+    `H2:`/`H3:` in order, and the closing heading as an `H2:` only if the host uses one.
+  draft_structure: |
+    1. `# H1`, the brief's title, word for word.
+    2. Intro, two to four short paragraphs: the topic stated directly and then the pain point (or the pain point and then the topic), why it matters to this reader, then the core content stated as content. No "this article", "this guide" or "in this post" sentence, no table of contents, no "Imagine".
+    3. The body in the host's structure and heading case (the site profile): the first H2 opens with the core answer; H3s only where the host uses them; tables only where the host uses them. Each anchor from the brief exactly once, in a section on its topic, as the plain solution to a problem the reader has just met. Put `[SRC: url]` right after each sourced statistic or regulatory claim, using only URLs from the research or search results.
+    4. {{type_conclusion}}
+    5. An FAQ only if the site profile or the notes ask for one (`## Frequently Asked Questions`, `###` questions, answers mirroring the question's subject, no links in answers). No Key Takeaways and no References section unless the host uses them.
+  metadata: |
+    ### Meta Titles
+    - the brief's title, kept word for word, as every option (only its case may change)
+  checks:
+    key_takeaways: none
+    faq: none
+    scope_sentence: forbidden
+    keyword_in_title: advise
+    keyword_in_heading: advise
+    product_close: forbidden
+    title_verbatim: true
+    brief_anchors_only: true
+    adjacent_anchors: forbidden
+    min_internal_links: 0
+    close_heading: host
+    references: none
 
 lead_magnet:
   label: "Downloadable lead magnet (checklist or guide)"
@@ -58,7 +169,20 @@ lead_magnet:
     A short close under a verb-first heading: what to do with the completed resource this week, and
     the one product page from the list that keeps it current, linked in its sentence.
   links: >
-    Use up to three sdsmanager.com links, each in its own section, never in adjacent sections.
+    Use up to three sdsmanager.com links, each in its own section.
+  checks:
+    key_takeaways: advise
+    faq: advise
+    scope_sentence: none
+    keyword_in_title: block
+    keyword_in_heading: advise
+    product_close: required
+    title_verbatim: false
+    brief_anchors_only: false
+    adjacent_anchors: allowed
+    min_internal_links: 0
+    close_heading: cta
+    references: none
 
 whitepaper:
   label: "Whitepaper"
@@ -70,5 +194,18 @@ whitepaper:
     Recommendations under a verb-first heading: the decision the reader faces, the evidence that settles
     it, and the one product page from the list that implements it, linked in its sentence.
   links: >
-    Use at least three sdsmanager.com links in total, each in its own section, never in adjacent
-    sections, with natural noun-phrase anchors.
+    Use at least three sdsmanager.com links in total, at most one per section, with natural noun-phrase
+    anchors.
+  checks:
+    key_takeaways: advise
+    faq: advise
+    scope_sentence: none
+    keyword_in_title: block
+    keyword_in_heading: advise
+    product_close: required
+    title_verbatim: false
+    brief_anchors_only: false
+    adjacent_anchors: allowed
+    min_internal_links: 3
+    close_heading: cta
+    references: advise

@@ -209,7 +209,9 @@ def test_outline_checks_shape_of_the_headings_only_outline():
     text = GOOD_OUTLINE.replace("H2: Key Takeaways\n", "")
     assert any("Key Takeaways" in f for f in blocking(sop.check("outline", text, CTX)))
     text = GOOD_OUTLINE.replace("H3: Do You Need to Keep an SDS for a Discontinued Product?\n", "")
-    assert any("FAQ question" in f for f in blocking(sop.check("outline", text, CTX)))
+    # Advisory, as in the article: the approved JSA article (Fixture A) has eight.
+    found = [str(f) for f in sop.check("outline", text, CTX)]
+    assert any("FAQ question" in f and f.startswith("[advise]") for f in found)
 
 
 def test_draft_checks_catch_the_recurring_misses():
@@ -1135,3 +1137,141 @@ def test_a_plan_that_says_no_product_fits_lets_the_close_go_unlinked():
     assert any("links no product page" in f for f in blocking(sop.check("draft", unlinked, CTX)))
     ctx = {**CTX, "no_product": True}
     assert not any("links no product page" in f for f in blocking(sop.check("draft", unlinked, ctx)))
+
+
+# ---- Phase 3 (docs/sop-audit.md): one check profile per content type ----
+
+GUEST = (
+    "# Why UK Workplace Risk Registers Fail an HSE Inspection\n\n"
+    "A register lists risks. Inspectors ask for the assessment behind each line, and a workplace risk "
+    "assessment is what they judge. Keeping it current is what passes an inspection.\n\n"
+    "## Why Registers Fail\n\nNobody owns the review dates. "
+    "[EHS risk management software](https://sdsmanager.com/uk/ehs-software/risk-management-software/) "
+    "gives every risk an owner and a review date.\n\n"
+    "## What the Law Requires\n\nThe Management Regulations require a suitable and sufficient assessment. "
+    "An employer with five or more employees records the significant findings and the groups at risk. "
+    "The assessment covers everyone the work affects, including visitors and contractors on site.\n\n"
+    "## How to Keep Assessments Current\n\nReview after any change to the work. A new machine, a new "
+    "chemical or a reported near miss each starts a review of the lines it touches. Record the date of "
+    "each review and who carried it out, so an inspector can follow the history of every risk.\n\n"
+    "## Final Thoughts\n\nCheck one line of the register against the shop floor this week.\n"
+)
+GUEST_CTX = {
+    **CTX,
+    "content_type": "outbound",
+    "pkeyword": "workplace risk assessment",
+    "title": "Why UK workplace risk registers fail an HSE inspection",
+    "anchors": [
+        {
+            "text": "EHS risk management software",
+            "url": "https://sdsmanager.com/uk/ehs-software/risk-management-software/",
+        }
+    ],
+}
+
+
+def test_a_guest_post_follows_its_own_profile_not_the_blog_shape():
+    found = blocking(sop.check("draft", GUEST, GUEST_CTX))
+    assert not found, (
+        found
+    )  # no Key Takeaways, FAQ, scope sentence or CTA close required; title case-insensitive
+    renamed = GUEST.replace("# Why UK Workplace Risk Registers Fail", "# Why Risk Registers Fail")
+    assert any(
+        "brief's title, kept word for word" in f for f in blocking(sop.check("draft", renamed, GUEST_CTX))
+    )
+    scoped = GUEST.replace(
+        "A register lists risks.", "In this article, we look at registers. A register lists risks."
+    )
+    assert any("announces the article" in f for f in blocking(sop.check("draft", scoped, GUEST_CTX)))
+
+
+def test_a_guest_post_links_only_its_anchors_and_none_in_the_close():
+    extra = GUEST.replace(
+        "Review after any change to the work.",
+        "Review after any change, in [SDS software](https://sdsmanager.com/uk/).",
+    )
+    found = [f for f in sop.check("draft", extra, GUEST_CTX) if f.severity == "block"]
+    off_brief = next(f for f in found if "aren't the brief's anchors" in f.text)
+    assert off_brief.allows["drop_urls"] == ["https://sdsmanager.com/uk/"]
+    closing = GUEST.replace(
+        "this week.\n",
+        "this week in [risk software](https://sdsmanager.com/uk/ehs-software/risk-management-software/).\n",
+    ).replace(
+        "[EHS risk management software](https://sdsmanager.com/uk/ehs-software/risk-management-software/)",
+        "EHS risk management software",
+    )
+    assert any("sits in the close" in f for f in blocking(sop.check("draft", closing, GUEST_CTX)))
+
+
+def test_a_guest_post_outline_needs_no_blog_components_but_keeps_the_title():
+    outline = GOOD_OUTLINE
+    headings = (
+        "## Headings-Only Outline\nH1: Why UK workplace risk registers fail an HSE inspection\n"
+        "H2: Why Registers Fail\nH2: What the Law Requires\nH2: How to Keep Assessments Current\n"
+    )
+    outline = re.sub(r"(?ms)^## Headings-Only Outline\n.*", headings, outline)
+    found = blocking(sop.check("outline", outline, GUEST_CTX))
+    assert not any("Key Takeaways" in f or "Frequently Asked" in f for f in found), found
+    retitled = outline.replace("H1: Why UK workplace", "H1: Why workplace")
+    assert any("brief's title" in f for f in blocking(sop.check("outline", retitled, GUEST_CTX)))
+
+
+def test_every_prompt_renders_for_every_content_type(brief):
+    for content_type in ("seo_blog", "outbound", "lead_magnet", "whitepaper"):
+        brief.content_type = content_type
+        brief.save()
+        step = services.create_run(brief, {}).steps.get(key="draft")
+        for name in ("outline", "draft", "sop_revise"):
+            context = sop.prompting.context_for(step)
+            text = "".join(m["content"] for m in sop.prompting.render(name, context))
+            leftover = set(re.findall(r"\{\{(\w+)\}\}", text)) - {
+                "findings",
+                "length_rule",
+                "link_sources",
+                "previous_rejection",
+                "output",
+                "step_label",
+            }
+            assert not leftover, (content_type, name, leftover)
+    guest = sop.prompting.type_structure("outbound")
+    assert "brief's title, word for word" in guest["draft_structure"]
+    assert "Key Takeaways" not in guest["draft_structure"].split("No Key Takeaways")[0]
+    assert "this article" in sop.prompting.type_structure("seo_blog")["draft_structure"]
+
+
+def test_localise_may_swap_regulators_and_region_links_but_marks_changed_figures():
+    us = (
+        "## Rules\n\nOSHA requires it under 1910.1200. "
+        "See [EHS software](https://sdsmanager.com/us/ehs-software/). Keep it 30 years.\n"
+    )
+    uk = (
+        "## Rules\n\nHSE requires it under COSHH. "
+        "See [EHS software](https://sdsmanager.com/uk/ehs-software/). Keep it 30 years.\n"
+    )
+    assert sop._guard("localise", us, uk, swap=("us", "uk"))[0]
+    assert not sop._guard("review_edit", us, uk)[0]  # the edit step keeps every fact
+    changed = uk.replace("30 years", "40 years")
+    assert not sop._guard("localise", us, changed, swap=("us", "uk"))[0]
+    assert sop._guard("localise", us, changed.replace("40 years.", "40 years [VERIFY]."), swap=("us", "uk"))[
+        0
+    ]
+
+
+def test_localise_is_not_checked_against_the_source_keyword(brief):
+    brief.localise_to = "UK"
+    brief.save()
+    step = services.create_run(brief, {"localise": {"enabled": True}}).steps.get(key="localise")
+    ctx = sop.context_from(step)
+    assert ctx["pkeyword"] == "" and ctx["region"] == "UK"
+    assert any("/uk/" in url for url in ctx["allowed_urls"])
+
+
+def test_the_first_guest_post_anchor_must_sit_in_the_first_thirty_percent():
+    anchor = (
+        "[EHS risk management software](https://sdsmanager.com/uk/ehs-software/risk-management-software/)"
+    )
+    late = GUEST.replace(anchor, "EHS risk management software").replace(
+        "Review after any change to the work.", f"Review after any change; {anchor} tracks it."
+    )
+    assert any("first 30%" in f for f in blocking(sop.check("draft", late, GUEST_CTX)))
+    assert not any("first 30%" in f for f in blocking(sop.check("draft", GUEST, GUEST_CTX)))

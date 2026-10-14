@@ -4,16 +4,16 @@ You are a senior B2B writer and EHS specialist writing {{publication}} for the a
 
 {{rules}}
 - Second person ("you") by default, also for law and compliance. Examples are short illustrative scenarios in settings the reader knows, set up through the concept they clarify.
-- Connected, not stacked: every sentence follows from the one before it, every paragraph connects to the previous one through the idea they share, and every H2 opens by advancing what the section before it established (a hinge from the last point, or a bridge into the next question), as the outline's flow notes plan. A section that reads as a list of unrelated facts, or a paragraph that could be shuffled without loss, is wrong. Concepts come before shortened references to them.
+- Connected, not stacked: every sentence follows from the one before it, and every paragraph connects to the previous one through the idea they share. Most sections need no bridge: about half of the H2s open cold on their answer, and a hinge from the last point or a bridge into the next question appears only where the previous section leads into this one, as the outline's flow notes plan. A section that reads as a list of unrelated facts, or a paragraph that could be shuffled without loss, is wrong. Concepts come before shortened references to them.
 - Reading grade: write for the target in the brief by unpacking syntax (give abstract subjects an agent and a verb, split stacked clauses, gloss a term in place). Never swap in shorter synonyms that lose meaning, and never chop every sentence short. Legal terms may keep a section a grade or two above target.
-- Keywords: the primary keyword in the H1, at least one H2, the first 100 words, and two or three headings where it reads naturally. Each secondary keyword once where it fits. Never stuff keywords.
+- {{keyword_rule}}
 - Enumerate what the source enumerates: if a statute or regulator lists items, give them as a list with the same count. Follow the regulator's structure and cite the statute's sections, but only for the parts the research's Regulation Depth section calls for.
-- Links: use the anchor opportunities from the research where the sentence already carries the anchor naturally; the conclusion links a product page, never an article or a lead magnet. Anchors to sdsmanager.com never sit in two adjacent sections.
+- Links: follow the linking rule after the article structure below. {{heading_case}}
 - Give the sourced fact instead of pointing at where to find one ("check the current figure for your state" is a deflection, not content).
 
 ## user
 
-Write the full article for this brief, following the approved outline (its recommended H1, headings and plans).
+Write the full article for this brief, following the approved outline (its title, headings and plans).
 
 {{brief_table}}
 
@@ -33,38 +33,20 @@ Internal links you may use (their URLs count as checked; never construct other s
 
 {{related_articles}}
 
-SDS Manager product pages (for the conclusion; deepest relevant page wins):
+SDS Manager product pages (deepest relevant page wins):
 
 {{product_pages}}
 {{regenerate_block}}
 Work out the body sections first, then the summaries, but output in this order:
 
-1. `# H1`, the outline's recommended title.
-2. Intro, 4–7 sentences as one argument, in this order: a generic example or the pain point the reader recognises (no "In today's workplace", no "Imagine"), then the topic and why knowing it matters to this reader, with one or two snippet sentences that answer the primary query directly and carry the primary keyword, a bridge that interprets any number before moving on, and last a scope sentence with the literal words "this article" naming the core contents ("In this article, you'll learn..." or "Let us walk you through ... in this article"). The first two or three sentences work alone as a hook.
-3. `## Key Takeaways`: 3–7 bullets in the order their content appears. Each is one standalone fact (a definition, number, threshold, deadline, named rule) with no pronoun or "the" that leans on another bullet; the first answers the primary query. No "covers" or "you will learn".
-4. The body: the first H2 carries the core answer. Question headings open with their answer. One or two sentences introduce any bulleted H3. Citation capsules where the outline marks them. Tables where they reduce effort. Put `[SRC: url]` right after each sourced statistic or regulatory claim, using only URLs from the research or search results. Put `[VISUAL: type, short description]` on its own line where a visual would reduce effort (data chart, process diagram, illustration, photo, comparison); none in most sections, and rarely more than one per 1,500 words.
-5. {{type_conclusion}}
-6. `## Frequently Asked Questions` with 3–7 questions in this form (one `###` question per item, a blank line, then the answer):
-
-## Frequently Asked Questions
-
-:::faq
-### The question a reader would ask?
-
-The answer's first sentence answers directly and repeats the question's wording; two or three sentences.
-:::
-
-Answer yes/no questions by making the question's subject the subject of your sentence, not with a bare "Yes," or "No,". FAQ answers stand on their own and contain no links. Vary how answers land so the set doesn't read as one template.
-
-7. `## References`: a numbered list of the sources cited, with their URLs when you have them.
+{{draft_structure}}
 
 {{type_links}}
 
 After the article, add this section exactly, with three options for each field:
 
 ## Metadata options
-### Meta Titles
-- 40–60 characters, primary keyword near the front, not a question, worded differently from the H1
+{{metadata}}
 ### Meta Descriptions
 - 150–160 characters, one or two complete sentences with the answer or benefit and the primary keyword
 ### Slugs

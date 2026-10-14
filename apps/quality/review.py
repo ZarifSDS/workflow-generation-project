@@ -199,28 +199,43 @@ NUMBER_WORDS = (
 WORD_NUMBER_WITH_UNIT = re.compile(rf"\b(?:{NUMBER_WORDS})(?:[- ](?:{NUMBER_WORDS}))*\s(?:{UNITS})\b", re.I)
 
 
-def protected_spans(text):
+MARKER_VERIFY = re.compile(r"\[\s*VERIFY\b[^\]]*\]", re.I)
+CITATION_NUMBER = re.compile(r"^\d{3,}\.\d|\(")  # "1910.1200", "1910.1200(h)": a regulation's id
+
+
+def protected_spans(text, localise=False):
     """Things a rewrite must never change: numbers with the unit they count, section and regulation
-    references, URLs, acronyms (agencies, statutes) and markers."""
+    references, URLs, acronyms (agencies, statutes) and markers. A localised variant replaces the source
+    region's regulators and citations by design (OSHA → HSE), so `localise` leaves acronyms, regulation
+    references and citation numbers out; the region slug in URLs is mapped by the caller."""
     flat = re.sub(r"\s+", " ", text)
-    spans = {m.group(0).strip() for m in NUMBER_WITH_UNIT.finditer(flat)}
+    numbers = {m.group(0).strip() for m in NUMBER_WITH_UNIT.finditer(flat)}
+    spans = {n for n in numbers if not (localise and CITATION_NUMBER.search(n))}
     spans |= {m.group(0).strip().lower() for m in WORD_NUMBER_WITH_UNIT.finditer(flat)}
-    spans |= set(
-        re.findall(
-            r"\b(?:Section|Regulation|Part|Article|Schedule|Rule|Subpart|Appendix)\s+[\dA-Z][\w.()-]*", flat
+    if not localise:
+        spans |= set(
+            re.findall(
+                r"\b(?:Section|Regulation|Part|Article|Schedule|Rule|Subpart|Appendix)\s+[\dA-Z][\w.()-]*",
+                flat,
+            )
         )
-    )
+        spans |= set(re.findall(r"\b[A-Z]{2,}[A-Z0-9&]*\b", flat))
     spans |= set(re.findall(r"(?:https?|wagtail)://[^\s)\]]+", flat))
-    spans |= set(re.findall(r"\b[A-Z]{2,}[A-Z0-9&]*\b", flat))
     spans |= set(MARKER.findall(flat))
     return spans
 
 
-def protected_ok(before, after, negation_allowance=0):
+def protected_ok(before, after, negation_allowance=0, localise=False):
     """(ok, reason): every protected span survives, and no negation is lost (unfolding a 'not X but Y'
     into the positive claim may remove its 'not'; `negation_allowance` more may go when a finding's fix is
-    exactly that, e.g. a bare "No," FAQ opener rewritten to mirror the question)."""
-    missing = sorted(protected_spans(before) - protected_spans(after))
+    exactly that, e.g. a bare "No," FAQ opener rewritten to mirror the question). A localised variant may
+    change a figure only where it adds a [VERIFY] for it (the localisation rule: changed facts are marked)."""
+    missing = sorted(protected_spans(before, localise) - protected_spans(after, localise))
+    if missing and localise:
+        added = len(MARKER_VERIFY.findall(after)) - len(MARKER_VERIFY.findall(before))
+        figures = [s for s in missing if not s.startswith(("http", "wagtail", "["))]
+        if len(figures) == len(missing) and added >= len(figures):
+            missing = []
     if missing:
         shown = ", ".join(f"“{span}”" for span in missing[:5])
         return False, f"it changed or dropped protected facts: {shown}"
@@ -232,7 +247,7 @@ def protected_ok(before, after, negation_allowance=0):
     return True, ""
 
 
-def accept_rewrite(before, after, min_ratio=0.75, negation_allowance=0):
+def accept_rewrite(before, after, min_ratio=0.75, negation_allowance=0, localise=False):
     """A rewrite is kept only if it keeps every heading, most of the words and every protected fact."""
     after = (after or "").strip()
     if not after:
@@ -241,7 +256,7 @@ def accept_rewrite(before, after, min_ratio=0.75, negation_allowance=0):
         return False, "headings were dropped"
     if len(after.split()) < min_ratio * len(before.split()):
         return False, "too much text was removed"
-    return protected_ok(before, after, negation_allowance)
+    return protected_ok(before, after, negation_allowance, localise)
 
 
 _accept_rewrite = accept_rewrite  # older name, used by the chat

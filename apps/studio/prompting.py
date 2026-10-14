@@ -112,9 +112,42 @@ def context_for(step, extra=None):
         "related_articles": houseref.related_articles_block(brief),
         "product_pages": houseref.product_pages_block(brief.region),
         "regenerate_block": f"\nInstruction from the editor for this attempt: {note}\n" if note else "",
+        **type_structure(brief.content_type),
     }
     context.update(extra or {})
     return context
+
+
+# Prompt pieces that differ by content type (types.yaml); a type without one uses the blog's.
+STRUCTURE_KEYS = (
+    "heading_case",
+    "keyword_rule",
+    "h1_options",
+    "outline_order",
+    "intro_plan",
+    "faq_plan",
+    "headings_only",
+    "draft_structure",
+    "metadata",
+)
+
+
+def type_structure(content_type):
+    types = _types()
+    kind, blog = types[content_type], types["seo_blog"]
+    values = {}
+    for key in STRUCTURE_KEYS:
+        value = kind.get(key) or blog.get(key, "")
+        values[key] = value.strip() if key in ("draft_structure", "metadata") else " ".join(value.split())
+    conclusion = " ".join(kind.get("conclusion", "").split())
+    values["draft_structure"] = values["draft_structure"].replace("{{type_conclusion}}", conclusion)
+    return values
+
+
+def check_profile(content_type):
+    """The check profile for a content type (types.yaml `checks`), over the blog's for missing keys."""
+    types = _types()
+    return {**types["seo_blog"].get("checks", {}), **(types.get(content_type, {}).get("checks") or {})}
 
 
 def render(name, context):

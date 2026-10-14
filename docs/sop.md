@@ -82,10 +82,14 @@ What the first live runs showed (2026-10-14): the loop cut the reviewer's findin
 - **Measuring a change to a check (no model calls):** `python manage.py sop_replay --latest --out var/replay.md` replays the checks over every stored run; `tests/test_sop_fixtures.py` holds Fixture A (approved articles: zero blocks) and Fixture B (planted defects: all caught). Run both before and after a change and compare. See `tests/fixtures/sop/README.md` and `docs/sop-audit.md`.
 - **Tuning the SOP:** rubrics in `apps/studio/prompts/sop_rubrics.md` (one `## step` section each), checks in `apps/studio/sop.py` (`check_*` functions; tests in `tests/test_sop.py`), reviewer and revision prompts in `prompts/sop_review.md` and `prompts/sop_revise.md`. Restart the worker after changing prompts.
 
-## 6. Where the rubric rules come from
+## 6. One profile per content type
+
+`apps/studio/prompts/types.yaml` holds, for each content type, both the prompt structure (what the outline and the draft contain, in what order, the heading case, the keyword rule, the meta-title rule) and the check profile (`checks:`: which components are required and how strictly, whether the title is verbatim, which links are allowed, the close). The step prompts and the deterministic checks read the same file, so a prompt can't ask for what a check forbids. To change what a content type contains, change its entry there and add a test; never add a `content_type == …` condition to a check.
+
+## 7. Where the rubric rules come from
 
 `apps/studio/prompts/sop_rubrics.md` vendors the rules of the skills' reference files, grouped per step: step-1-research and the structure-fit pass (research, outline), step-2-draft and `component-specs.md` (components), `reader-flow.md` (flow and reasoning), `voice.md` (voice), `ai-patterns.md` (the pattern table, banned constructions, diction, emphasizers), `formatting.md` (house style, heading hierarchy, tables, GEO extraction integrity, source currency), `linking.md` (URL sourcing, anchors, placement, volume, product links), step-3-edit (review and edit), `localization.md` (localise). A `## draft:outbound` and a `## review_edit:outbound` section carry the `ehs-outbound-blog` rules that override the blog rules on a guest post (SITE_PROFILE governs the surface, no heading mirrored by its opener, complete-sentence paragraph openers, format rotation, informational mode, the backlink rules); `sop.rubric(step, content_type)` appends them for guest posts, and the blog-shaped deterministic checks (Key Takeaways first, FAQ block) become advisory there because the host decides those. When a reference file changes, change the matching rubric group; the skill is the source and the rubric is the copy.
 
-## 7. Model-agnostic by construction
+## 8. Model-agnostic by construction
 
 The reviewer is told the rules, not trusted to know them: the rubric, the check results and the inputs travel with every call, so a small local model and a large cloud model get the same contract. Deterministic checks catch what a weak reviewer misses; the revision guard (`accept_rewrite`) catches what a weak writer breaks. Pick the models under Settings › Default models: a fast model for the reviewer is usually enough, because the rubric and the checks do the work; the step's own model does the revision so the voice stays consistent.

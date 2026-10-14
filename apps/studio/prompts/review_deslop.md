@@ -25,7 +25,7 @@ Then check three things, because uniform de-slopping creates its own signature:
 2. Don't swap a flagged word for an unflagged synonym; use the plain word or cut it.
 3. Cutting beats rewording: most flagged constructions carry no information.
 
-House style overrides deslop here: keep Title Case headings, keep a plain turn marker that replaces a bold mini-header, and keep FAQ answers that repeat the question's wording.
+House style overrides deslop here: keep the headings' case as written (Title Case on sdsmanager.com, the host's case on a guest post), keep a plain turn marker that replaces a bold mini-header, and keep FAQ answers that repeat the question's wording.
 
 Preserve meaning exactly. If a fix would change a technical claim, leave the sentence and list it below instead. Don't add content: substantive gaps (a paragraph with no specific fact, an unsupported claim a reader must act on) are for the author, not for you.
 

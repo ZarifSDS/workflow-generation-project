@@ -50,6 +50,16 @@ voice-and-style). Where a rubric and a skill disagree, the skill is right and th
 - The Headings-Only Outline is plain `H1:`/`H2:`/`H3:` lines, no prose: `H2: Key Takeaways` second, the verb-first CTA heading before the FAQ, and `H2: Frequently Asked Questions` last with each question as an `H3:`.
 - Fixed components keep their fixed forms and are exempt from the search-query rule: `Key Takeaways` (always exactly that, second), the CTA heading (verb-first, not a query) and `Frequently Asked Questions` (always exactly that, last). `Intro` in the Detailed Outline is a label for the introduction, not a heading. Never ask for these to be reworded.
 
+## outline:outbound
+
+These rules govern the outline of a guest post and override the blog rules above where they conflict (the outbound skill is the source):
+
+- The title is the brief's, kept word for word (only its case may follow the host's heading case); H1 Options holds that one title. A title without the primary keyword is flagged once, never rewritten.
+- No Key Takeaways, FAQ, References or verb-first CTA heading unless the site profile or the notes show the host uses them; their absence is correct. The close follows the host's closing style and carries no product link and no anchor.
+- The Intro Plan states the topic and the pain point, then the core content as content: no "this article" sentence and no table of contents.
+- The Keyword and Anchor Map places every anchor from the brief exactly once, in a section on its page's topic: the first in the first 30% of the article, none in the close, and no two in adjacent sections (H3s count). It plans no other sdsmanager.com link.
+- Heading case, nesting and length follow the site profile.
+
 ## draft
 
 ### Components
@@ -112,7 +122,7 @@ voice-and-style). Where a rubric and a skill disagree, the skill is right and th
 
 ### Formatting and house style
 
-- Title Case for every heading (house style, not a tell); zero em and en dashes anywhere (ranges as "10-15" or "10 to 15"); straight quotes only; no thematic breaks; no emoji.
+- Headings in the content type's case: Title Case on sdsmanager.com (house style, not a tell), the site profile's case on a guest post; zero em and en dashes anywhere (ranges as "10-15" or "10 to 15"); straight quotes only; no thematic breaks; no emoji.
 - A heading or title that pairs a topic with its qualifier separates them with a colon ("Worked Example: Acetone SDS"), never a comma; a comma in a heading only lists items.
 - Bold sparingly: about one bolded phrase per 150 words, only for a defined term on first use, a threshold or a warning; never every occurrence, never mechanically across parallel sentences, never source or brand names. Bold-label lists ("Label: text") only where a list has genuine labels, never stamped across every list; other bullets are plain sentences or short noun phrases with varied length and grammar. Benefit tails ("so [outcome]") on at most a third of a list's bullets, never as a trailing "-ing" clause.
 - Paragraphs run to 3-4 lines, fewer where the idea is done sooner; split where the controlling idea changes, never mid-idea; uniform paragraph size is noted, not blocking.

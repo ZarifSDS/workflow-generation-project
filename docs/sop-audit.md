@@ -202,6 +202,36 @@ The agent then guides the workflow instead of looping on one step: it decides pe
 - **Replay of runs 18-21:** 44 blocks became 40. The four removed are exactly the miscalibrated kinds.
 - **Live-site finding:** the published WHS article links `/au/sds-management-articles/how-to-build-a-risk-register/`, which returns 404 (one of the not-live slugs).
 
+### Phase 3 (done): one profile per content type
+
+- **`types.yaml` holds each content type's check profile (`checks:`) and its prompt structure.** The structure pieces are heading case, keyword rule, H1 options, outline order, intro plan, FAQ plan, headings-only form, draft structure and meta-title rule; a type without one uses the blog's.
+  - `prompting.type_structure` fills the outline and draft prompts from the structure pieces.
+  - `prompting.check_profile` serves `sop.profile_of`, which `check_article` and `check_outline` read instead of `content_type == "outbound"` conditions.
+  - A prompt can no longer ask for what a check forbids. A test renders every prompt for every content type with no placeholder left unfilled.
+- **Guest posts (outbound profile):**
+  - **Not required:** Key Takeaways, FAQ, References, a verb-first close, the "this article" sentence, or the keyword in the title or a heading (advisory instead).
+  - **The title:** when it came from the brief sheet (the brief has a source reference), the H1 must be it word for word, ignoring case, in the outline and the draft.
+  - **Blocks:**
+    - an intro that announces the article ("In this article…");
+    - any sdsmanager.com link that isn't one of the brief's anchors;
+    - a link in the close (read from the last real body section, not References);
+    - anchors in adjacent sections, counted at H2 and H3 level;
+    - a first anchor after the first 30% of the body text (both approved guest posts with anchors keep it).
+  - **Rubrics:** a new `outline:outbound` rubric. The edit-step rubric for guest posts now includes the outbound draft rules instead of only naming them.
+  - **Reviewer input:** the reviewer now gets the host's site profile on the outline, draft and edit steps.
+- **Localise:**
+  - not checked against the source keyword;
+  - target-region pages and index rows count as inputs, so a correct `/uk/` link isn't "invented";
+  - the reviewer sees the edited text localise worked from;
+  - its own guard: acronyms, regulation references and citation numbers may change and the region slug in URLs is mapped, but a changed figure needs a new `[VERIFY]`.
+- **Prompt contradictions removed:**
+  - the blog's "never in two adjacent sections" (Fixture A);
+  - every H2 must open with a bridge (the skill: about half open cold);
+  - "no rhetorical questions" (now: questions you don't answer at once);
+  - Title Case for every type (now the type's case);
+  - the literal `++underlined text++` the replay found copied into a heading.
+- **Replay of runs 18-21:** identical counts to phase 2.
+
 Phases 1 and 2 matter most: phase 1 makes misfires measurable offline, and phase 2 removes the largest class by construction.
 
 ## Decisions for the owner

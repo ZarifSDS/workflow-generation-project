@@ -20,6 +20,7 @@ How it works for one step (apps.studio.tasks.execute_step calls `apply` when `st
 The whole loop is logged in the version's metrics under "sop" and shown on the run screen.
 """
 
+import copy
 import difflib
 import re
 from collections import Counter
@@ -440,41 +441,59 @@ def check_outline(text, ctx):
     if not lines:
         findings.append(Finding("block", "the Headings-Only Outline has no `H1:`/`H2:`/`H3:` lines"))
         return findings
+    prof = profile_of(ctx)
     if not lines[0].startswith("H1:"):
         findings.append(Finding("block", "the Headings-Only Outline must start with the `H1:` line"))
-    if len(lines) < 2 or lines[1].lower() != "h2: key takeaways":
-        findings.append(Finding("block", "the second heading line must be `H2: Key Takeaways`"))
+    if prof["key_takeaways"] != "none" and (len(lines) < 2 or lines[1].lower() != "h2: key takeaways"):
+        findings.append(Finding(prof["key_takeaways"], "the second heading line must be `H2: Key Takeaways`"))
     h2s = [line for line in lines if line.startswith("H2:")]
-    if not h2s or h2s[-1].lower() != "h2: frequently asked questions":
-        findings.append(Finding("block", "the last H2 must be `H2: Frequently Asked Questions`"))
-    else:
+    has_faq = bool(h2s) and h2s[-1].lower() == "h2: frequently asked questions"
+    if not has_faq and prof["faq"] != "none":
+        findings.append(Finding(prof["faq"], "the last H2 must be `H2: Frequently Asked Questions`"))
+    if has_faq:
         faq_index = lines.index(h2s[-1])
         faq_h3 = [line for line in lines[faq_index + 1 :] if line.startswith("H3:")]
         if not 3 <= len(faq_h3) <= 7:
             findings.append(
-                Finding("block", f"{len(faq_h3)} FAQ question(s) under the FAQ heading; the SOP asks for 3-7")
-            )
-        if len(h2s) >= 2:
-            close = h2s[-2][3:].strip().lower()
-            if close in GENERIC_CLOSE:
-                findings.append(
-                    Finding(
-                        "block",
-                        f"the conclusion heading '{h2s[-2][3:].strip()}' is generic; "
-                        "use a verb-first CTA heading",
-                    )
+                Finding(
+                    "advise", f"{len(faq_h3)} FAQ question(s) under the FAQ heading; the SOP asks for 3-7"
                 )
+            )
+    closing = h2s[-2] if has_faq and len(h2s) >= 2 else (h2s[-1] if h2s and not has_faq else "")
+    if prof["close_heading"] == "cta" and closing and closing[3:].strip().lower() in GENERIC_CLOSE:
+        findings.append(
+            Finding(
+                "block",
+                f"the conclusion heading '{closing[3:].strip()}' is generic; use a verb-first CTA heading",
+            )
+        )
     body_h2s = [
         line for line in h2s if line.lower() not in ("h2: key takeaways", "h2: frequently asked questions")
     ]
-    if len(body_h2s) < 3:
+    # A host that structures with H3s only (the approved HazCom guest post) still has sections.
+    sections = (
+        body_h2s if prof["close_heading"] == "cta" else [ln for ln in lines[1:] if ln[:3] in ("H2:", "H3:")]
+    )
+    if len(sections) < 3:
         findings.append(
-            Finding("block", f"only {len(body_h2s)} body H2(s); a competitive article needs at least 3")
+            Finding("block", f"only {len(sections)} body section(s); a competitive article needs at least 3")
         )
-    if pk:
+    if prof["title_verbatim"] and ctx.get("title") and _title_key(lines[0][3:]) != _title_key(ctx["title"]):
+        findings.append(
+            Finding(
+                "block",
+                f"the `H1:` line must be the brief's title, kept word for word: '{ctx['title'].strip()}'",
+            )
+        )
+    elif pk:
         h1_options = (_section_body(text, "H1 Options") or "").lower()
         if pk not in h1_options and pk not in lines[0].lower():
-            findings.append(Finding("block", f"no H1 option carries the primary keyword '{ctx['pkeyword']}'"))
+            findings.append(
+                Finding(
+                    prof["keyword_in_title"], f"no H1 option carries the primary keyword '{ctx['pkeyword']}'"
+                )
+            )
+    if pk:
         if not any(carries_keyword(line[3:], pk) for line in lines[1:]):
             findings.append(
                 Finding(
@@ -517,35 +536,63 @@ def _faq(text):
     return body, items
 
 
+def profile_of(ctx):
+    """The content type's check profile (types.yaml `checks`): which components exist and how strictly."""
+    return ctx.get("profile") or prompting.check_profile(ctx.get("content_type") or "seo_blog")
+
+
+def _title_key(text):
+    return re.sub(r"[^a-z0-9]+", " ", re.sub(r"\*+", "", text or "").lower()).strip()
+
+
+SCOPE_SENTENCE = re.compile(r"(?i)\b(?:in )?this (?:article|guide|post|piece)\b|\bwalk you through\b")
+
+
 def check_article(text, ctx, *, metadata=True):
     findings = _mechanics(text)
-    shape = "advise" if ctx.get("content_type") == "outbound" else "block"  # host-dependent on a guest post
+    prof = profile_of(ctx)
     pk = (ctx.get("pkeyword") or "").lower()
     h1s = re.findall(r"(?m)^#\s+(.+)$", text)
     if len(h1s) != 1:
         findings.append(
             Finding("block", f"{len(h1s)} H1 heading(s); the article needs exactly one", level="structural")
         )
-    elif pk and pk not in h1s[0].lower():
-        # A guest post keeps the sheet's title verbatim; the outbound skill says flag a missing keyword
-        # once and never rewrite the title (both approved Fixture A guest posts lack it).
+    elif prof["title_verbatim"] and ctx.get("title") and _title_key(h1s[0]) != _title_key(ctx["title"]):
+        # A guest post keeps the sheet's title word for word (only its case may follow the host).
         findings.append(
             Finding(
-                shape,
-                f"the H1 '{h1s[0]}' doesn't carry the primary keyword '{ctx['pkeyword']}'",
+                "block",
+                f"the H1 must be the brief's title, kept word for word: '{ctx['title'].strip()}'",
                 allows={"rename": [h1s[0]]},
+            )
+        )
+    elif pk and pk not in h1s[0].lower():
+        # On a guest post the outbound skill says flag a missing keyword once and never rewrite the title
+        # (both approved Fixture A guest posts lack it).
+        findings.append(
+            Finding(
+                prof["keyword_in_title"],
+                f"the H1 '{h1s[0]}' doesn't carry the primary keyword '{ctx['pkeyword']}'",
+                allows={"rename": [h1s[0]]} if not prof["title_verbatim"] else {},
             )
         )
     intro = _intro(text)
     first_100 = " ".join(quality_review.prose(intro).split()[:100]).lower()
     if pk and pk not in first_100:
         findings.append(Finding("block", "the primary keyword isn't in the first 100 words"))
-    if ctx.get("content_type") != "outbound" and not re.search(
+    if prof["scope_sentence"] == "required" and not re.search(
         r"(?i)\bthis article\b|\bwalk you through\b", intro
     ):
-        # The scope sentence is sdsmanager.com house style; the outbound skill bans it on guest posts.
         findings.append(
             Finding("block", "the intro has no scope sentence with the literal words 'this article'")
+        )
+    elif prof["scope_sentence"] == "forbidden" and (scope := SCOPE_SENTENCE.search(intro)):
+        # The outbound skill: state the core content as content, never "This article covers…".
+        findings.append(
+            Finding(
+                "block",
+                f"the intro announces the article ('{scope.group(0)}'); state the core content as content",
+            )
         )
     if not 3 <= len(_sentences(quality_review.prose(intro))) <= 9:
         findings.append(
@@ -557,16 +604,25 @@ def check_article(text, ctx, *, metadata=True):
         )
     sections = _sections(text)
     names = [name for name, _ in sections[1:]]
+    takeaways = prof["key_takeaways"]
     if not names or names[0].lower() != "key takeaways":
-        findings.append(
-            Finding(
-                shape, "`## Key Takeaways` must be the first H2, right after the intro", level="structural"
+        if takeaways != "none":
+            findings.append(
+                Finding(
+                    takeaways,
+                    "`## Key Takeaways` must be the first H2, right after the intro",
+                    level="structural",
+                )
             )
-        )
     else:
         bullets = _items(sections[1][1])
         if not 3 <= len(bullets) <= 7:
-            findings.append(Finding(shape, f"{len(bullets)} Key Takeaways bullet(s); the SOP asks for 3-7"))
+            findings.append(
+                Finding(
+                    "advise" if takeaways == "none" else takeaways,
+                    f"{len(bullets)} Key Takeaways bullet(s); the SOP asks for 3-7",
+                )
+            )
         for bullet in bullets:
             item = re.sub(r"^\s*(?:[-*]|\d+[.)])\s*", "", bullet).strip("* ")
             if COVERAGE_FRAMING.search(item):
@@ -582,7 +638,7 @@ def check_article(text, ctx, *, metadata=True):
         # On a guest post the outbound skill says flag the shortfall rather than bend a heading.
         findings.append(
             Finding(
-                shape,
+                prof["keyword_in_heading"],
                 "no H2 or H3 carries the primary keyword, even as a natural variant",
                 allows={"rename": ["*"]},
             )
@@ -630,7 +686,10 @@ def check_article(text, ctx, *, metadata=True):
         )
     faq_body, faq_items = _faq(text)
     if faq_body is None:
-        findings.append(Finding(shape, "no `## Frequently Asked Questions` section", level="structural"))
+        if prof["faq"] != "none":
+            findings.append(
+                Finding(prof["faq"], "no `## Frequently Asked Questions` section", level="structural")
+            )
     else:
         if not 3 <= len(faq_items) <= 7:
             # Advisory: the published JSA article (Fixture A) carries 8 and was approved.
@@ -669,7 +728,7 @@ def check_article(text, ctx, *, metadata=True):
         for n in names
         if n.lower() not in ("key takeaways", "frequently asked questions", "references", "metadata options")
     ]
-    if body_names:
+    if body_names and prof["close_heading"] == "cta":
         close = body_names[-1].strip().lower()
         if close in GENERIC_CLOSE or close.startswith("conclusion"):
             findings.append(
@@ -680,7 +739,7 @@ def check_article(text, ctx, *, metadata=True):
                     allows={"rename": [body_names[-1]]},
                 )
             )
-    if ctx.get("content_type") == "seo_blog" and body_names:
+    if prof["product_close"] == "required" and body_names:
         # The blog close is gap → action → one product page (run 20 closed on a "Start Free Trial" label
         # with no link at all). An article or lead magnet is never the CTA target.
         close_links = INTERNAL_LINK.findall(_section_body(text, body_names[-1]) or "")
@@ -700,32 +759,34 @@ def check_article(text, ctx, *, metadata=True):
                     allows={"drop_urls": _links_in(" ".join(close_links))},
                 )
             )
-    if ctx.get("content_type") == "seo_blog":
-        if _section_body(text, "References") is None:
-            findings.append(Finding("advise", "no `## References` section"))
-        if (n := len(INTERNAL_LINK.findall(text))) < 3:
-            findings.append(
-                Finding(
-                    "advise",
-                    f"{n} sdsmanager.com link(s); the SOP asks for at least three, or a flagged shortfall",
-                )
-            )
-    linked = [i for i, (_, body) in enumerate(sections) if INTERNAL_LINK.search(body)]
-    pairs = [(a, b) for a, b in zip(linked, linked[1:], strict=False) if b - a == 1]
-    # A guest-post rule (ehs-outbound-blog): the blog skill has none, and both published Fixture A blogs
-    # link in adjacent sections.
-    if pairs and ctx.get("content_type") == "outbound":
-        # The fix moves or removes the earlier section's link; the close keeps its product link.
+    if prof["references"] != "none" and _section_body(text, "References") is None:
+        findings.append(Finding(prof["references"], "no `## References` section"))
+    if (floor := prof["min_internal_links"]) and (n := len(INTERNAL_LINK.findall(text))) < floor:
         findings.append(
             Finding(
-                "block",
-                "sdsmanager.com anchors sit in two adjacent sections: "
-                + ", ".join(f"'{sections[a][0] or 'intro'}' and '{sections[b][0]}'" for a, b in pairs[:3]),
-                allows={
-                    "drop_urls": [u for a, _ in pairs for u in _links_in(sections[a][1]) if "sdsmanager" in u]
-                },
+                "advise",
+                f"{n} sdsmanager.com link(s); the SOP asks for at least {floor}, or a flagged shortfall",
             )
         )
+    if prof["adjacent_anchors"] == "forbidden":
+        # A guest-post rule (ehs-outbound-blog; H3s count as sections): the blog skill has none, and both
+        # published Fixture A blogs link in adjacent sections.
+        parts = _subsections(text)
+        linked = [i for i, (_, body) in enumerate(parts) if INTERNAL_LINK.search(body)]
+        pairs = [(a, b) for a, b in zip(linked, linked[1:], strict=False) if b - a == 1]
+        if pairs:
+            findings.append(
+                Finding(
+                    "block",
+                    "sdsmanager.com anchors sit in two adjacent sections: "
+                    + ", ".join(f"'{parts[a][0] or 'intro'}' and '{parts[b][0]}'" for a, b in pairs[:3]),
+                    allows={
+                        "drop_urls": [
+                            u for a, _ in pairs for u in _links_in(parts[a][1]) if "sdsmanager" in u
+                        ]
+                    },
+                )
+            )
     findings += check_sourced_urls(text, ctx)
     findings += check_citations(text, ctx)
     for anchor in ctx.get("anchors") or []:
@@ -743,16 +804,7 @@ def check_article(text, ctx, *, metadata=True):
                     "the brief wants it exactly once",
                 )
             )
-    if (
-        ctx.get("content_type") == "outbound"
-        and body_names
-        and INTERNAL_LINK.search(sections[-1][1] if sections else "")
-    ):
-        last_body = _section_body(text, body_names[-1]) or ""
-        if INTERNAL_LINK.search(last_body):
-            findings.append(
-                Finding("block", "a product anchor sits in the close; guest posts carry none there")
-            )
+    findings += check_brief_anchors(text, ctx, prof, body_names)
     for match in LINK_CARRIER.finditer(text):
         # A pointer sentence is cut, never reworded, so its link may go with it (run 20 deadlocked here).
         findings.append(
@@ -789,6 +841,74 @@ def check_article(text, ctx, *, metadata=True):
             findings.append(Finding("note", "fewer than three metadata options for: " + ", ".join(short)))
     findings += check_reverse_outline(text, ctx)
     return findings + check_skill_scripts(text)
+
+
+def _subsections(text):
+    """[(name, body)] split at every H2 and H3: the outbound skill counts H3s as sections for anchors."""
+    parts = re.split(r"(?m)^#{2,3}\s+(.+)\n", text)
+    return [("", parts[0])] + [(parts[i].strip(), parts[i + 1]) for i in range(1, len(parts) - 1, 2)]
+
+
+def _same_url(a, b):
+    return a.rstrip("/").lower() == b.rstrip("/").lower()
+
+
+def check_brief_anchors(text, ctx, prof, body_names):
+    """Guest posts (outbound skill): only the brief's anchors link sdsmanager.com, none sits in the close,
+    and the first sits in the first 30% of the article."""
+    if not prof["brief_anchors_only"] and prof["product_close"] != "forbidden":
+        return []
+    findings = []
+    anchors = [a for a in ctx.get("anchors") or [] if a.get("url")]
+    internal = [
+        m.group(1) for m in re.finditer(r"\]\(((?:https?://)?(?:www\.)?sdsmanager\.com[^)\s]*)\)", text)
+    ]
+    if prof["brief_anchors_only"]:
+        extra = sorted({u for u in internal if not any(_same_url(u, a["url"]) for a in anchors)})
+        if extra:
+            findings.append(
+                Finding(
+                    "block",
+                    "sdsmanager.com link(s) that aren't the brief's anchors: "
+                    + ", ".join(extra[:3])
+                    + "; a guest post carries only its anchors",
+                    allows={"drop_urls": extra},
+                )
+            )
+    closing = [n for n in body_names if _norm(n) not in (_norm(FAQ_HEADING), _norm("References"))]
+    if prof["product_close"] == "forbidden" and closing:
+        in_close = _links_in(
+            " ".join(u for u in INTERNAL_LINK.findall(_section_body(text, closing[-1]) or ""))
+        )
+        if in_close:
+            findings.append(
+                Finding(
+                    "block",
+                    f"an sdsmanager.com link sits in the close ('{closing[-1]}'); a guest post carries "
+                    "none there",
+                    allows={"drop_urls": in_close},
+                )
+            )
+    if anchors and internal:
+        first = min(
+            (text.find(f"]({u}") for u in internal if any(_same_url(u, a["url"]) for a in anchors)),
+            default=-1,
+        )
+
+        def body_words(part):  # the article's text, not its headings
+            return len(re.sub(r"(?m)^#{1,6}\s.*$", "", quality_review.prose(part)).split())
+
+        total = body_words(text)
+        if first > 0 and total and body_words(text[:first]) > 0.3 * total:
+            # A block: the outbound skill's rule, and both approved Fixture A guest posts with anchors keep it
+            findings.append(
+                Finding(
+                    "block",
+                    "the first brief anchor sits after the first 30% of the article; move it into an earlier "
+                    "section on its topic",
+                )
+            )
+    return findings
 
 
 def _heading_terms(heading):
@@ -943,13 +1063,18 @@ def context_from(step):
     counts = {}
     for kind in ("title", "meta", "slug", "tags", "excerpt"):
         counts[kind] = step.run.metadata_options.filter(kind=kind).count()
+    localise = step.key == "localise"
     return {
-        "pkeyword": brief.pkeyword,
-        "skeywords": list(brief.skeywords or []),
+        # A localised variant translates the keyword (localise.md), so the source keyword isn't checked.
+        "pkeyword": "" if localise else brief.pkeyword,
+        "skeywords": [] if localise else list(brief.skeywords or []),
         "fkgl": float(brief.fkgl),
         "wordcount": brief.wordcount,
-        "region": brief.region,
+        "region": (brief.localise_to or brief.region) if localise else brief.region,
         "content_type": brief.content_type,
+        "profile": prompting.check_profile(brief.content_type),
+        # The title is kept word for word only when it came from the brief sheet (a typed topic isn't one).
+        "title": brief.topic if brief.source_reference else "",
         "cta_style": brief.cta_style,
         "anchors": list(brief.anchors or []),
         "metadata_counts": counts if step.key == "draft" else {},
@@ -1046,7 +1171,7 @@ def _input_sources(step):
     from . import houseref
 
     run, brief = step.run, step.run.brief
-    return [
+    sources = [
         houseref.related_articles_block(brief),
         houseref.product_pages_block(brief.region),
         " ".join(a.get("url", "") for a in (brief.anchors or [])),
@@ -1055,6 +1180,12 @@ def _input_sources(step):
         prompting.approved_output(run, "outline"),
         brief.notes or "",
     ]
+    if step.key == "localise" and brief.localise_to:
+        # The variant links the target region's pages: a correct /uk/ link isn't an invented URL.
+        target = copy.copy(brief)
+        target.region = brief.localise_to
+        sources += [houseref.related_articles_block(target), houseref.product_pages_block(brief.localise_to)]
+    return sources
 
 
 def check_sourced_urls(text, ctx):
@@ -1117,6 +1248,9 @@ def rubric(step_key, content_type=None):
 
     base = section(step_key)
     extra = section(f"{step_key}:{content_type}") if content_type else ""
+    if step_key == "review_edit" and content_type:
+        # The edit rubric says the guest-post draft rules still hold: include them, don't just name them.
+        extra = f"{section(f'draft:{content_type}')}\n\n{extra}".strip()
     return f"{base}\n\n{extra}".strip() if extra else base
 
 
@@ -1156,8 +1290,14 @@ def _inputs_for(step):
         parts.append(("Approved research", prompting.approved_output(run, "research"), 2500))
     if step.key == "draft":
         parts.append(("Approved outline", prompting.approved_output(run, "outline"), 2500))
-    if step.key in ("review_edit", "localise"):
+    if run.brief.content_type == "outbound" and step.key in ("outline", "draft", "review_edit"):
+        # Every host-style rubric line (case, nesting, tables, closing pattern) is judged against this.
+        parts.append(("Approved site profile of the host", prompting.approved_output(run, "site_crawl"), 800))
+    if step.key == "review_edit":
         parts.append(("The approved draft it edited", prompting.approved_output(run, "draft"), 2500))
+    if step.key == "localise":
+        source = prompting.approved_output(run, "review_edit") or prompting.approved_output(run, "draft")
+        parts.append(("The approved article it localised", source, 2500))
     blocks = []
     for label, text, limit in parts:
         if text:
@@ -1173,7 +1313,17 @@ def base_related(step):
     return houseref.related_articles_block(step.run.brief)
 
 
-def _guard(step_key, before, after, droppable=(), allows=None):
+def region_swap(step):
+    """(source slug, target slug) for a localise step: its links move from /us/ to /uk/ by design."""
+    from . import houseref
+
+    brief = step.run.brief
+    if step.key != "localise" or not brief.localise_to:
+        return None
+    return houseref.REGION_SLUGS.get(brief.region, "us"), houseref.REGION_SLUGS.get(brief.localise_to, "us")
+
+
+def _guard(step_key, before, after, droppable=(), allows=None, swap=None):
     """Whether a revision may replace the text: the fixed invariants, minus exactly what the findings sent
     to the reviser allow (`allows`, from `permissions()`; `droppable` is the older name for drop_urls).
 
@@ -1183,8 +1333,12 @@ def _guard(step_key, before, after, droppable=(), allows=None):
     allows = allows or permissions([])
     for span in sorted({*droppable, *allows["drop_urls"], *allows["drop_spans"]}, key=len, reverse=True):
         before = before.replace(span, "")
+    if swap:
+        before = re.sub(rf"(sdsmanager\.com)/{swap[0]}/", rf"\1/{swap[1]}/", before)
     if step_key in ("review_edit", "localise"):
-        ok, reason = quality_review.accept_rewrite(before, after, negation_allowance=allows["drop_negations"])
+        ok, reason = quality_review.accept_rewrite(
+            before, after, negation_allowance=allows["drop_negations"], localise=step_key == "localise"
+        )
         if not ok:
             return ok, reason
     after = (after or "").strip()
@@ -1434,7 +1588,9 @@ def run_loop(step, text, call, max_rounds=None):
         # The revision gets the same mechanics before it is compared, so a model's "10–15" against the fixed
         # "10-15" isn't a changed fact; then the guard allows exactly what the findings sent allow.
         revised, _ = normalise(step.key, _strip_fences(revised))
-        ok, reason = _guard(step.key, result.text, revised, allows=permissions(line_blocks))
+        ok, reason = _guard(
+            step.key, result.text, revised, allows=permissions(line_blocks), swap=region_swap(step)
+        )
         if ok:
             revised_checks = check(step.key, revised, ctx)
             if new := introduced(checks, revised_checks):
