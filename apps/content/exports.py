@@ -1,7 +1,7 @@
 """Exports of a run's approved article: Markdown, HTML, DOCX and the hero as the CMS WebP (M7)."""
 
 import io
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from html.parser import HTMLParser
 
 import yaml
@@ -46,6 +46,18 @@ class ArticleContent:
     hero: object  # a Wagtail image or None
     region: str
     variant: str  # "final" | "localised"
+    hero_meta: dict = field(default_factory=dict)  # the hero step's metrics: alt text, files, host size
+
+    @property
+    def hero_size(self):
+        """(width, height) of the delivered hero: the CMS WebP, or a guest post's image at the host's size."""
+        if self.hero is not None and self.hero_meta.get("for_host"):
+            return self.hero.width, self.hero.height
+        return HERO_SIZE
+
+    @property
+    def hero_alt(self):
+        return self.hero_meta.get("alt_text") or ""
 
 
 def _approved_version(run, key):
@@ -73,6 +85,7 @@ def article_content(run, variant="final"):
         hero=hero_version.image if hero_version else None,
         region=str(region),  # a plain str: a TextChoices member can't be written to YAML front matter
         variant=variant,
+        hero_meta=((hero_version.metrics or {}).get("hero") or {}) if hero_version else {},
     )
 
 
@@ -111,6 +124,7 @@ def markdown_export(run, variant="final"):
         "primary_keyword": run.brief.pkeyword,
         "secondary_keywords": list(run.brief.skeywords or []),
         "hero_image": f"{meta['slug']}.webp" if content.hero else None,
+        "hero_alt": content.hero_alt if content.hero else None,
         "studio_run": run.pk,
     }
     front_matter = yaml.safe_dump(front, sort_keys=False, allow_unicode=True).strip()
@@ -122,8 +136,12 @@ def html_export(run, variant="final"):
     content = article_content(run, variant)
     meta = article_meta(run, content)
     body = markup.markdown_to_html(markup.strip_workflow_sections(content.text), _resolver())
+    width, height = content.hero_size
     hero = (
-        f'<img src="{escape(meta["slug"])}.webp" alt="" width="720" height="405">\n' if content.hero else ""
+        f'<img src="{escape(meta["slug"])}.webp" alt="{escape(content.hero_alt)}" width="{width}" '
+        f'height="{height}">\n'
+        if content.hero
+        else ""
     )
     return (
         "<!doctype html>\n"
@@ -162,12 +180,35 @@ def _image_bytes(image, size=None, fmt="PNG"):
     return buffer.getvalue()
 
 
+def _stored(content, kind):
+    """A file the hero step kept beside the image (the skill's own WebP or layered SVG), or None."""
+    from django.core.files.storage import default_storage
+
+    name = (content.hero_meta.get("files") or {}).get(kind)
+    if not name or not default_storage.exists(name):
+        return None
+    with default_storage.open(name, "rb") as handle:
+        return handle.read()
+
+
 def hero_webp(run):
-    """The hero at 720x405 WebP, as the sds-hero-stock skill delivers it for the CMS."""
-    hero = article_content(run).hero
-    if hero is None:
+    """The hero as WebP: the skill's own 720x405 file for the CMS, or a guest post's lead image at the
+    host's size (WebP preferred by the outbound skill)."""
+    content = article_content(run)
+    if content.hero is None:
         raise ArticleError("There is no approved hero image.")
-    return _image_bytes(hero, HERO_SIZE, "WEBP")
+    if content.hero_meta.get("for_host"):
+        return _image_bytes(content.hero, None, "WEBP")
+    return _stored(content, "webp") or _image_bytes(content.hero, HERO_SIZE, "WEBP")
+
+
+def hero_svg(run):
+    """The skill's layered, editable SVG of the branded hero."""
+    content = article_content(run)
+    data = _stored(content, "svg") if content.hero is not None else None
+    if data is None:
+        raise ArticleError("There is no layered SVG for this hero (regenerate the hero to make one).")
+    return data
 
 
 # ---- DOCX ----

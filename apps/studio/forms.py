@@ -4,7 +4,7 @@ from django import forms
 
 from apps.ai import catalog
 
-from .models import BriefPreset, ContentBrief, ContentType
+from .models import BriefPreset, ContentBrief, ContentType, ImageJob
 from .pipeline import STEPS, profile_for, steps_for
 
 
@@ -159,3 +159,84 @@ def step_rows(content_type, preset=None, existing=None):
             }
         )
     return rows
+
+
+class ImageJobForm(forms.ModelForm):
+    """The standalone Image generator (apps/studio/imagegen.py)."""
+
+    upload = forms.ImageField(
+        label="Or start from your own photo",
+        required=False,
+        help_text="A licensed photo (yours, Pexels, Unsplash, a stock library). It replaces the generated "
+        "one; never upload a watermarked comp.",
+    )
+
+    class Meta:
+        model = ImageJob
+        fields = ["kind", "headline", "description", "photo_prompt", "region", "width", "height", "corner"]
+        widgets = {
+            "kind": forms.RadioSelect,
+            "description": forms.Textarea(attrs={"rows": 2}),
+            "photo_prompt": forms.Textarea(attrs={"rows": 3}),
+        }
+        help_texts = {
+            "width": "Lead and in-article images. Empty: 1200x630 for a lead image, 1200x675 in an article.",
+            "corner": "In-article images: where the logo goes.",
+        }
+
+    def clean(self):
+        data = super().clean()
+        from .imagegen import ImageJobError, validate_size
+
+        try:
+            validate_size(data.get("width"), data.get("height"))
+        except ImageJobError as error:
+            raise forms.ValidationError(str(error)) from error
+        if bool(data.get("width")) != bool(data.get("height")):
+            raise forms.ValidationError("Give both a width and a height, or neither.")
+        if data.get("kind") == ImageJob.Kind.HERO and not data.get("headline", "").strip():
+            self.add_error("headline", "A blog hero needs a headline (the article's H1).")
+        if not (
+            data.get("upload") or data.get("description", "").strip() or data.get("photo_prompt", "").strip()
+        ):
+            raise forms.ValidationError(
+                "Describe what the image shows, write a photo prompt, or upload a photo."
+            )
+        return data
+
+
+class ImagePlanForm(forms.Form):
+    """Pick an existing article for tailored images: a studio run, a published sdsmanager.com article, or
+    pasted text."""
+
+    article = forms.ChoiceField(label="Article", required=False)
+    url = forms.URLField(
+        label="Or a published sdsmanager.com article URL",
+        required=False,
+        assume_scheme="https",
+    )
+    text = forms.CharField(
+        label="Or paste the article (Markdown)",
+        required=False,
+        widget=forms.Textarea(attrs={"rows": 4}),
+    )
+
+    def __init__(self, *args, **kwargs):
+        from .imagegen import article_choices
+
+        super().__init__(*args, **kwargs)
+        self.fields["article"].choices = [("", "Choose an article")] + article_choices()
+
+    def clean(self):
+        from .imagegen import ImageJobError, sdsmanager_url
+
+        data = super().clean()
+        chosen = [bool(data.get("article")), bool(data.get("url")), bool((data.get("text") or "").strip())]
+        if sum(chosen) != 1:
+            raise forms.ValidationError("Choose an article, give its URL, or paste it (one of the three).")
+        if data.get("url"):
+            try:
+                data["url"] = sdsmanager_url(data["url"])
+            except ImageJobError as error:
+                self.add_error("url", str(error))
+        return data

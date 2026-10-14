@@ -41,7 +41,11 @@ def brief_table(brief):
             else "set by the topic",
         ),
         ("Target reading grade (FKGL)", f"{brief.fkgl} (soft target)"),
-        ("Audience", f"{brief.audience or 'not specified'} ({brief.get_comprehension_display().lower()})"),
+        (
+            "Reader",
+            f"{brief.audience or 'anyone new to the topic, whatever their job'} "
+            f"({brief.get_comprehension_display().lower()})",
+        ),
         ("Region", brief.get_region_display()),
     ]
     if brief.content_type == "outbound":
@@ -68,6 +72,26 @@ def audience_block(brief):
     if brief.audience:
         block += f"\nThis brief narrows the audience to: {brief.audience}."
     return f"\n{block}\n"
+
+
+@cache
+def _exemplar():
+    from apps.quality import scripts
+
+    return (scripts.VENDOR / "ehs_seo_blog" / "references" / "plain-explanation-exemplar.md").read_text(
+        encoding="utf-8"
+    )
+
+
+def style_reference_block(brief):
+    """The skill's default STYLE_REFERENCE at beginner comprehension (the studio's default reader): paired
+    before/after examples of explaining to a newcomer, to match in qualities, never in wording."""
+    if brief.comprehension != "beginner":
+        return ""
+    return (
+        "\nStyle reference for a reader new to the topic (match its qualities: depth, example use, tone; "
+        f"never copy its sentences):\n\n{_exemplar().strip()}\n"
+    )
 
 
 def _serp_block(report):
@@ -107,6 +131,7 @@ def context_for(step, extra=None):
         "research": approved_output(run, "research") or "(no research step in this run)",
         "serp_block": _serp_block(approved_output(run, "search_results")),
         "audience_block": audience_block(brief),
+        "style_reference": style_reference_block(brief),
         "outline": approved_output(run, "outline"),
         "draft": approved_output(run, "review_edit") or approved_output(run, "draft"),
         "related_articles": houseref.related_articles_block(brief),
@@ -129,7 +154,11 @@ STRUCTURE_KEYS = (
     "headings_only",
     "draft_structure",
     "metadata",
+    "hero_composition",
+    "hero_framing",
+    "hero_layout",
 )
+KEEP_LINES = ("draft_structure", "metadata", "hero_framing")
 
 
 def type_structure(content_type):
@@ -138,7 +167,7 @@ def type_structure(content_type):
     values = {}
     for key in STRUCTURE_KEYS:
         value = kind.get(key) or blog.get(key, "")
-        values[key] = value.strip() if key in ("draft_structure", "metadata") else " ".join(value.split())
+        values[key] = value.strip() if key in KEEP_LINES else " ".join(value.split())
     conclusion = " ".join(kind.get("conclusion", "").split())
     values["draft_structure"] = values["draft_structure"].replace("{{type_conclusion}}", conclusion)
     return values

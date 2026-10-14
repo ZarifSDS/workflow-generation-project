@@ -306,11 +306,12 @@ Each change was proven three ways: tests with the audit's correct sentences (no 
 - **Re-vendored `hero_compose.py` and `svgify.py`**, which were two versions behind (one colour per line, a 4-line headline switching at line 3). The script's "recoloured" note becomes a flag.
 - **Vendor manifest** (`apps/quality/vendor/MANIFEST.json`, `apps/quality/vendor_manifest.py`): every vendored file with its source in the skills folder and its SHA-256, with `lama.py` and the trimmed internal index recorded as deliberate forks. `tests/test_vendor.py` fails when a vendored file changes without the manifest, and, where the skills are installed, when a copy falls behind its skill. `python -m apps.quality.vendor_manifest` reports drift.
 
-**Still open from the hero audit** (no live hero was run in this session):
-- **Guest posts:** the hero and publish steps still treat a guest post as an sdsmanager.com article. It is branded with the SDS Manager logo and publishes to an `ArticlePage`; it should skip the branding and export instead.
-- **Outputs and templates:** the WebP and layered-SVG outputs are discarded, and the page template serves the 1440 PNG.
-- **The vision check:** safety items carry no severity, and text is held on wherever it sits, even under the veil.
-- **Photo prompts** differ from the measured spec in small ways (subject at about two-thirds instead of 62%, no skew correction).
+**Hero items closed after phase 8** (2026-10-14 evening; `tests/test_hero_outputs.py`):
+- **Guest posts:** the lead image is never branded. `hero.for_host` crops the photo around the subject to the host's shape (`hero.host_size`: Medium 1500x750, Substack and Ghost 1200x630, LinkedIn 1280x720, otherwise the skill's 1200x630 default; a `Size: WxH` regenerate note re-crops the same photo) and names it after the primary keyword. The photo prompt and the vision check get the guest-post composition from `types.yaml` (`hero_composition`, `hero_framing`, `hero_layout`). The last step is labelled **Export** and builds no `ArticlePage`: it checks that every brief anchor is in the text and that the image has alt text, and points at the downloads.
+- **Outputs and templates:** the skill's 720x405 WebP and its layered SVG (svgify.py with `--photo`; needs `fonttools`) are kept under `media/studio/heroes/run-N/` and offered as downloads; a hero made before this falls back to re-encoding. The article template serves the hero with `srcset_image` as WebP at 720 and 1440.
+- **The vision check:** each safety item carries `high` or `low`; only `high` (or an unrated item) holds. Each text item carries a box; text whose box lands under the opaque part of the veil after the reframe (`hero.final_x`, `covered_by_veil`, left 30% of the branded frame) is reported but doesn't hold. The check also writes the alt text (stored on the Wagtail image's description and used in the exports).
+
+**Still open:** photo prompts differ from the measured spec in small ways (subject at about two-thirds instead of 62%, no skew correction). The crawl doesn't measure a custom host's image size, so a custom domain gets the default until a `Size:` note says otherwise.
 
 ## Where the audit stands
 

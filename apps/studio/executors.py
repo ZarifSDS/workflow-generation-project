@@ -340,7 +340,41 @@ def cleanup(step):
     )
 
 
-VISION_KEYS = ("subject", "person_at_left_edge", "facing", "readable_text", "safety_issues", "scene")
+VISION_KEYS = (
+    "subject",
+    "person_at_left_edge",
+    "facing",
+    "readable_text",
+    "safety_issues",
+    "scene",
+    "alt_text",
+)
+
+
+def _box(value):
+    valid = (
+        isinstance(value, list)
+        and len(value) == 4
+        and all(isinstance(v, int | float) and 0 <= v <= 1 for v in value)
+        and value[0] < value[2]
+        and value[1] < value[3]
+    )
+    return [float(v) for v in value] if valid else None
+
+
+def _text_item(item):
+    """{"text", "box"}: the vision model's object, or a plain string (no box, so it can't be placed)."""
+    if isinstance(item, dict):
+        return {"text": str(item.get("text") or "").strip(), "box": _box(item.get("box"))}
+    return {"text": str(item or "").strip(), "box": None}
+
+
+def _safety_item(item):
+    """{"issue", "severity"}: anything but an explicit "low" counts as high, so an unrated issue holds."""
+    if isinstance(item, dict):
+        severity = "low" if str(item.get("severity", "")).strip().lower() == "low" else "high"
+        return {"issue": str(item.get("issue") or "").strip(), "severity": severity}
+    return {"issue": str(item or "").strip(), "severity": "high"}
 
 
 def _parse_vision(text):
@@ -353,24 +387,17 @@ def _parse_vision(text):
     if not isinstance(data, dict):
         return None
     vision = {key: data.get(key) for key in VISION_KEYS}
-    box = vision["subject"]
-    valid_box = (
-        isinstance(box, list)
-        and len(box) == 4
-        and all(isinstance(v, int | float) and 0 <= v <= 1 for v in box)
-        and box[0] < box[2]
-        and box[1] < box[3]
-    )
-    vision["subject"] = [float(v) for v in box] if valid_box else None
+    vision["subject"] = _box(vision["subject"])
     # A key the model left out means the photo wasn't checked for it: that holds the hero (it used to pass
     # as clean). Placeholder items ("None", "no readable text") are no finding (they used to hold it).
     vision["unchecked"] = [
         key for key in ("readable_text", "safety_issues") if not isinstance(data.get(key), list)
     ]
-    for key in ("readable_text", "safety_issues"):
-        items = vision[key] if isinstance(vision[key], list) else []
-        vision[key] = [str(item).strip() for item in items if not _placeholder(item)]
+    for key, parse, name in (("readable_text", _text_item, "text"), ("safety_issues", _safety_item, "issue")):
+        items = [parse(item) for item in (vision[key] if isinstance(vision[key], list) else [])]
+        vision[key] = [item for item in items if not _placeholder(item[name])]
     vision["person_at_left_edge"] = vision["person_at_left_edge"] is not False
+    vision["alt_text"] = " ".join(str(vision["alt_text"] or "").split())[:150]
     return vision
 
 
@@ -472,13 +499,22 @@ def _previous_photo(step):
 
 
 def _hero_note(hero_metrics, image_prompt):
-    lines = [f"Headline: `{hero_metrics['headline']}`"]
+    if hero_metrics.get("for_host"):
+        width, height = hero_metrics["host_size"]
+        lines = [
+            f"Lead image for the host site: {width}x{height}, unbranded (no veil, logo or headline). "
+            "Regenerate with a note `Size: 1600x900` for another size; the same photo is reused."
+        ]
+    else:
+        lines = [f"Headline: `{hero_metrics['headline']}`"]
     vision = hero_metrics.get("vision")
     if vision:
         used = f"Vision check: {vision['model']}"
         if vision.get("fallback_from"):
             used += f" (fallback, because {vision['fallback_from']} failed)"
         lines.append(used)
+    if hero_metrics.get("alt_text"):
+        lines.append(f"Alt text: {hero_metrics['alt_text']}")
     if hero_metrics["headline_problem"]:
         lines += [
             "",
@@ -503,11 +539,47 @@ def _hero_note(hero_metrics, image_prompt):
     return "\n".join(lines)
 
 
+def _vision_flags(vision, vision_problem, result):
+    """Flags from the vision check. "Unchecked:", "Safety:" and "Readable text" hold the hero (a failed or
+    partial check used to pass as clean, the audit's H2); a low-severity safety detail and text the veil
+    covers are reported without holding it."""
+    flags = []
+    if vision_problem:
+        flags.append(f"Unchecked: {vision_problem} Subject position, text and safety weren't checked.")
+    if not vision:
+        return flags
+    for key in vision.get("unchecked") or []:
+        label = "readable text" if key == "readable_text" else "safety problems"
+        flags.append(f"Unchecked: the vision check didn't report on {label}; look at the photo yourself.")
+    if not vision.get("subject"):
+        assumed = "the crop was centred" if result.for_host else "the layout was assumed"
+        flags.append(f"Unchecked: the vision check gave no usable subject box, so {assumed}.")
+    for item in vision["safety_issues"]:
+        label = "Safety" if item["severity"] == "high" else "Safety (minor, not held)"
+        flags.append(f"{label}: {item['issue']}")
+    for item in vision["readable_text"]:
+        if result.branded and hero.covered_by_veil(item["box"], vision, result.metrics):
+            flags.append(f"Text under the veil (covered by the branding, not held): {item['text']}")
+        else:
+            flags.append(f"Readable text or logo in the photo: {item['text']}")
+    return flags
+
+
+def _save_hero_file(step, stem, extension, data):
+    """The skill's WebP and layered SVG beside the Wagtail image (the image library holds one file)."""
+    from django.core.files.base import ContentFile
+    from django.core.files.storage import default_storage
+
+    return default_storage.save(f"studio/heroes/run-{step.run_id}/{stem}{extension}", ContentFile(data))
+
+
 def hero_image(step):
+    from django.utils.text import slugify
     from wagtail.images import get_image_model
 
     Image = get_image_model()
     run, brief = step.run, step.run.brief
+    guest = brief.content_type == "outbound"
     article = prompting.approved_output(run, "cleanup") or prompting.approved_output(run, "draft")
     title_option = run.metadata_options.filter(kind="title", selected=True).first()
     # The skill's visual copy is the article's H1 (the page title), not the meta title, which is worded
@@ -516,20 +588,23 @@ def hero_image(step):
     title = h1.group(1).strip("* ") if h1 else (title_option.text if title_option else brief.topic)
     note = (step.regenerate_note or "").strip()
     headline_override = note[len("headline:") :].strip() if note.lower().startswith("headline:") else ""
+    size_override = guest and note.lower().startswith("size:") and bool(hero.SIZE_RE.search(note))
     context = prompting.context_for(
         step, {"title": title, "excerpt": " ".join((article or brief.topic).split()[:150])}
     )
     markup = hero.headline_markup(headline_override or title, brief.region, brief.pkeyword)
+    size = hero.host_size(brief.site_domain, note if size_override else "")
 
-    previous = _previous_photo(step) if headline_override else None
+    reuse = (headline_override and not guest) or size_override
+    previous = _previous_photo(step) if reuse else None
     fallback_note, flags = "", []
     if previous:
-        # Only the headline changes: brand the same photo again.
+        # Only the headline (or the guest post's size) changes: use the same photo again.
         photo, image_prompt, provider, model = previous
         with photo.file.open("rb") as handle:
             data = handle.read()
     else:
-        if headline_override:
+        if reuse:
             context["regenerate_block"] = ""
         prompt_result = _call_text(step, prompting.render("hero_prompt", context), task="hero_prompt")
         image_prompt = " ".join(prompt_result.text.split())[:1500]
@@ -541,6 +616,10 @@ def hero_image(step):
         # Exactly 16:9 before the vision check, so its subject box matches the photo that is branded.
         data = hero.to_16_9(data)
         vision, vision_problem = _look_at_photo(step, data, context)
+        if guest:
+            # A guest post's lead image goes to the host as it is: sized for the host, never branded.
+            result = hero.for_host(data, size, vision)
+            break
         try:
             result = hero.brand(data, markup, vision)
         except (hero.BrandingError, OSError, subprocess.SubprocessError) as error:
@@ -555,52 +634,59 @@ def hero_image(step):
         photo.delete()
         image_prompt += " " + PLACE_RIGHT
 
-    # "Unchecked:" flags hold the hero: a failed or partial vision check means text and safety weren't
-    # looked at, and that used to pass as clean (the audit's H2).
-    if vision_problem:
-        flags.append(f"Unchecked: {vision_problem} Subject position, text and safety weren't checked.")
-    if vision:
-        for key in vision.get("unchecked") or []:
-            label = "readable text" if key == "readable_text" else "safety problems"
-            flags.append(f"Unchecked: the vision check didn't report on {label}; look at the photo yourself.")
-        if not vision.get("subject"):
-            flags.append("Unchecked: the vision check gave no usable subject box, so the layout was assumed.")
-        flags += [f"Safety: {issue}" for issue in vision["safety_issues"]]
-        flags += [f"Readable text or logo in the photo: {item}" for item in vision["readable_text"]]
+    flags += _vision_flags(vision, vision_problem, result)
     flags += result.flags
+    alt_text = (vision or {}).get("alt_text", "")
 
-    branded = None
-    if result.branded:
-        # The 1440x810 master, named after the visual copy (Wagtail would drop the skill's "@2x").
-        branded = Image.objects.create(
-            title=f"Hero: {title}"[:255],
-            file=ImageFile(io.BytesIO(result.png), name=f"{hero.file_stem(markup)}.png"),
+    final, files = None, {}
+    if result.ready:
+        if guest:
+            # The skill's guest-post file name: lowercase, hyphenated, with a topic keyword.
+            name, label = slugify(brief.pkeyword or title)[:80] or "hero", "Hero (guest post, unbranded)"
+        else:
+            # The 1440x810 master, named after the visual copy (Wagtail would drop the skill's "@2x").
+            name, label = hero.file_stem(markup), "Hero"
+        final = Image.objects.create(
+            title=f"{label}: {title}"[:255],
+            description=alt_text,
+            file=ImageFile(io.BytesIO(result.png), name=f"{name}.png"),
         )
+        if result.webp:
+            files["webp"] = _save_hero_file(step, name, ".webp", result.webp)
+        if result.svg:
+            files["svg"] = _save_hero_file(step, name, ".svg", result.svg)
     hero_metrics = {
         **result.metrics,
+        "headline": "" if guest else markup,
         "branded": result.branded,
+        "for_host": result.for_host,
         "headline_problem": result.headline_problem,
         "flags": flags,
         "vision": vision,
+        "alt_text": alt_text,
+        "files": files,
         "photo_image_id": photo.pk,
         "image_prompt": image_prompt,
     }
-    state = "Branded hero" if branded else "Hero photo (not branded yet)"
+    if guest:
+        state = f"Lead image for {brief.site or brief.site_domain or 'the host site'} ({size[0]}x{size[1]})"
+    else:
+        state = "Branded hero" if final else "Hero photo (not branded yet)"
     return StepOutput(
         content=f"{state} for “{title}”.",
         provider=provider,
         model=model,
         note=fallback_note + _hero_note(hero_metrics, image_prompt),
-        image=branded or photo,
+        image=final or photo,
         extra_metrics={"hero": hero_metrics},
         # Even with the gate off (autopilot), a person looks at a hero with readable text, a safety problem
-        # or no branding before it reaches a page.
-        hold=hero_needs_a_look(flags, bool(branded)),
+        # or no finished image before it goes anywhere.
+        hold=hero_needs_a_look(flags, bool(final)),
     )
 
 
-def hero_needs_a_look(flags, branded):
-    return not branded or any(
+def hero_needs_a_look(flags, ready):
+    return not ready or any(
         f.startswith(("Safety:", "Readable text", "Branding failed", "Unchecked:")) for f in flags
     )
 
@@ -634,6 +720,8 @@ def publish(step):
             "Edit Final cleanup: check each [VERIFY] claim, place or delete each [VISUAL] cue, and strip "
             "the [SRC:] markers once the sources are checked."
         )
+    if run.brief.content_type == "outbound":
+        return _guest_export(run)
     try:
         result = publishing.publish(run, run.created_by)
     except publishing.PublishError as error:
@@ -666,6 +754,39 @@ def publish(step):
                 "webhook": result.webhook,
             }
         },
+    )
+
+
+def _guest_export(run):
+    """A guest post goes to the host, not to sdsmanager.com: the step checks the package and lists the
+    exports (Markdown, HTML, Word and the lead image) instead of creating a page."""
+    from apps.content import exports
+
+    content = exports.article_content(run)
+    brief = run.brief
+    host = brief.site or brief.site_domain or "the host site"
+    warnings = []
+    for anchor in brief.anchors or []:
+        url = (anchor.get("url") or "").strip()
+        if url and url not in content.text:
+            warnings.append(f"The anchor “{anchor.get('text', '')}” → {url} isn't in the article.")
+    if content.hero is None:
+        warnings.append("No approved lead image; send the article without one or approve the hero step.")
+    elif not content.hero_meta.get("alt_text"):
+        warnings.append("The lead image has no alt text; write one before sending (the host needs it).")
+    lines = [
+        f"Ready to send to **{host}**. Nothing was published on sdsmanager.com: a guest post goes to the "
+        "host as files.",
+        "Download the Markdown, HTML or Word file and the lead image below, then approve this step to "
+        "finish the run.",
+    ]
+    if content.hero is not None and content.hero_meta.get("alt_text"):
+        lines.append(f"Lead image alt text: {content.hero_meta['alt_text']}")
+    note = "## Check before sending\n\n" + "\n".join(f"- {w}" for w in warnings) if warnings else ""
+    return StepOutput(
+        content="\n\n".join(lines),
+        note=note,
+        extra_metrics={"export": {"host": host, "warnings": warnings}},
     )
 
 

@@ -27,6 +27,22 @@ def run_chat(message_id):
     assistant.answer(message_id)
 
 
+@task()
+def run_image_job(job_id):
+    """Make one image for the standalone Image generator (apps/studio/imagegen.py)."""
+    from . import imagegen
+
+    imagegen.execute(job_id)
+
+
+@task()
+def run_image_plan(plan_id):
+    """Read an existing article and propose images tailored to it (apps/studio/imagegen.py)."""
+    from . import imagegen
+
+    imagegen.execute_plan(plan_id)
+
+
 def execute_step(step_id):
     """Run one queued step. Safe to call twice: only a QUEUED step is picked up."""
     from . import executors, services, sop

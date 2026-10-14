@@ -204,12 +204,13 @@ def test_seeded_audience_profiles_reach_the_prompts(brief):
     run = services.create_run(brief, {})
     outline = run.steps.get(key="outline")
     user_prompt = prompting.render("outline", prompting.context_for(outline))[1]["content"]
-    assert "Audience for UK" in user_prompt and "UK spelling" in user_prompt
+    assert "Reader for UK" in user_prompt and "UK spelling" in user_prompt
 
 
 def test_wizard_prefills_audience_from_profiles(admin_client):
     html = admin_client.get(reverse("studio:brief_new")).content.decode()
-    assert 'id="studio-audiences"' in html and "EHS managers, safety coordinators" in html
+    # The seeded profiles carry no reader since the newcomer default (0013); the grade still prefills.
+    assert 'id="studio-audiences"' in html and "EHS managers, safety coordinators" not in html
 
 
 # ---- Section units and tuning ----

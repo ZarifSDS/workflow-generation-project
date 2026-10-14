@@ -26,6 +26,7 @@ SOURCES = {
     "clean_user_facing_text/scripts": "clean-user-facing-text/scripts",
     "ehs_seo_blog/scripts": "ehs-seo-blog-optimized/scripts",
     "ehs_seo_blog/data": "ehs-seo-blog-optimized/data",
+    "ehs_seo_blog/references": "ehs-seo-blog-optimized/references",
     "sds_hero_stock": "sds-hero-stock/scripts",
 }
 FORKS = {

@@ -339,15 +339,19 @@ def test_full_run_with_every_gate_on(admin_user, model, fake_images, fake_crawl,
         assert current.latest_version.number == 1 and current.versions.count() == 1, key
     if content_type in ("seo_blog", "whitepaper"):
         assert step(run, "localise").status == S.SKIPPED and not step(run, "localise").enabled
+    assert fake_images["generate"] == 1
+    if content_type == "outbound":
+        assert fake_crawl[0][0] == "https://blog.example.com/"
+        # A guest post goes to the host as files: the last step exports, no sdsmanager.com page.
+        assert ArticlePage.objects.count() == 0
+        assert "Nothing was published on sdsmanager.com" in content(run, "publish")
+        return
     assert ArticlePage.objects.count() == 1
     page = run.article_page
     assert page.live is False and page.workflow_in_progress
     assert page.current_workflow_state.workflow.name == "Moderators approval"
     assert page.title == H1 and page.slug == "sds-retention-requirements"
     assert "Moderators approval" in content(run, "publish")
-    assert fake_images["generate"] == 1
-    if content_type == "outbound":
-        assert fake_crawl[0][0] == "https://blog.example.com/"
 
 
 @pytest.mark.parametrize("content_type", ["seo_blog", "outbound", "lead_magnet", "whitepaper"])
@@ -366,6 +370,9 @@ def test_full_run_with_every_gate_off_continues_automatically(
         current = step(run, key)
         assert current.approved_at is not None and current.approved_by is None, key
         assert current.latest_version.number == 1, key
+    if content_type == "outbound":
+        assert ArticlePage.objects.count() == 0  # exported, not published
+        return
     assert ArticlePage.objects.count() == 1
     page = run.article_page
     assert page.live is False and page.workflow_in_progress

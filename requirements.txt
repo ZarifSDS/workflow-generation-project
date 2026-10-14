@@ -18,6 +18,8 @@ nh3==0.3.7
 # sds-hero-stock branding scripts (apps/quality/vendor/sds_hero_stock)
 numpy==2.5.4
 scipy==1.18.1
+# svgify.py: the hero's layered SVG with the headline outlined to paths
+fonttools==4.60.1
 # DOCX export (apps/content/exports.py)
 python-docx==1.2.0
 lxml==6.1.3

@@ -3,6 +3,14 @@ from django.urls import path
 from .views import editor_api
 from .views.briefs import BriefListView, BriefWizardView
 from .views.dashboard import DashboardView
+from .views.images import (
+    ImageGeneratorView,
+    ImageJobView,
+    ImagePlanView,
+    image_job_download,
+    image_job_status,
+    image_plan_status,
+)
 from .views.metadata import MetadataView
 from .views.provider_keys import (
     AddedModelView,
@@ -35,6 +43,12 @@ urlpatterns = [
         VersionCompareView.as_view(),
         name="compare",
     ),
+    path("images/", ImageGeneratorView.as_view(), name="images"),
+    path("images/<int:pk>/", ImageJobView.as_view(), name="image_job"),
+    path("images/articles/<int:pk>/", ImagePlanView.as_view(), name="image_plan"),
+    path("images/articles/<int:pk>/status/", image_plan_status, name="image_plan_status"),
+    path("images/<int:pk>/status/", image_job_status, name="image_job_status"),
+    path("images/<int:pk>/download/<slug:fmt>/", image_job_download, name="image_job_download"),
     path("models/", ProvidersView.as_view(), name="providers"),
     # JSON for the step-output editor (M9 phase 5)
     path("editor/images/", editor_api.upload_image, name="editor_upload_image"),

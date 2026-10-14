@@ -73,8 +73,17 @@ PIPELINES = {
 }
 
 
+# A step whose job differs by content type: a guest post's last step exports files for the host instead of
+# creating an sdsmanager.com page.
+LABELS = {("outbound", "publish"): "Export"}
+
+
 def steps_for(content_type):
     return [STEPS[key] for key in PIPELINES[content_type]]
+
+
+def label_for(key, content_type):
+    return LABELS.get((content_type, key), STEPS[key].label)
 
 
 @dataclass(frozen=True)

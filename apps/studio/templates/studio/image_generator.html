@@ -1,0 +1,96 @@
+{% extends "wagtailadmin/generic/base.html" %}
+
+{% block main_content %}
+<div class="studio">
+    <p class="s-muted">Images without a brief. Every photo goes through the same vision check as the hero step (readable text, safety, alt text). The image model makes photographs only: charts and diagrams are made in a design tool.</p>
+    {% if not generation_connected %}<div class="s-callout" role="status">Generation isn't connected in this environment, so new images stay queued.</div>{% endif %}
+
+    <nav class="s-row-actions" aria-label="How to start">
+        <a class="button {% if tab != 'article' %}button-secondary{% endif %}" href="{% url 'studio:images' %}" {% if tab == 'article' %}aria-current="page"{% endif %}>For an existing article</a>
+        <a class="button {% if tab != 'single' %}button-secondary{% endif %}" href="{% url 'studio:images' %}?tab=single" {% if tab == 'single' %}aria-current="page"{% endif %}>From a description or photo</a>
+    </nav>
+
+    {% if can_write and tab == "article" %}
+        <form method="post" class="s-keys__form s-box" novalidate aria-labelledby="plan-head">{% csrf_token %}
+            <h3 class="s-section" id="plan-head">Images for an existing article</h3>
+            <p class="s-muted s-m0">The model reads the article and proposes its hero (with the H1 as the headline) and the in-article photos that would help a reader, starting with the writer's [VISUAL] cues. You edit and tick the ones to make.</p>
+            {% if plan_form.non_field_errors %}<div class="s-callout" role="alert">{{ plan_form.non_field_errors|join:" " }}</div>{% endif %}
+            {% for field in plan_form %}
+                <div class="s-keys__field">
+                    <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                    {{ field }}
+                    {% if field.help_text %}<p class="s-muted">{{ field.help_text }}</p>{% endif %}
+                    {% for error in field.errors %}<p class="s-keys__error" role="alert">{{ error }}</p>{% endfor %}
+                </div>
+            {% endfor %}
+            <div class="s-row-actions"><button class="button" type="submit" name="action" value="plan">Read it and suggest images</button></div>
+        </form>
+    {% elif can_write %}
+        <form method="post" enctype="multipart/form-data" class="s-keys__form s-box" novalidate aria-labelledby="new-image-head">{% csrf_token %}
+            <h3 class="s-section" id="new-image-head">One image</h3>
+            {% if form.non_field_errors %}<div class="s-callout" role="alert">{{ form.non_field_errors|join:" " }}</div>{% endif %}
+            {% for field in form %}
+                <div class="s-keys__field">
+                    {% if field.name == "kind" %}
+                        <fieldset><legend>{{ field.label }}</legend>{{ field }}</fieldset>
+                    {% else %}
+                        <label for="{{ field.id_for_label }}">{{ field.label }}{% if field.field.required %} <span aria-hidden="true">*</span>{% endif %}</label>
+                        {{ field }}
+                    {% endif %}
+                    {% if field.help_text %}<p class="s-muted">{{ field.help_text }}</p>{% endif %}
+                    {% for error in field.errors %}<p class="s-keys__error" role="alert">{{ error }}</p>{% endfor %}
+                </div>
+            {% endfor %}
+            <div class="s-row-actions"><button class="button" type="submit" name="action" value="single">Make the image</button></div>
+        </form>
+    {% endif %}
+
+    {% if tab == "article" %}
+        <section aria-labelledby="plans-head">
+            <h3 class="s-section" id="plans-head">Articles with images</h3>
+            {% if plans %}
+                <div class="s-table-wrap">
+                    <table class="s-table">
+                        <thead><tr><th scope="col">Article</th><th scope="col">Source</th><th scope="col">Images</th><th scope="col">Status</th></tr></thead>
+                        <tbody>
+                        {% for plan in plans %}
+                            <tr>
+                                <td><a href="{% url 'studio:image_plan' plan.pk %}"><strong>{{ plan.title|default:"Untitled article"|truncatechars:90 }}</strong></a></td>
+                                <td class="s-small">{{ plan.source_label|truncatechars:60 }}</td>
+                                <td>{{ plan.jobs.all|length }}</td>
+                                <td><span class="s-tag s-tag--{% if plan.status == 'ready' %}ok{% elif plan.status == 'failed' %}bad{% else %}info{% endif %}">{{ plan.get_status_display }}</span></td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="s-empty"><p>No article has images planned yet.</p></div>
+            {% endif %}
+        </section>
+    {% else %}
+        <section aria-labelledby="recent-head">
+            <h3 class="s-section" id="recent-head">Recent images</h3>
+            {% if jobs %}
+                <div class="s-table-wrap">
+                    <table class="s-table">
+                        <thead><tr><th scope="col">Image</th><th scope="col">Kind</th><th scope="col">Status</th><th scope="col">Made</th></tr></thead>
+                        <tbody>
+                        {% for job in jobs %}
+                            <tr>
+                                <td><a href="{% url 'studio:image_job' job.pk %}"><strong>{{ job.headline|default:job.description|default:"Uploaded photo"|truncatechars:80 }}</strong></a></td>
+                                <td>{{ job.get_kind_display }}</td>
+                                <td>{% include "studio/includes/image_job_status.html" %}</td>
+                                <td class="s-mono">{{ job.created_at|date:"j M Y H:i" }}</td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="s-empty"><p>No images yet.</p></div>
+            {% endif %}
+        </section>
+    {% endif %}
+</div>
+{% endblock %}

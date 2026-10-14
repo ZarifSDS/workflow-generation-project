@@ -2,7 +2,8 @@
 # checks read (apps/studio/sop.py `profile()`), so a prompt never asks for what a check forbids
 # (docs/sop-audit.md, cause 2). Prompt keys: {{type_instructions}}, {{publication}}, {{type_conclusion}},
 # {{type_links}}, and the structure keys below (heading_case, keyword_rule, h1_options, outline_order,
-# intro_plan, faq_plan, headings_only, draft_structure, metadata). A type without a structure key uses the
+# intro_plan, faq_plan, headings_only, draft_structure, metadata, and the hero photo's hero_composition,
+# hero_framing and hero_layout). A type without a structure key uses the
 # seo_blog one. {{type_conclusion}} inside draft_structure is filled first.
 #
 # checks: key_takeaways / faq: block | advise | none (whether the component is required);
@@ -48,7 +49,8 @@ seo_blog:
     In article order: `Intro`, `Key Takeaways`, every `H2:` and `H3:`, the conclusion's CTA heading, then
     `Frequently Asked Questions`.
   intro_plan: >
-    The opener (a generic example or the pain point the reader recognises; for best-X and comparison
+    The opener (a generic example anyone can picture, or a pain point a newcomer would recognise
+    without insider experience; for best-X and comparison
     intent, the reader's buying situation), why knowing this matters to the reader, the snippet answer with
     the primary keyword, and the core contents the "this article" scope sentence will name.
   faq_plan: >
@@ -59,7 +61,7 @@ seo_blog:
     last `H2: Frequently Asked Questions` with each question as `H3: …`.
   draft_structure: |
     1. `# H1`, the outline's recommended title.
-    2. Intro, 4–7 sentences as one argument, in this order: a generic example or the pain point the reader recognises (no "In today's workplace", no "Imagine"), then the topic and why knowing it matters to this reader, with one or two snippet sentences that answer the primary query directly and carry the primary keyword, a bridge that interprets any number before moving on, and last a scope sentence with the literal words "this article" naming the core contents ("In this article, you'll learn..." or "Let us walk you through ... in this article"). The first two or three sentences work alone as a hook.
+    2. Intro, 4–7 sentences as one argument, in this order: a generic example anyone can picture or a pain point a newcomer would recognise without insider experience (no "In today's workplace", no "Imagine"), then the topic and why knowing it matters to this reader, with one or two snippet sentences that answer the primary query directly and carry the primary keyword, a bridge that interprets any number before moving on, and last a scope sentence with the literal words "this article" naming the core contents ("In this article, you'll learn..." or "Let us walk you through ... in this article"). The first two or three sentences work alone as a hook.
     3. `## Key Takeaways`: 3–7 bullets in the order their content appears. Each is one standalone fact (a definition, number, threshold, deadline, named rule) with no pronoun or "the" that leans on another bullet; the first answers the primary query. No "covers" or "you will learn".
     4. The body: the first H2 carries the core answer. Question headings open with their answer. One or two sentences introduce any bulleted H3. Citation capsules where the outline marks them. Tables where they reduce effort. Put `[SRC: url]` right after each sourced statistic or regulatory claim, using only URLs from the research or search results. Put `[VISUAL: type, short description]` on its own line where a visual would reduce effort (data chart, process diagram, illustration, photo, comparison); a run of more than about 1,500 words without one is usually a gap.
     5. {{type_conclusion}}
@@ -79,6 +81,16 @@ seo_blog:
   metadata: |
     ### Meta Titles
     - 40–60 characters, primary keyword near the front, not a question, worded differently from the H1
+  hero_composition: >
+    The photo is branded afterwards: a white veil and a headline cover the left 60% of the frame, so the
+    subject must sit in the right third and the left side must be calm, bright, uncluttered background
+    (wall, floor, soft-focus room), with nothing dark or busy there.
+  hero_framing: |
+    - wide 16:9 frame; the person or people and their task entirely in the right third (their left edge about two-thirds of the way across), facing or working toward the left or toward the task, not looking at the camera
+    - the left half calm and bright: plain background, no people, no dark objects
+  hero_layout: >
+    A white veil and the headline will cover the left side; the subject belongs in the right part of the
+    frame.
   checks:
     key_takeaways: block
     faq: block
@@ -144,6 +156,16 @@ outbound:
   metadata: |
     ### Meta Titles
     - the brief's title, kept word for word, as every option (only its case may change)
+  hero_composition: >
+    The photo goes on the host's site as it is: no veil, logo or headline is added. It is cropped to a
+    wide lead-image shape (about 1.9:1 or 2:1), so compose a normal editorial photograph with the subject
+    on a third or centred and room around it, so the crop keeps it whole.
+  hero_framing: |
+    - wide frame; the subject and their task well inside the frame, clear of the edges, not looking at the camera
+    - show the topic factually (the process, equipment or environment); a person is the protagonist only where the article is told through one
+  hero_layout: >
+    It goes on another website as it is, with no overlay, logo or headline added, cropped to a wide
+    lead-image shape.
   checks:
     key_takeaways: none
     faq: none

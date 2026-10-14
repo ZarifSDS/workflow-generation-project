@@ -3,7 +3,7 @@ from django.db import models
 from django.utils import timezone
 
 from .permissions import PERMISSIONS
-from .pipeline import STEPS
+from .pipeline import STEPS, label_for
 
 VERSIONS_TO_KEEP = 3  # the first version is always kept as well (docs/ux.md)
 
@@ -25,7 +25,7 @@ class Region(models.TextChoices):
 
 
 class Comprehension(models.TextChoices):
-    BEGINNER = "beginner", "Beginner"
+    BEGINNER = "beginner", "Beginner (new to the topic)"
     PRACTITIONER = "practitioner", "Practitioner"
     EXPERT = "expert", "Expert"
 
@@ -56,9 +56,16 @@ class BriefFieldsMixin(models.Model):
     wordcount = models.PositiveIntegerField(
         "Target length (words)", null=True, blank=True, help_text="A guide, not a quota."
     )
-    audience = models.CharField(max_length=255, blank=True)
+    audience = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text=(
+            "Leave empty for the default: anyone new to the topic, whatever their job. Name a reader only "
+            "when the article is for them alone."
+        ),
+    )
     comprehension = models.CharField(
-        "Reader's expertise", max_length=20, choices=Comprehension.choices, default=Comprehension.PRACTITIONER
+        "Reader's expertise", max_length=20, choices=Comprehension.choices, default=Comprehension.BEGINNER
     )
     cta_style = models.CharField(
         "Call to action", max_length=10, choices=CTAStyle.choices, default=CTAStyle.SUBTLE
@@ -257,6 +264,8 @@ class StepRun(models.Model):
 
     @property
     def label(self):
+        if self.key == "publish":  # the only step whose label differs by content type (pipeline.LABELS)
+            return label_for(self.key, self.run.brief.content_type)
         return self.definition.label
 
     @property
@@ -357,8 +366,10 @@ class AudienceProfile(models.Model):
     region = models.CharField(max_length=4, choices=Region.choices, unique=True)
     audience = models.CharField(
         max_length=255,
+        blank=True,
         help_text=(
-            "Who reads the articles, e.g. EHS managers at mid-sized UK manufacturers evaluating software."
+            "Leave empty for the default: anyone new to the topic, whatever their job. Name a reader only "
+            "when every article for this region is for them."
         ),
     )
     reading_grade = models.DecimalField(
@@ -384,11 +395,12 @@ class AudienceProfile(models.Model):
         ordering = ["region"]
 
     def __str__(self):
-        return f"{self.get_region_display()}: {self.audience}"
+        return f"{self.get_region_display()}: {self.audience or 'anyone new to the topic'}"
 
     def prompt_block(self):
+        reader = self.audience or "anyone new to the topic, whatever their job (no prior knowledge assumed)"
         lines = [
-            f"Audience for {self.get_region_display()}: {self.audience}.",
+            f"Reader for {self.get_region_display()}: {reader}.",
             f"Target reading grade: FKGL {self.reading_grade:g} in every section.",
         ]
         if self.style.strip():
@@ -451,3 +463,140 @@ class ChatMessage(models.Model):
         if self.started_at and self.finished_at:
             return max(0, round((self.finished_at - self.started_at).total_seconds()))
         return None
+
+
+class ImagePlan(models.Model):
+    """Images tailored to one existing article (apps/studio/imagegen.py): the model reads the article and
+    proposes a hero and in-article images; each idea the user keeps becomes an ImageJob."""
+
+    class Status(models.TextChoices):
+        QUEUED = "queued", "Queued"
+        RUNNING = "running", "Reading the article"
+        READY = "ready", "Ideas ready"
+        FAILED = "failed", "Failed"
+
+    title = models.CharField(max_length=255, blank=True)
+    run = models.ForeignKey(
+        "GenerationRun", null=True, blank=True, on_delete=models.SET_NULL, related_name="image_plans"
+    )
+    url = models.URLField(blank=True, help_text="A published sdsmanager.com article.")
+    article_text = models.TextField(blank=True, help_text="The article as read (or pasted), Markdown.")
+    region = models.CharField(max_length=4, choices=Region.choices, default=Region.US)
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.QUEUED)
+    error = models.TextField(blank=True)
+    ideas = models.JSONField(default=list, blank=True)
+    notes = models.TextField(blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at", "-pk"]
+
+    def __str__(self):
+        return self.title or self.url or f"Image plan {self.pk}"
+
+    @property
+    def is_open(self):
+        return self.status in (self.Status.QUEUED, self.Status.RUNNING)
+
+    @property
+    def source_label(self):
+        if self.run_id:
+            return f"Studio run {self.run_id}"
+        return self.url or "Pasted article"
+
+
+class ImageJob(models.Model):
+    """One image from the standalone Image generator (apps/studio/imagegen.py): not tied to a brief or a run.
+    The worker generates (or takes an uploaded) photo, checks it with the vision model and finishes it as a
+    branded sdsmanager.com hero, an unbranded lead image at a given size, or an in-article image with the
+    logo."""
+
+    class Kind(models.TextChoices):
+        HERO = "hero", "Blog hero for sdsmanager.com (veil, logo, headline)"
+        LEAD = "lead", "Unbranded lead image (guest posts and other sites)"
+        INLINE = "inline", "In-article image with the SDS Manager logo"
+
+    class Status(models.TextChoices):
+        QUEUED = "queued", "Queued"
+        RUNNING = "running", "Running"
+        DONE = "done", "Done"
+        FAILED = "failed", "Failed"
+
+    class Corner(models.TextChoices):
+        AUTO = "auto", "Pick the corner that clashes least"
+        TL = "tl", "Top left"
+        TR = "tr", "Top right"
+        BL = "bl", "Bottom left"
+        BR = "br", "Bottom right"
+
+    kind = models.CharField(max_length=10, choices=Kind.choices, default=Kind.HERO)
+    description = models.TextField(
+        "What the image shows",
+        blank=True,
+        help_text="The topic or scene, e.g. 'a warehouse worker checking an SDS binder'. The model writes "
+        "the photo prompt from it. Not needed when you upload a photo.",
+    )
+    headline = models.CharField(
+        max_length=200,
+        blank=True,
+        help_text="Blog heroes: the article's H1. A colon splits the periwinkle topic from the grey "
+        "qualifier, or write the markup yourself (**Topic:** | rest).",
+    )
+    photo_prompt = models.TextField(
+        blank=True, help_text="Optional: your own prompt for the image model instead of a written one."
+    )
+    region = models.CharField(max_length=4, choices=Region.choices, default=Region.US)
+    width = models.PositiveIntegerField(null=True, blank=True)
+    height = models.PositiveIntegerField(null=True, blank=True)
+    corner = models.CharField(max_length=4, choices=Corner.choices, default=Corner.AUTO)
+    source = models.ForeignKey(
+        "wagtailimages.Image",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+        help_text="An uploaded photo (or the previous job's photo) used instead of generating one.",
+    )
+    plan = models.ForeignKey(ImagePlan, null=True, blank=True, on_delete=models.SET_NULL, related_name="jobs")
+    section = models.CharField(
+        max_length=255, blank=True, help_text="Where the image goes in the article (an H2), or the hero."
+    )
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.QUEUED)
+    error = models.TextField(blank=True)
+    photo = models.ForeignKey(
+        "wagtailimages.Image", null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    image = models.ForeignKey(
+        "wagtailimages.Image", null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    metrics = models.JSONField(default=dict, blank=True)
+    provider = models.CharField(max_length=60, blank=True)
+    model = models.CharField(max_length=200, blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at", "-pk"]
+
+    def __str__(self):
+        return f"{self.get_kind_display()}: {self.headline or self.description[:60] or 'uploaded photo'}"
+
+    @property
+    def is_open(self):
+        return self.status in (self.Status.QUEUED, self.Status.RUNNING)
+
+    @property
+    def flags(self):
+        return self.metrics.get("flags") or []
+
+    @property
+    def needs_a_look(self):
+        return bool(self.metrics.get("needs_a_look"))

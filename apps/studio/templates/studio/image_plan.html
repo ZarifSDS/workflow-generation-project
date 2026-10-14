@@ -1,0 +1,83 @@
+{% extends "wagtailadmin/generic/base.html" %}
+
+{% block main_content %}
+<div class="studio">
+    <p class="s-muted s-m0">{% if plan.run %}<a href="{% url 'studio:run' plan.run.pk %}">{{ plan.source_label }}</a>{% elif plan.url %}<a href="{{ plan.url }}" rel="noopener" target="_blank">{{ plan.url }}</a>{% else %}{{ plan.source_label }}{% endif %} · {{ plan.region }}</p>
+
+    {% if plan.is_open %}
+        <div class="s-callout" role="status">Reading the article and planning its images. This page updates on its own.</div>
+    {% elif plan.status == "failed" %}
+        <div class="s-callout" role="alert"><strong>It didn't work.</strong> {{ plan.error }}</div>
+        {% if can_write %}<form method="post">{% csrf_token %}<button class="button" type="submit" name="action" value="replan">Try again</button></form>{% endif %}
+    {% endif %}
+
+    {% if plan.ideas %}
+        <form method="post" aria-labelledby="ideas-head">{% csrf_token %}
+            <h3 class="s-section" id="ideas-head">Suggested images</h3>
+            <p class="s-muted">Edit any description, tick the images to make, then make them together. A blog hero gets the veil, logo and headline; an in-article photo gets the logo in the corner that clashes least.</p>
+            {% for idea in plan.ideas %}
+                <fieldset class="s-box">
+                    <legend><strong>{% if idea.kind == "hero" %}Hero{% else %}In the article: {{ idea.section }}{% endif %}</strong>{% if idea.section in made %} <span class="s-tag s-tag--ok">Made</span>{% endif %}</legend>
+                    {% if idea.why %}<p class="s-muted s-small s-m0">{{ idea.why }}</p>{% endif %}
+                    {% if idea.kind == "hero" %}
+                        <div class="s-keys__field"><label for="headline-{{ forloop.counter0 }}">Headline (the article's H1)</label><input id="headline-{{ forloop.counter0 }}" name="headline-{{ forloop.counter0 }}" value="{{ idea.headline }}" maxlength="200"></div>
+                    {% endif %}
+                    <div class="s-keys__field"><label for="description-{{ forloop.counter0 }}">What the photo shows</label><textarea id="description-{{ forloop.counter0 }}" name="description-{{ forloop.counter0 }}" rows="2">{{ idea.description }}</textarea></div>
+                    <label class="s-cluster"><input type="checkbox" name="pick-{{ forloop.counter0 }}" value="1" {% if idea.section not in made %}checked{% endif %}> Make this image</label>
+                </fieldset>
+            {% endfor %}
+            {% if plan.notes %}<div class="s-callout" role="note"><strong>Not photos:</strong><ul>{% for line in plan.notes.splitlines %}<li>{{ line|cut:"Not a photo: " }}</li>{% endfor %}</ul></div>{% endif %}
+            {% if can_write %}
+                <div class="s-row-actions">
+                    <button class="button" type="submit" name="action" value="make">Make the ticked images</button>
+                    <button class="button button-secondary" type="submit" name="action" value="replan">Suggest again</button>
+                </div>
+            {% endif %}
+        </form>
+    {% endif %}
+
+    {% if jobs %}
+        <section aria-labelledby="made-head">
+            <h3 class="s-section" id="made-head">Images for this article</h3>
+            <div class="s-table-wrap">
+                <table class="s-table">
+                    <thead><tr><th scope="col">Image</th><th scope="col">Where</th><th scope="col">Status</th></tr></thead>
+                    <tbody>
+                    {% for job in jobs %}
+                        <tr>
+                            <td>{% if job.image %}<a href="{% url 'studio:image_job' job.pk %}"><img src="{{ job.image.file.url }}" alt="{{ job.metrics.alt_text }}" width="160" loading="lazy"></a>{% else %}<a href="{% url 'studio:image_job' job.pk %}">Image {{ job.pk }}</a>{% endif %}</td>
+                            <td>{{ job.section|default:job.get_kind_display }}</td>
+                            <td>{% include "studio/includes/image_job_status.html" %}</td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+    {{ block.super }}
+    {% if active %}
+    <script>
+    (function () {
+        // While the plan or any of its images is in progress, check every 5 s and reload when something changes.
+        var url = "{% url 'studio:image_plan_status' plan.pk %}", last = "{{ signature|escapejs }}";
+        function poll() {
+            fetch(url, {headers: {"X-Requested-With": "fetch"}, credentials: "same-origin"})
+                .then(function (r) { return r.ok ? r.json() : null; })
+                .then(function (data) {
+                    if (!data) return;
+                    if (last && data.signature !== last) { window.location.reload(); return; }
+                    last = data.signature;
+                    if (data.active) setTimeout(poll, 5000);
+                })
+                .catch(function () { setTimeout(poll, 15000); });
+        }
+        setTimeout(poll, 5000);
+    })();
+    </script>
+    {% endif %}
+{% endblock %}

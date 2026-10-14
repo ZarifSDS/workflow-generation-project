@@ -1,0 +1,1 @@
+<span class="s-tag s-tag--{% if job.status == 'done' %}{% if job.needs_a_look or not job.image %}warn{% else %}ok{% endif %}{% elif job.status == 'failed' %}bad{% else %}info{% endif %}">{% if job.status == 'done' and not job.image %}No image{% elif job.status == 'done' and job.needs_a_look %}Check before use{% else %}{{ job.get_status_display }}{% endif %}</span>

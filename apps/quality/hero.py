@@ -40,17 +40,41 @@ class BrandingError(Exception):
     pass
 
 
+# The veil is at least 96% opaque over the left 35% of the branded frame (svgify's measured stops); text in
+# the photo that ends left of this is covered by the branding. A margin keeps the call conservative.
+VEIL_COVERS_UNTIL = 0.30
+
+# Guest posts: the host's lead image (ehs-outbound-blog, platform-formatting.md). A custom domain gets the
+# Open Graph default the skill uses where the crawl couldn't observe a size.
+HOST_SIZES = {
+    "medium.com": (1500, 750),
+    "substack.com": (1200, 630),
+    "linkedin.com": (1280, 720),
+    "ghost.io": (1200, 630),
+}
+DEFAULT_HOST_SIZE = (1200, 630)
+SIZE_RE = re.compile(r"(\d{3,4})\s*[x×]\s*(\d{3,4})")
+
+
 @dataclass
 class HeroResult:
-    png: bytes | None = None  # 1440x810 master
+    png: bytes | None = None  # 1440x810 master (a guest post: the photo at the host's size)
     webp: bytes | None = None  # 720x405, what the CMS serves
+    svg: bytes | None = (
+        None  # the skill's layered, editable SVG (photo, veil, glow, edge tint, logo, headline)
+    )
     metrics: dict = field(default_factory=dict)
     flags: list = field(default_factory=list)
     headline_problem: str = ""  # hero_compose's "doesn't fit" message (exit code 3)
     subject_too_far_left: bool = False  # needs a generative fill or a new photo
+    for_host: bool = False  # a guest post's lead image: sized for the host, never branded
 
     @property
     def branded(self):
+        return self.png is not None and not self.for_host
+
+    @property
+    def ready(self):
         return self.png is not None
 
 
@@ -303,9 +327,96 @@ def brand(photo, markup, vision=None):
         return HeroResult(
             png=out.with_name(out.name + "@2x.png").read_bytes(),
             webp=out.with_suffix(".webp").read_bytes(),
+            svg=_layered_svg(photo_path, markup, subject_left, person, tmp, flags),
             metrics=metrics,
             flags=flags,
         )
+
+
+def _layered_svg(photo, markup, subject_left, person, tmp, flags):
+    """The skill's step 5 SVG from the same reframed photo; a failure only loses the SVG (it's a flag)."""
+    out = tmp / "hero.svg"
+    args = [photo, "--headline", markup, "-o", out, "--subject-left", f"{subject_left:.3f}", "--photo"]
+    if not person:
+        args.append("--no-person")
+    try:
+        result = _run("svgify.py", *args)
+    except (OSError, subprocess.SubprocessError) as error:
+        result, detail = None, str(error)
+    if result is not None and result.returncode == 0 and out.is_file():
+        return out.read_bytes()
+    if result is not None:
+        lines = (result.stderr or result.stdout).strip().splitlines()
+        detail = lines[-1] if lines else f"exit code {result.returncode}"
+    flags.append(f"The layered SVG wasn't made ({detail}); the PNG and WebP are complete.")
+    return None
+
+
+def final_x(x, vision, metrics):
+    """Where a horizontal position in the checked photo (a fraction of its width) lands in the branded
+    frame: reframe.py flips, scales and shifts the photo, so the subject box's two edges give the map."""
+    reframe, box = metrics.get("reframe") or {}, (vision or {}).get("subject")
+    if not box or reframe.get("skipped") or "subject_left" not in reframe or box[2] <= box[0]:
+        return x  # branded as it was
+    left, right = box[0], box[2]
+    if reframe.get("flipped"):
+        x, left, right = 1 - x, 1 - right, 1 - left
+    scale = (reframe["subject_right"] - reframe["subject_left"]) / (right - left)
+    return reframe["subject_left"] + scale * (x - left)
+
+
+def covered_by_veil(box, vision, metrics):
+    """True when a text box from the vision check ends under the opaque part of the veil."""
+    if not (isinstance(box, list | tuple) and len(box) == 4):
+        return False
+    return max(final_x(box[0], vision, metrics), final_x(box[2], vision, metrics)) <= VEIL_COVERS_UNTIL
+
+
+# ---- Guest posts: the host's lead image, unbranded ----
+
+
+def host_size(site_domain, note=""):
+    """(width, height): a `Size: WxH` note first, then the platform's spec, then the skill's default."""
+    if match := SIZE_RE.search(note or ""):
+        return int(match.group(1)), int(match.group(2))
+    host = re.sub(r"^https?://", "", (site_domain or "").lower()).split("/")[0].removeprefix("www.")
+    for domain, size in HOST_SIZES.items():
+        if host == domain or host.endswith("." + domain):
+            return size
+    return DEFAULT_HOST_SIZE
+
+
+def for_host(photo, size, vision=None):
+    """Crop the photo to the host's shape around the subject and resize it; no veil, logo or headline."""
+    from PIL import Image
+
+    width, height = size
+    flags, metrics = [], {"host_size": [width, height]}
+    with Image.open(io.BytesIO(photo)) as image:
+        image = image.convert("RGB")
+        src_w, src_h = image.size
+        ratio = width / height
+        crop_w, crop_h = (
+            (src_w, round(src_w / ratio)) if src_w / src_h < ratio else (round(src_h * ratio), src_h)
+        )
+        crop_w, crop_h = min(crop_w, src_w), min(crop_h, src_h)
+        box = (vision or {}).get("subject")
+        centre_x = (box[0] + box[2]) / 2 * src_w if box else src_w / 2
+        centre_y = (box[1] + box[3]) / 2 * src_h if box else src_h / 2
+        x0 = round(min(max(centre_x - crop_w / 2, 0), src_w - crop_w))
+        y0 = round(min(max(centre_y - crop_h / 2, 0), src_h - crop_h))
+        if box and (box[0] * src_w < x0 or box[2] * src_w > x0 + crop_w):
+            flags.append(
+                f"The subject is wider than a {width}x{height} crop, so part of it is cut. Regenerate with "
+                "the subject smaller in the frame."
+            )
+        upscale = round(max(width / crop_w, height / crop_h), 2)
+        metrics["upscale"] = upscale
+        if upscale > 1.6:
+            flags.append(f"The crop is upscaled {upscale}x to {width}x{height} and may look soft.")
+        out = io.BytesIO()
+        image.crop((x0, y0, x0 + crop_w, y0 + crop_h)).resize(size, Image.LANCZOS).save(out, format="PNG")
+    return HeroResult(png=out.getvalue(), metrics=metrics, flags=flags, for_host=True)
 
 
 # ---- In-article ("inner") images ----

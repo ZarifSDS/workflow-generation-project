@@ -12,7 +12,8 @@
             {% if page.author %}By {{ page.author.name }}{% if page.author.role %}, {{ page.author.role }}{% endif %} · {% endif %}<time datetime="{{ page.created_date|date:'c' }}">{{ page.created_date|date:"j F Y" }}</time>
         </p>
         {% if page.hero_image %}
-            {% image page.hero_image width-1440 class="article__hero" alt="" %}
+            {# The CMS serves the hero as a 720-wide WebP (sds-hero-stock); 1440 for high-density screens. alt="": the H1 is the headline in the image. #}
+            {% srcset_image page.hero_image width-{720,1440} format-webp sizes="(max-width: 760px) 100vw, 720px" class="article__hero" alt="" %}
         {% endif %}
         {% for block in page.body %}
             {% include_block block %}

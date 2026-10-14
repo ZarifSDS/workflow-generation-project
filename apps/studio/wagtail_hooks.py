@@ -121,6 +121,7 @@ STUDIO_ITEMS = [
     ("New brief", "studio:brief_new", "plus", "studio-new-brief", permissions.WRITING),
     ("Briefs", "studio:briefs", "doc-full", "studio-briefs", permissions.ACCESS),
     ("Runs", "studio:runs", "list-ul", "studio-runs", permissions.ACCESS),
+    ("Image generator", "studio:images", "image", "studio-images", permissions.ACCESS),
     ("Presets", "studio_presets:index", "form", "studio-presets", "studio.view_briefpreset"),
     ("Models and providers", "studio:providers", "cogs", "studio-providers", permissions.ACCESS),
 ]

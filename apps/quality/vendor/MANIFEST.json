@@ -72,6 +72,10 @@
     "source": "ehs-seo-blog-optimized/data/product-link-registry.json",
     "sha256": "01599e2cd655a36b909bb4bab1902a236e11034ed8ff1d2dfb6aa5d98690f6f9"
   },
+  "ehs_seo_blog/references/plain-explanation-exemplar.md": {
+    "source": "ehs-seo-blog-optimized/references/plain-explanation-exemplar.md",
+    "sha256": "ec643c0f0eea632033efd1d91af27de1f151d50aa2c1e4abd72fd15b7c0beb79"
+  },
   "sds_hero_stock/check_photo.py": {
     "source": "sds-hero-stock/scripts/check_photo.py",
     "sha256": "795a49051478f041c12e2297fa88bd1199bc837e5fb874e541ce6917c1dd0f2f"

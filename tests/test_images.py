@@ -206,6 +206,11 @@ def vendor(tmp_path, monkeypatch):
     )
     assets = folder / "assets"
     Image.new("RGBA", (216, 72), (98, 109, 249, 255)).save(assets / "sds-manager-logo.png")
+    (assets / "sds-manager-logo.svg").write_text(
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 216 72"><rect class="cls-1" width="216" '
+        'height="72"/></svg>',
+        encoding="utf8",
+    )
     Image.new("RGBA", (720, 405), (252, 252, 252, 200)).save(assets / "overlay_A.png")
     ys = np.linspace(255, 167, 405)[:, None, None]
     Image.fromarray(np.broadcast_to(ys, (405, 720, 3)).astype(np.uint8)).save(assets / "veil_color.png")
@@ -243,6 +248,8 @@ def test_brand_produces_master_and_webp(vendor):
     assert result.branded, result.flags
     assert Image.open(io.BytesIO(result.png)).size == (1440, 810)
     assert Image.open(io.BytesIO(result.webp)).size == (720, 405)
+    # The skill's layered SVG is kept too (it used to be discarded).
+    assert result.svg and b'id="logo"' in result.svg and b'width="1440"' in result.svg
     assert result.metrics["headline_fit"]["lines"] <= 4
     assert set(result.metrics["contrast"]) == {"grey", "periwinkle"}
     assert 0.6 < result.metrics["subject_left"] < 0.66  # 62%, or a little right where the crop meets the edge
@@ -340,7 +347,8 @@ def test_the_vision_check_ignores_placeholders_and_flags_what_it_left_out():
         '{"subject": [0.6, 0.1, 0.9, 1.0], "readable_text": ["None", "no readable text"], '
         '"safety_issues": ["no gloves while handling drums", "No issues found"]}'
     )
-    assert vision["readable_text"] == [] and vision["safety_issues"] == ["no gloves while handling drums"]
+    assert vision["readable_text"] == []
+    assert vision["safety_issues"] == [{"issue": "no gloves while handling drums", "severity": "high"}]
     assert vision["unchecked"] == []
     partial = executors._parse_vision('{"subject": [0.6, 0.1, 0.9, 1.0], "text": []}')
     assert set(partial["unchecked"]) == {"readable_text", "safety_issues"}

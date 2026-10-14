@@ -71,7 +71,11 @@ def _export_links(run):
         return []
     links = [(url(fmt), label) for fmt, label in (("md", "Markdown"), ("html", "HTML"), ("docx", "Word"))]
     if content.hero is not None:
-        links.append((url("webp"), "Hero WebP (720×405)"))
+        width, height = content.hero_size
+        guest = content.hero_meta.get("for_host")
+        links.append((url("webp"), f"{'Lead image' if guest else 'Hero'} WebP ({width}×{height})"))
+        if (content.hero_meta.get("files") or {}).get("svg"):
+            links.append((url("svg"), "Hero layered SVG"))
     try:
         exports.article_content(run, "localised")
         region = run.brief.localise_to
@@ -104,7 +108,8 @@ def _hero(version):
     if not hero:
         return None
     photo = get_image_model().objects.filter(pk=hero.get("photo_image_id")).first()
-    return {**hero, "photo": photo if hero.get("branded") else None}
+    # The photo before branding, or before a guest post's crop to the host's size.
+    return {**hero, "photo": photo if hero.get("branded") or hero.get("for_host") else None}
 
 
 class RunWorkspaceView(StudioPage):
@@ -400,6 +405,7 @@ EXPORTS = {
     "html": ("text/html; charset=utf-8", "html"),
     "docx": ("application/vnd.openxmlformats-officedocument.wordprocessingml.document", "docx"),
     "webp": ("image/webp", "webp"),
+    "svg": ("image/svg+xml", "svg"),
 }
 
 
@@ -447,8 +453,9 @@ def run_export(request, pk, fmt):
         raise Http404
     variant = "localised" if request.GET.get("variant") == "localised" else "final"
     try:
-        if fmt == "webp":
-            body, name = exports.hero_webp(run), exports.filename(run)
+        if fmt in ("webp", "svg"):
+            body = exports.hero_webp(run) if fmt == "webp" else exports.hero_svg(run)
+            name = exports.filename(run)
         else:
             builder = {
                 "md": exports.markdown_export,
