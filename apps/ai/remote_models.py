@@ -9,6 +9,7 @@ The key goes only to the provider's own address (the one it was entered for). Li
 minutes per provider and address, so the form stays quick while you add several models.
 """
 
+import re
 from dataclasses import asdict, dataclass
 
 import httpx
@@ -33,6 +34,7 @@ class RemoteModel:
     context: int | None = None
     price: str = ""  # "$0.15 in / $0.60 out per million tokens"
     vision: bool = False
+    chat: bool = True  # False: embeddings, speech, image or moderation models (never a step's writer)
 
     @property
     def status(self):
@@ -40,20 +42,24 @@ class RemoteModel:
         return "" if self.free is None else ("free" if self.free else "paid")
 
     @property
+    def details(self):
+        parts = []
+        if self.context:
+            parts.append(
+                f"{self.context // 1000}k context" if self.context >= 1000 else f"{self.context} context"
+            )
+        if self.price:
+            parts.append(self.price)
+        if self.vision:
+            parts.append("vision: reads images")
+        return " · ".join(parts)
+
+    @property
     def option_label(self):
         parts = [self.name or self.id]
         if self.name and self.name != self.id:
             parts.append(f"({self.id})")
-        details = []
-        if self.context:
-            details.append(
-                f"{self.context // 1000}k context" if self.context >= 1000 else f"{self.context} context"
-            )
-        if self.price:
-            details.append(self.price)
-        if self.vision:
-            details.append("vision: reads images")
-        return " ".join(parts) + (f" · {' · '.join(details)}" if details else "")
+        return " ".join(parts) + (f" · {self.details}" if self.details else "")
 
 
 def _per_million(value):
@@ -79,16 +85,32 @@ def _openai_entry(item):
         price = "free" if free else f"{_money(prompt)} in / {_money(completion)} out per M tokens"
     elif model_id.endswith(":free"):
         free = True
-    modalities = (item.get("architecture") or {}).get("input_modalities") or []
+    architecture = item.get("architecture") or {}
+    modalities = architecture.get("input_modalities") or []
+    outputs = architecture.get("output_modalities")
     context = item.get("context_length") or item.get("context_window")
+    name = str(item.get("name") or "").strip()
     return RemoteModel(
         id=model_id,
-        name=str(item.get("name") or "").strip(),
+        name=name,
         free=free,
         context=context if isinstance(context, int) else None,
         price=price,
         vision="image" in modalities,
+        chat=is_chat(model_id, name) and (not outputs or "text" in outputs),
     )
+
+
+# Ids of models that don't write text: embeddings, speech in or out, image and video makers, moderation.
+NOT_CHAT = re.compile(
+    r"embed|whisper|tts|transcri|speech|audio|orpheus|playai|imagen|veo|lyria|aqa|"
+    r"guard|moderation|image-generation|dall-e|rerank",
+    re.IGNORECASE,
+)
+
+
+def is_chat(model_id, name=""):
+    return not NOT_CHAT.search(f"{model_id} {name}")
 
 
 def _fetch(spec):
@@ -115,11 +137,11 @@ def _fetch(spec):
         raise RemoteModelsError("the provider's answer wasn't a model list") from error
     if spec.adapter == "ollama_native":
         items = data.get("models") if isinstance(data, dict) else None
-        models = [
-            RemoteModel(id=str(item.get("name") or item.get("model") or ""), free=True)
-            for item in items or []
-            if isinstance(item, dict)
-        ]
+        models = []
+        for item in items or []:
+            if isinstance(item, dict):
+                model_id = str(item.get("name") or item.get("model") or "")
+                models.append(RemoteModel(id=model_id, free=True, chat=is_chat(model_id)))
     else:
         items = data.get("data") if isinstance(data, dict) else data
         models = [_openai_entry(item) for item in items or [] if isinstance(item, dict)]
@@ -141,3 +163,100 @@ def list_models(spec, refresh=False):
     models = _fetch(spec)
     cache.set(key, [asdict(model) for model in models], CACHE_SECONDS)
     return models
+
+
+# ---- Keeping the model lists in step with the providers (AddedModel rows with source "listed") ----
+
+SYNC_EVERY_HOURS = 24
+
+
+def listable(spec):
+    """A provider whose models can be listed now: a text API that lists models, with its key if needed."""
+    return spec.adapter in LISTABLE_ADAPTERS and spec.is_configured
+
+
+def sync(spec):
+    """Read the provider's chat models into AddedModel as "listed" rows: new ones are added, gone ones are
+    removed, hidden ones stay hidden, and rows added by hand or edited labels and statuses are left alone.
+    Models the built-in catalog already offers are skipped (its curated entry wins). Returns the number of
+    listed models; records the result in ModelSync; raises RemoteModelsError after recording it."""
+    from django.db import transaction
+    from django.utils import timezone
+
+    from . import catalog
+    from .models import AddedModel, ModelSync
+
+    record, _ = ModelSync.objects.get_or_create(provider=spec.name)
+    try:
+        models = [model for model in list_models(spec, refresh=True) if model.chat]
+    except RemoteModelsError as error:
+        record.error, record.synced_at = str(error)[:300], timezone.now()
+        record.save()
+        raise
+    built_in = {item.model for item in catalog.CATALOG if item.provider == spec.name}
+    usual = catalog.usual_status(spec.name)
+    now = timezone.now()
+    wanted = {model.id: model for model in models if model.id not in built_in}
+    with transaction.atomic():
+        rows = {row.model: row for row in AddedModel.objects.filter(provider=spec.name)}
+        new = [
+            AddedModel(
+                provider=spec.name,
+                model=model.id,
+                label=(model.name or model.id)[:80],
+                status=model.status or usual,
+                source=AddedModel.Source.LISTED,
+                details=model.details[:200],
+                refreshed_at=now,
+            )
+            for model_id, model in wanted.items()
+            if model_id not in rows
+        ]
+        AddedModel.objects.bulk_create(new)
+        for model_id, row in rows.items():
+            if row.source != AddedModel.Source.LISTED:
+                continue
+            if model_id not in wanted:
+                row.delete()
+            else:
+                row.details, row.refreshed_at = wanted[model_id].details[:200], now
+                row.save(update_fields=["details", "refreshed_at"])
+        record.synced_at, record.listed, record.error = now, len(wanted), ""
+        record.save()
+    catalog.clear_cache()
+    return len(wanted)
+
+
+def stale(names=None):
+    """Names of listable providers not synced in the last SYNC_EVERY_HOURS (or never)."""
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    from .models import ModelSync
+    from .providers import get_providers
+
+    cutoff = timezone.now() - timedelta(hours=SYNC_EVERY_HOURS)
+    synced = {row.provider: row.synced_at for row in ModelSync.objects.all()}
+    return [
+        name
+        for name, spec in get_providers().items()
+        if listable(spec)
+        and (names is None or name in names)
+        and not (synced.get(name) and synced[name] > cutoff)
+    ]
+
+
+def sync_all(names=None):
+    """{provider: listed count or error message} for every listable provider (or the named ones)."""
+    from .providers import get_providers
+
+    results = {}
+    for name, spec in get_providers().items():
+        if not listable(spec) or (names is not None and name not in names):
+            continue
+        try:
+            results[name] = sync(spec)
+        except RemoteModelsError as error:
+            results[name] = str(error)
+    return results

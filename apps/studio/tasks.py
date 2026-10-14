@@ -43,6 +43,14 @@ def run_image_plan(plan_id):
     imagegen.execute_plan(plan_id)
 
 
+@task()
+def sync_model_lists(names=None):
+    """Read the providers' model lists into the studio's model dropdowns (apps/ai/remote_models.py)."""
+    from apps.ai import remote_models
+
+    remote_models.sync_all(names)
+
+
 def execute_step(step_id):
     """Run one queued step. Safe to call twice: only a QUEUED step is picked up."""
     from . import executors, services, sop

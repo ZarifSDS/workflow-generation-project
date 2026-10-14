@@ -45,11 +45,12 @@ class TaskDefaultsView(KeysPage):
             rows.append(
                 {
                     "task": task,
-                    "groups": catalog.grouped(task.kind),
                     "built_in": _label(defaults.model_key(base)),
                     "built_in_fallback": _label(defaults.model_key(base.get("fallback") or {})),
                     "model": chosen[0] if chosen else (row.model_key if row else ""),
                     "fallback": chosen[1] if chosen else (row.fallback_key if row else ""),
+                    "model_label": _label(chosen[0] if chosen else (row.model_key if row else "")),
+                    "fallback_label": _label(chosen[1] if chosen else (row.fallback_key if row else "")),
                     "row": row,
                 }
             )
@@ -74,6 +75,7 @@ class TaskDefaultsView(KeysPage):
             rows=kwargs.get("rows") or self.rows(),
             errors=kwargs.get("errors") or {},
             providers=self.providers(),
+            option_sets={kind: catalog.grouped(kind) for kind in sorted({task.kind for task in MODEL_TASKS})},
         )
         return context
 

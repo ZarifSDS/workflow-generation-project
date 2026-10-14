@@ -202,6 +202,12 @@ def studio_css():
     return format_html('<link rel="stylesheet" href="{}">', static("studio/studio.css"))
 
 
+@hooks.register("insert_global_admin_js")
+def studio_select_filter():
+    """A filter box above long model dropdowns (studio/select_filter.js)."""
+    return format_html('<script src="{}" defer></script>', static("studio/select_filter.js"))
+
+
 class StudioReviewPanel(Component):
     """Dashboard: steps the signed-in user can approve now."""
 

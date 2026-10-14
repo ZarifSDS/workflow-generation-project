@@ -12,7 +12,7 @@ from apps.ai import catalog
 from apps.quality import house, review
 
 from .. import assistant, diffing, permissions, requester, services
-from ..models import ChatMessage, GenerationRun, StepRun
+from ..models import ChatMessage, GenerationRun, StepRun, StepVersion
 from . import editor_api
 from .common import StudioPage
 
@@ -55,6 +55,26 @@ def _checks(version, brief):
         "target": float(brief.fkgl),
         "words": m.get("word_count"),
     }
+
+
+def observed_durations(step_key, limit=300):
+    """{"provider::model": {"seconds", "runs"}}: the median time each model took for this step in past runs
+    (the step's own `duration_seconds`, SOP rounds included), for the model lists. The catalog's typical
+    time is the fallback where a model hasn't run this step yet."""
+    import statistics
+
+    times = {}
+    versions = (
+        StepVersion.objects.filter(step__key=step_key)
+        .exclude(model="")
+        .order_by("-pk")
+        .values_list("provider", "model", "metrics")[:limit]
+    )
+    for provider, model, metrics in versions:
+        seconds = (metrics or {}).get("duration_seconds")
+        if isinstance(seconds, int | float) and seconds > 0:
+            times.setdefault(f"{provider}::{model}", []).append(seconds)
+    return {key: {"seconds": round(statistics.median(v)), "runs": len(v)} for key, v in times.items()}
 
 
 def _export_links(run):
@@ -169,6 +189,7 @@ class RunWorkspaceView(StudioPage):
             if step and step.key == "publish" and user.has_perm(permissions.EDITING)
             else None,
             model_groups=catalog.grouped(kind) if kind in ("text", "image") else [],
+            observed=observed_durations(step.key) if step and kind in ("text", "image") else {},
             current_model_key=f"{step.provider}::{step.model}" if step and step.model else "",
             can_review=can_review,
             # Text output (the model steps and Final cleanup) can be edited; the hero and Publish can't.

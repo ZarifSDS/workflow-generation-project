@@ -226,7 +226,7 @@
                                 <select id="send-back-model" name="model">
                                     {% for group, items in model_groups %}
                                         <optgroup label="{{ group }}">
-                                            {% for item in items %}<option value="{{ item.key }}" {% if not item.selectable %}disabled{% endif %} {% if item.key == current_model_key %}selected{% endif %}>{{ item.label }}{% if item.typical_seconds %} · {{ item.typical_seconds|duration }}{% endif %}</option>{% endfor %}
+                                            {% for item in items %}<option value="{{ item.key }}" {% if not item.selectable %}disabled{% endif %} {% if item.key == current_model_key %}selected{% endif %}>{{ item.label }}{% with seen=observed|get_item:item.key %}{% if seen %} · took {{ seen.seconds|took }} for this step (median of {{ seen.runs }}){% elif item.typical_seconds %} · {{ item.typical_seconds|duration }}{% endif %}{% endwith %}</option>{% endfor %}
                                         </optgroup>
                                     {% endfor %}
                                 </select>
@@ -371,7 +371,9 @@
                     {% if checks.meta_narration %}<div class="s-kv"><span>Meta narration</span><span class="s-tag s-tag--warn">{{ checks.meta_narration }}</span></div>{% endif %}
                     {% if checks.spelling %}<div class="s-kv"><span>Wrong spelling variant</span><span class="s-tag s-tag--warn">{{ checks.spelling|length }}</span></div>{% endif %}
                     {% if checks.fkgl is not None %}<div class="s-kv"><span>Grade overall</span><span class="s-mono">{{ checks.fkgl }} (target {{ checks.target }})</span></div>{% endif %}
-                    {% if checks.sections %}
+                    {% if section_rows and step.status == "ready" %}
+                        <p class="s-muted s-small s-m0"><a href="#grades-head">Grade by section, with Tune</a></p>
+                    {% elif checks.sections %}
                         <div class="s-muted s-small">Grade by section</div>
                         {% for section in checks.sections %}
                             <div class="s-grade" title="{{ section.heading }}: FKGL {{ section.fkgl }}">
@@ -394,6 +396,15 @@
                     {% if quality.sweep_blocking is not None %}<div class="s-kv"><span>Mechanical sweep blockers</span><span class="s-tag s-tag--{% if quality.sweep_blocking %}warn{% else %}ok{% endif %}">{{ quality.sweep_blocking }}</span></div>{% endif %}
                     {% if quality.hidden_characters %}<div class="s-kv"><span>Hidden characters</span><span class="s-tag s-tag--warn">{{ quality.hidden_characters }}</span></div>{% endif %}
                     {% if quality.sentence_len_band %}<p class="s-muted s-m0 s-small">Sentence rhythm: {{ quality.sentence_len_band }}</p>{% endif %}
+                    {% if quality.deslop_findings or quality.unclear_references or quality.frames_over_threshold or quality.sweep_blocking or quality.hidden_characters %}
+                        <ul class="s-muted s-small s-m0">
+                            {% if quality.deslop_findings %}<li>AI tells: ask Suggestions to “remove the AI tells” (it applies as a new version), or let Review and edit run its deslop pass.</li>{% endif %}
+                            {% if quality.unclear_references %}<li>Unclear references: a “this”, “that” or “it” without a named thing before it. Name the thing.</li>{% endif %}
+                            {% if quality.frames_over_threshold %}<li>Repeated frames: several sentences built the same way. Vary how those sentences open.</li>{% endif %}
+                            {% if quality.sweep_blocking %}<li>Mechanical blockers (dashes, curly quotes, spacing): Final cleanup fixes these on its own.</li>{% endif %}
+                            {% if quality.hidden_characters %}<li>Hidden characters: Final cleanup strips them.</li>{% endif %}
+                        </ul>
+                    {% endif %}
                 </section>
             {% endif %}
 
@@ -417,7 +428,7 @@
                         <select id="regen-model" name="model">
                             {% for group, items in model_groups %}
                                 <optgroup label="{{ group }}">
-                                    {% for item in items %}<option value="{{ item.key }}" {% if not item.selectable %}disabled{% endif %} {% if item.key == current_model_key %}selected{% endif %}>{{ item.label }}{% if item.typical_seconds %} · {{ item.typical_seconds|duration }}{% endif %}{% if item.reason %} · {{ item.reason }}{% endif %}</option>{% endfor %}
+                                    {% for item in items %}<option value="{{ item.key }}" {% if not item.selectable %}disabled{% endif %} {% if item.key == current_model_key %}selected{% endif %}>{{ item.label }}{% with seen=observed|get_item:item.key %}{% if seen %} · took {{ seen.seconds|took }} for this step (median of {{ seen.runs }}){% elif item.typical_seconds %} · {{ item.typical_seconds|duration }}{% endif %}{% endwith %}{% if item.reason %} · {{ item.reason }}{% endif %}</option>{% endfor %}
                                 </optgroup>
                             {% endfor %}
                         </select>

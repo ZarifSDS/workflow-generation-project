@@ -48,12 +48,18 @@ class ProviderConfig(models.Model):
 
 
 class AddedModel(models.Model):
-    """A model offered in the dropdowns in addition to apps.ai.catalog (e.g. a paid OpenRouter model)."""
+    """A model offered in the dropdowns in addition to apps.ai.catalog: added by hand, or listed by the
+    provider for a stored key (apps.ai.remote_models.sync). A listed model that is removed stays as a hidden
+    row, so the next sync doesn't bring it back."""
 
     class Status(models.TextChoices):
         FREE = "free", "Free"
         LIMITED = "limited", "Free with limits"
         PAID = "paid", "Paid (billed to your key)"
+
+    class Source(models.TextChoices):
+        MANUAL = "manual", "Added by hand"
+        LISTED = "listed", "Listed by the provider"
 
     provider = models.CharField(max_length=30)
     model = models.CharField(max_length=200, help_text="The provider's model id, e.g. openai/gpt-5.5")
@@ -62,6 +68,12 @@ class AddedModel(models.Model):
     typical_seconds = models.PositiveIntegerField(
         null=True, blank=True, help_text="Rough time per step in seconds, shown next to the model"
     )
+    source = models.CharField(max_length=10, choices=Source.choices, default=Source.MANUAL)
+    hidden = models.BooleanField(default=False, help_text="Removed from the lists; kept so a sync skips it")
+    details = models.CharField(
+        max_length=200, blank=True, help_text="Context and price, as the provider lists"
+    )
+    refreshed_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -70,6 +82,18 @@ class AddedModel(models.Model):
 
     def __str__(self):
         return f"{self.label} ({self.provider})"
+
+
+class ModelSync(models.Model):
+    """When a provider's model list was last read into AddedModel, and what went wrong if it failed."""
+
+    provider = models.CharField(max_length=30, unique=True)
+    synced_at = models.DateTimeField(null=True, blank=True)
+    listed = models.PositiveIntegerField(default=0)
+    error = models.CharField(max_length=300, blank=True)
+
+    def __str__(self):
+        return f"{self.provider}: {self.listed} models"
 
 
 class TaskDefault(models.Model):

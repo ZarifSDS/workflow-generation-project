@@ -1,0 +1,75 @@
+{% extends "wagtailadmin/generic/base.html" %}
+
+{% block main_content %}
+<div class="studio">
+    <p class="s-muted s-m0">Rename models, change free or paid, or remove several at once. Removing a model you added by hand deletes it; removing one the provider lists hides it, so the next refresh doesn't bring it back (restore it from “Hidden models”). The studio's built-in models aren't edited here.</p>
+
+    <form method="get" class="s-row-actions" role="search">
+        <label for="mm-provider" class="w-sr-only">Provider</label>
+        <select id="mm-provider" name="provider">
+            <option value="">All providers</option>
+            {% for name, label in providers %}<option value="{{ name }}" {% if name == provider %}selected{% endif %}>{{ label }}</option>{% endfor %}
+        </select>
+        <label for="mm-q" class="w-sr-only">Search models</label>
+        <input type="search" id="mm-q" name="q" value="{{ q }}" placeholder="Search name, id, price or context">
+        <label class="s-cluster"><input type="checkbox" name="hidden" value="1" {% if show_hidden %}checked{% endif %}> Hidden models</label>
+        <button class="button button-secondary" type="submit">Show</button>
+        <span class="s-spacer"></span>
+        <a class="button button-secondary" href="{% url 'studio:provider_model_add' %}{% if provider %}?provider={{ provider }}{% endif %}">Add models</a>
+    </form>
+
+    {% if rows %}
+        <form method="post" novalidate>{% csrf_token %}
+            <input type="hidden" name="provider" value="{{ provider }}"><input type="hidden" name="q" value="{{ q }}">{% if show_hidden %}<input type="hidden" name="hidden" value="1">{% endif %}
+            <p class="s-muted s-small">{% if total > limit %}Showing {{ limit }} of {{ total }}: narrow the search to see the rest.{% else %}{{ total }} model{{ total|pluralize }}.{% endif %}</p>
+            <div class="s-table-wrap">
+                <table class="s-table">
+                    <thead><tr>
+                        <th scope="col"><input type="checkbox" id="mm-all" aria-label="Tick all shown"></th>
+                        <th scope="col">Name shown in the studio</th>
+                        <th scope="col">Model id</th>
+                        <th scope="col">Provider</th>
+                        <th scope="col">Free or paid</th>
+                        <th scope="col">From</th>
+                    </tr></thead>
+                    <tbody>
+                    {% for m in rows %}
+                        <tr>
+                            <td><input type="checkbox" name="pick" value="{{ m.pk }}" aria-label="Tick {{ m.label }}"><input type="hidden" name="row" value="{{ m.pk }}"></td>
+                            <td><label class="w-sr-only" for="label-{{ m.pk }}">Name for {{ m.model }}</label><input id="label-{{ m.pk }}" name="label-{{ m.pk }}" value="{{ m.label }}" maxlength="80"></td>
+                            <td class="s-mono s-small">{{ m.model }}{% if m.details %}<div class="s-muted">{{ m.details }}</div>{% endif %}</td>
+                            <td>{% for key, label in labels.items %}{% if key == m.provider %}{{ label }}{% endif %}{% endfor %}</td>
+                            <td><label class="w-sr-only" for="status-{{ m.pk }}">Free or paid for {{ m.model }}</label><select id="status-{{ m.pk }}" name="status-{{ m.pk }}">{% for value, label in statuses %}<option value="{{ value }}" {% if value == m.status %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></td>
+                            <td><span class="s-tag s-tag--{% if m.source == 'listed' %}info{% else %}neutral{% endif %}">{% if m.source == 'listed' %}Provider's list{% else %}By hand{% endif %}</span></td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <div class="s-row-actions">
+                <button class="button" type="submit" name="action" value="save">Save changes</button>
+                {% if show_hidden %}
+                    <button class="button button-secondary" type="submit" name="action" value="restore">Restore ticked</button>
+                {% else %}
+                    <button class="button button-secondary no" type="submit" name="action" value="remove">Remove ticked</button>
+                {% endif %}
+            </div>
+        </form>
+    {% else %}
+        <div class="s-empty"><p>{% if q or provider %}No models match.{% elif show_hidden %}No hidden models.{% else %}No models yet: refresh the lists on AI providers, or add models.{% endif %}</p></div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+    {{ block.super }}
+    <script>
+    (function () {
+        var all = document.getElementById("mm-all");
+        if (!all) return;
+        all.addEventListener("change", function () {
+            document.querySelectorAll("input[name='pick']").forEach(function (box) { box.checked = all.checked; });
+        });
+    })();
+    </script>
+{% endblock %}

@@ -40,7 +40,7 @@
                 {% endif %}
             {% endfor %}
             <div class="s-row-actions">
-                <button class="button" type="submit">{% if return_to %}Add and go back to Default models{% else %}Add model{% endif %}</button>
+                <button class="button" type="submit">{% if return_to %}Add and go back to Default models{% else %}Add{% endif %}</button>
                 <button class="button button-secondary" type="submit" name="next" value="another">Add and pick another</button>
                 <a class="button button-secondary" href="{% if return_to %}{% url 'studio:task_defaults' %}{% else %}{% url 'studio:provider_keys' %}{% endif %}">Cancel</a>
             </div>
@@ -67,8 +67,7 @@
                 if (!option.value) return;
                 var text = option.textContent.toLowerCase();
                 var match = words.every(function (w) { return text.indexOf(w) !== -1; });
-                option.hidden = !match;
-                option.disabled = !match;
+                option.hidden = !match && !option.selected;  // picks already made stay visible and are sent
                 if (match) shown += 1;
             });
             select.querySelectorAll("optgroup").forEach(function (group) {

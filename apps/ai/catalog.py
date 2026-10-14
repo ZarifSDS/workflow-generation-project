@@ -176,7 +176,7 @@ def _added():
                 typical_seconds=row.typical_seconds,
                 added=True,
             )
-            for row in AddedModel.objects.all()
+            for row in AddedModel.objects.filter(hidden=False).order_by("provider", "label")
         ]
     except DatabaseError:
         return [], {}

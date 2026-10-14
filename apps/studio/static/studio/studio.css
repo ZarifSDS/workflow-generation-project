@@ -205,3 +205,6 @@
 .studio .s-chat__text { white-space: normal; }
 
 .studio .s-markers { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.35rem; }
+
+/* Filter box above long model dropdowns (select_filter.js) */
+.s-select-filter { display: block; width: 100%; max-width: 32rem; margin-bottom: 0.25rem; }

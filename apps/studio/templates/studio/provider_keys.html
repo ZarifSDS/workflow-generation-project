@@ -48,32 +48,34 @@
         </div>
     </section>
 
+    {% if model_lists is not None %}
     <section aria-labelledby="models-head" class="s-keys">
         <div class="s-row-actions">
-            <h2 class="s-section" id="models-head">Added models</h2>
+            <h2 class="s-section" id="models-head">Models</h2>
             <span class="s-spacer"></span>
-            <a class="button button-small button-secondary" href="{% url 'studio:provider_model_add' %}">Add a model</a>
+            <form method="post">{% csrf_token %}<button class="button button-small button-secondary" type="submit" name="action" value="refresh">Refresh model lists</button></form>
+            <a class="button button-small button-secondary" href="{% url 'studio:provider_models' %}">Manage models</a>
+            <a class="button button-small button-secondary" href="{% url 'studio:provider_model_add' %}">Add models</a>
         </div>
-        <p class="s-muted s-m0">Models added here appear in the model lists next to the built-in ones. Paid models are billed to the provider's key; the built-in list keeps paid models switched off.</p>
-        {% if added_models %}
-            <div class="s-table-wrap">
-                <table class="s-table">
-                    <thead><tr><th scope="col">Model</th><th scope="col">Provider</th><th scope="col">Cost</th><th scope="col"><span class="w-sr-only">Actions</span></th></tr></thead>
-                    <tbody>
-                    {% for m in added_models %}
-                        <tr>
-                            <th scope="row">{{ m.label }}<div class="s-muted s-mono s-keys__sub">{{ m.model }}</div></th>
-                            <td>{% for key, label in labels.items %}{% if key == m.provider %}{{ label }}{% endif %}{% endfor %}</td>
-                            <td><span class="s-tag s-tag--{% if m.status == "paid" %}warn{% else %}ok{% endif %}">{{ m.get_status_display }}</span></td>
-                            <td class="s-keys__actions"><a class="button button-small button-secondary no" href="{% url 'studio:provider_model_remove' m.pk %}">Remove</a></td>
-                        </tr>
-                    {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        {% else %}
-            <div class="s-empty"><span class="s-muted">No models added yet.</span></div>
-        {% endif %}
+        <p class="s-muted s-m0">Every model a provider lists for your key (chat models only) is offered in the model lists, paid ones included: a stored key is the go-ahead to use it. Lists are read again when a key is saved, once a day, and when you refresh. Manage models to rename, re-price, hide or restore several at once.</p>
+        <div class="s-table-wrap">
+            <table class="s-table">
+                <thead><tr><th scope="col">Provider</th><th scope="col">In the lists</th><th scope="col">Last read</th><th scope="col"><span class="w-sr-only">Actions</span></th></tr></thead>
+                <tbody>
+                {% for p in model_lists %}
+                    <tr>
+                        <th scope="row">{{ p.label }}</th>
+                        <td>{% if p.built_in %}{{ p.built_in }} built in{% endif %}{% if p.listed %}{% if p.built_in %} · {% endif %}{{ p.listed }} from its list{% endif %}{% if p.manual %}{% if p.built_in or p.listed %} · {% endif %}{{ p.manual }} by hand{% endif %}{% if not p.built_in and not p.listed and not p.manual %}<span class="s-tag s-tag--warn">None yet</span>{% endif %}{% if p.hidden %} <span class="s-muted">({{ p.hidden }} hidden)</span>{% endif %}</td>
+                        <td>{% if not p.listable %}<span class="s-muted">{% if p.needs_key and not p.source %}Needs a key{% else %}Doesn't list models{% endif %}</span>{% elif p.sync.error %}<span class="s-tag s-tag--bad">Failed</span> <span class="s-muted s-small">{{ p.sync.error }}</span>{% elif p.sync.synced_at %}{{ p.sync.synced_at|timesince }} ago{% else %}<span class="s-muted">Not yet</span>{% endif %}</td>
+                        <td class="s-keys__actions">
+                            {% if p.listable %}<form method="post">{% csrf_token %}<input type="hidden" name="provider" value="{{ p.name }}"><button class="button button-small button-secondary" type="submit" name="action" value="refresh">Refresh</button></form>{% endif %}
+                            <a class="button button-small button-secondary" href="{% url 'studio:provider_models' %}?provider={{ p.name }}">Manage</a>
+                        </td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
     </section>
-</div>
+    {% endif %}</div>
 {% endblock %}

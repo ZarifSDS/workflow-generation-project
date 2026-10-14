@@ -88,6 +88,18 @@ def _clear_secret(row, field):
     setattr(row, f"{field}_hint", "")
 
 
+def sync_message(name, label):
+    """List the provider's models now (a new or changed key means a new list) and say what happened."""
+    spec = get_providers().get(name)
+    if spec is None or not remote_models.listable(spec):
+        return ""
+    try:
+        count = remote_models.sync(spec)
+    except remote_models.RemoteModelsError as error:
+        return f" Its models couldn't be listed yet ({error}); add them under Add a model, or refresh later."
+    return f" {count} of its models are in the model lists now." if count else ""
+
+
 class ProviderKeysView(KeysPage):
     template_name = "studio/provider_keys.html"
     page_title = "AI providers"
@@ -116,12 +128,82 @@ class ProviderKeysView(KeysPage):
                     "base_url": spec.base_url,
                 }
             )
+        if not self.search:
+            context.update(model_lists=self.model_lists(providers))
+            self.sync_stale_in_background()
         context.update(
             providers=providers,
-            added_models=AddedModel.objects.all(),
             labels=catalog.provider_labels() | {p["name"]: p["label"] for p in providers},
         )
         return context
+
+    def model_lists(self, providers):
+        """Per text provider: models in the lists (listed, by hand, hidden) and the last sync."""
+        from django.db.models import Count, Q
+
+        from apps.ai.models import ModelSync
+
+        counts = {
+            row["provider"]: row
+            for row in AddedModel.objects.values("provider").annotate(
+                listed=Count("pk", filter=Q(source="listed", hidden=False)),
+                manual=Count("pk", filter=Q(source="manual", hidden=False)),
+                hidden=Count("pk", filter=Q(hidden=True)),
+            )
+        }
+        syncs = {row.provider: row for row in ModelSync.objects.all()}
+        built_in = {}
+        for item in catalog.CATALOG:
+            if item.kind == "text":
+                built_in[item.provider] = built_in.get(item.provider, 0) + 1
+        rows = []
+        for p in providers:
+            spec = p["spec"]
+            if spec.adapter not in TEXT_ADAPTERS:
+                continue
+            count = counts.get(p["name"], {})
+            rows.append(
+                {
+                    **p,
+                    "listable": remote_models.listable(spec),
+                    "built_in": built_in.get(p["name"], 0),
+                    "listed": count.get("listed", 0),
+                    "manual": count.get("manual", 0),
+                    "hidden": count.get("hidden", 0),
+                    "sync": syncs.get(p["name"]),
+                }
+            )
+        return rows
+
+    def sync_stale_in_background(self):
+        """Lists older than a day are read again by the worker (the page never waits for a provider)."""
+        if not getattr(settings, "STUDIO_EXECUTE_STEPS", False):
+            return
+        from django.core.cache import cache
+
+        stale = remote_models.stale()
+        # cache.add is false while a sync queued in the last ten minutes may still be waiting for the worker.
+        if stale and cache.add("ai:model-sync-queued", True, 600):
+            from ..tasks import sync_model_lists
+
+            transaction.on_commit(lambda: sync_model_lists.enqueue(stale))
+
+    def post(self, request, *args, **kwargs):
+        """Refresh the model lists of every provider that can list its models (or one: ?provider=)."""
+        if self.search or request.POST.get("action") != "refresh":
+            return redirect("studio:provider_keys")
+        only = request.POST.get("provider") or None
+        results = remote_models.sync_all([only] if only else None)
+        labels = catalog.provider_labels()
+        done = [f"{labels.get(n, n)} {r}" for n, r in results.items() if isinstance(r, int)]
+        failed = [f"{labels.get(n, n)} ({r})" for n, r in results.items() if not isinstance(r, int)]
+        if done:
+            messages.success(request, "Model lists refreshed: " + ", ".join(done) + " models.")
+        if failed:
+            messages.error(request, "Couldn't list the models of " + "; ".join(failed) + ".")
+        if not results:
+            messages.info(request, "No provider with a key lists its models yet.")
+        return redirect("studio:provider_keys")
 
 
 class ProviderKeyView(KeysPage):
@@ -168,7 +250,10 @@ class ProviderKeyView(KeysPage):
             row.updated_by = request.user
             row.save()
             log(instance=row, action="ai.key_set", user=request.user, data={"changed": changed})
-        messages.success(request, f"Saved {' and '.join(changed)} for {row.label}. It's used from now on.")
+        note = sync_message(row.name, row.label) if form.cleaned_data.get("api_key") else ""
+        messages.success(
+            request, f"Saved {' and '.join(changed)} for {row.label}. It's used from now on.{note}"
+        )
         return redirect(home_for(row.name)[0])
 
 
@@ -265,8 +350,10 @@ class AddedProviderView(KeysPage):
                 data={"base_url": row.base_url, "key": row.api_key_hint or "none"},
             )
         verb = "Added" if old_url is None else "Saved"
+        listed = sync_message(row.name, row.label) if row.api_key_encrypted else ""
         messages.success(
-            request, f"{verb} {row.label}. Add its models below to offer them in the studio.{note}"
+            request,
+            f"{verb} {row.label}.{listed or ' Add its models below to offer them in the studio.'}{note}",
         )
         return redirect("studio:provider_keys")
 
@@ -301,7 +388,7 @@ class AddedModelView(KeysPage):
     possible for a model the list doesn't show."""
 
     template_name = "studio/provider_model_form.html"
-    page_title = "Add a model"
+    page_title = "Add models"
 
     def prepare(self, **kwargs):
         self.providers = {
@@ -328,13 +415,15 @@ class AddedModelView(KeysPage):
         ]
 
     def get_form(self):
-        added = set(AddedModel.objects.filter(provider=self.provider).values_list("model", flat=True))
+        rows = AddedModel.objects.filter(provider=self.provider).values_list("model", "hidden")
+        built_in = {item.model for item in catalog.CATALOG if item.provider == self.provider}
         return AddedModelForm(
             self.request.POST or None,
             initial={"provider": self.provider},
             provider_choices=self.provider_choices(),
             remote=self.remote,
-            added=added,
+            added={model for model, hidden in rows if not hidden} | built_in,
+            hidden={model for model, hidden in rows if hidden},
             default_status=catalog.usual_status(self.provider) if self.provider else "paid",
         )
 
@@ -356,13 +445,119 @@ class AddedModelView(KeysPage):
         form = self.get_form()
         if not form.is_valid():
             return self.render_to_response(self.get_context_data(form=form))
-        item = form.save()
-        log(instance=item, action="ai.model_added", user=request.user)
-        messages.success(request, f"Added {item.label}. It's offered in the model lists now.")
+        rows = form.save()
+        for row in rows:
+            log(instance=row, action="ai.model_added", user=request.user)
+        names = ", ".join(row.label for row in rows[:5]) + (
+            f" and {len(rows) - 5} more" if len(rows) > 5 else ""
+        )
+        messages.success(
+            request, f"Added {names}. {'They are' if len(rows) > 1 else 'It is'} in the model lists now."
+        )
         if request.POST.get("next") == "another":
             back = "&return_to=defaults" if self.return_to else ""
-            return redirect(f"{reverse('studio:provider_model_add')}?provider={item.provider}{back}")
+            return redirect(f"{reverse('studio:provider_model_add')}?provider={self.provider}{back}")
         return redirect("studio:task_defaults" if self.return_to else "studio:provider_keys")
+
+
+class ModelsManageView(KeysPage):
+    """Settings › AI providers › Manage models: rename, re-price, remove and restore models in bulk.
+
+    Removing a model added by hand deletes it; removing a listed one hides it, so the next sync of the
+    provider's list doesn't bring it back (Restore shows it again). The built-in catalog isn't edited here.
+    """
+
+    template_name = "studio/provider_models.html"
+    page_title = "Manage models"
+    LIMIT = 300
+
+    def prepare(self, **kwargs):
+        params = self.request.POST if self.request.method == "POST" else self.request.GET
+        self.provider = params.get("provider", "")
+        self.q = params.get("q", "").strip()
+        self.show_hidden = params.get("hidden") == "1"
+
+    def queryset(self):
+        rows = AddedModel.objects.filter(hidden=self.show_hidden)
+        if self.provider:
+            rows = rows.filter(provider=self.provider)
+        if self.q:
+            from django.db.models import Q
+
+            for word in self.q.split():
+                rows = rows.filter(
+                    Q(label__icontains=word) | Q(model__icontains=word) | Q(details__icontains=word)
+                )
+        return rows.order_by("provider", "label")
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        rows = self.queryset()
+        labels = catalog.provider_labels()
+        providers = sorted(set(AddedModel.objects.values_list("provider", flat=True)))
+        context.update(
+            rows=rows[: self.LIMIT],
+            total=rows.count(),
+            limit=self.LIMIT,
+            provider=self.provider,
+            q=self.q,
+            show_hidden=self.show_hidden,
+            providers=[(name, labels.get(name, name)) for name in providers],
+            labels=labels,
+            statuses=AddedModel.Status.choices,
+        )
+        return context
+
+    def post(self, request, *args, **kwargs):
+        action = request.POST.get("action")
+        picked = [int(pk) for pk in request.POST.getlist("pick") if pk.isdigit()]
+        from urllib.parse import urlencode
+
+        query = {"provider": self.provider, "q": self.q, **({"hidden": "1"} if self.show_hidden else {})}
+        back = f"{reverse('studio:provider_models')}?{urlencode(query)}"
+        if action == "save":
+            changed = self._save_edits(request)
+            messages.success(
+                request,
+                f"Saved {changed} change{'s' if changed != 1 else ''}." if changed else "Nothing changed.",
+            )
+        elif action in ("remove", "restore") and picked:
+            rows = AddedModel.objects.filter(pk__in=picked)
+            with transaction.atomic():
+                if action == "restore":
+                    count = rows.update(hidden=False)
+                    verb = "Restored"
+                else:
+                    manual = rows.filter(source=AddedModel.Source.MANUAL)
+                    count = manual.count() + rows.filter(source=AddedModel.Source.LISTED).update(hidden=True)
+                    for row in manual:
+                        log(instance=row, action="ai.model_removed", user=request.user)
+                    manual.delete()
+                    verb = "Removed"
+            catalog.clear_cache()
+            messages.success(request, f"{verb} {count} model{'s' if count != 1 else ''}.")
+        else:
+            messages.error(request, "Tick the models first.")
+        return redirect(back)
+
+    def _save_edits(self, request):
+        changed = 0
+        valid = set(AddedModel.Status.values)
+        rows = AddedModel.objects.filter(
+            pk__in=[int(pk) for pk in request.POST.getlist("row") if pk.isdigit()]
+        )
+        with transaction.atomic():
+            for row in rows:
+                label = " ".join(request.POST.get(f"label-{row.pk}", row.label).split())[:80] or row.label
+                status = request.POST.get(f"status-{row.pk}", row.status)
+                if status not in valid:
+                    status = row.status
+                if (label, status) != (row.label, row.status):
+                    row.label, row.status = label, status
+                    row.save(update_fields=["label", "status"])
+                    changed += 1
+        catalog.clear_cache()
+        return changed
 
 
 class DeleteModelView(ConfirmView):
