@@ -306,7 +306,7 @@ def check_outline(text, ctx):
             findings.append(
                 Finding(
                     "advise",
-                    "no H2 or H3 carries the primary keyword; the SOP wants it in one to three headings",
+                    "no H2 or H3 carries the primary keyword; fine if none reads naturally (flag, never force)",
                 )
             )
     if re.search(r"(?m)^#{1,3}\s+\S", _section_body(text, "Headings-Only Outline") or ""):
