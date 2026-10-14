@@ -8,7 +8,7 @@ from django.core.management import call_command
 from django.db import connection
 from django.urls import reverse
 
-from apps.ai import catalog, redact, secrets
+from apps.ai import catalog, redact, remote_models, secrets
 from apps.ai.models import AddedModel, ProviderConfig
 from apps.ai.providers import get_provider, get_providers
 from apps.ai.types import ProviderError
@@ -25,6 +25,17 @@ def secrets_key(monkeypatch):
     redact.clear_stored_cache()
     yield
     redact.clear_stored_cache()
+
+
+@pytest.fixture(autouse=True)
+def _no_model_listing(monkeypatch):
+    """The Add a model page asks the provider for its list; these tests type the id (the listing has its
+    own tests in test_remote_models.py) and never reach the network."""
+
+    def unavailable(spec, refresh=False):
+        raise remote_models.RemoteModelsError("not in these tests")
+
+    monkeypatch.setattr(remote_models, "list_models", unavailable)
 
 
 def _operator():

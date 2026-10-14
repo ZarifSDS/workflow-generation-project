@@ -1,0 +1,79 @@
+{% extends "wagtailadmin/generic/base.html" %}
+
+{% block main_content %}
+<div class="studio">
+    <form method="get" class="s-keys__form" id="provider-pick">
+        <div class="s-keys__field">
+            <label for="id_pick_provider">Provider</label>
+            <select id="id_pick_provider" name="provider">
+                {% for value, label in form.fields.provider.choices %}<option value="{{ value }}" {% if value == provider %}selected{% endif %}>{{ label }}</option>{% endfor %}
+            </select>
+            <p class="s-muted">Its models are read from the provider with your key. Add one under <a href="{% url 'studio:provider_keys' %}">AI providers</a> first if it isn't listed here.</p>
+        </div>
+        <noscript><div class="s-row-actions"><button class="button button-secondary" type="submit">Show its models</button></div></noscript>
+    </form>
+
+    {% if provider %}
+        <form method="post" class="s-keys__form" novalidate>{% csrf_token %}
+            <input type="hidden" name="provider" value="{{ provider }}">
+            {% if remote_error %}<div class="s-callout" role="alert">{{ remote_error }}</div>{% endif %}
+            {% if form.non_field_errors %}<div class="s-callout" role="alert">{{ form.non_field_errors|join:" " }}</div>{% endif %}
+            {% if remote_count %}
+                <div class="s-keys__field">
+                    <label for="model-filter">Find a model</label>
+                    <input type="search" id="model-filter" placeholder="Type to narrow the list, e.g. claude, free, vision" autocomplete="off" aria-controls="{{ form.listed.id_for_label }}">
+                    <p class="s-muted" id="model-count" aria-live="polite">{{ remote_count }} model{{ remote_count|pluralize }} from {{ provider_label }}. <a href="?provider={{ provider }}&amp;refresh=1">Refresh the list</a></p>
+                </div>
+            {% endif %}
+            {% for field in form %}
+                {% if field.name != "provider" %}
+                    {% if field.is_hidden %}{{ field }}{% else %}
+                    <div class="s-keys__field">
+                        <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                        {{ field }}
+                        {% if field.help_text %}<p class="s-muted">{{ field.help_text }}</p>{% endif %}
+                        {% for error in field.errors %}<p class="s-keys__error" role="alert">{{ error }}</p>{% endfor %}
+                    </div>
+                    {% endif %}
+                {% endif %}
+            {% endfor %}
+            <div class="s-row-actions">
+                <button class="button" type="submit">Add model</button>
+                <button class="button button-secondary" type="submit" name="next" value="another">Add and pick another</button>
+                <a class="button button-secondary" href="{% url 'studio:provider_keys' %}">Cancel</a>
+            </div>
+        </form>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+    {{ block.super }}
+    <script>
+    (function () {
+        // Choosing a provider loads its models.
+        var pick = document.getElementById("id_pick_provider");
+        if (pick) pick.addEventListener("change", function () { if (pick.value) document.getElementById("provider-pick").submit(); });
+        // The filter narrows the dropdown as you type (every word must match the option text).
+        var filter = document.getElementById("model-filter"), select = document.getElementById("{{ form.listed.id_for_label }}");
+        var count = document.getElementById("model-count");
+        if (!filter || !select) return;
+        var total = select.querySelectorAll("option[value]:not([value=''])").length;
+        filter.addEventListener("input", function () {
+            var words = filter.value.toLowerCase().split(/\s+/).filter(Boolean), shown = 0;
+            select.querySelectorAll("option").forEach(function (option) {
+                if (!option.value) return;
+                var text = option.textContent.toLowerCase();
+                var match = words.every(function (w) { return text.indexOf(w) !== -1; });
+                option.hidden = !match;
+                option.disabled = !match;
+                if (match) shown += 1;
+            });
+            select.querySelectorAll("optgroup").forEach(function (group) {
+                group.hidden = !group.querySelector("option:not([hidden])");
+            });
+            count.firstChild.textContent = (words.length ? shown + " of " + total : total) + " models match. ";
+        });
+    })();
+    </script>
+{% endblock %}

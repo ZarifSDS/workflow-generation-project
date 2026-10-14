@@ -103,19 +103,77 @@ class AddedProviderForm(forms.ModelForm):
 
 
 class AddedModelForm(forms.ModelForm):
+    """Add a model to a provider: pick it from the provider's own list (apps.ai.remote_models) or type its
+    id. The name and the free/paid status come from the list when left empty."""
+
+    listed = forms.ChoiceField(label="Model", required=False)
+
     class Meta:
         model = AddedModel
         fields = ["provider", "model", "label", "status", "typical_seconds"]
-        labels = {"model": "Model id", "label": "Name shown in the studio"}
+        labels = {"model": "Or type a model id", "label": "Name shown in the studio"}
+        help_texts = {
+            "model": "Only for a model the list doesn't show, exactly as the provider spells it.",
+            "label": "Empty: the provider's name for it.",
+        }
 
-    def __init__(self, *args, provider_choices=(), **kwargs):
+    def __init__(self, *args, provider_choices=(), remote=(), added=(), default_status="paid", **kwargs):
         super().__init__(*args, **kwargs)
+        self.remote = {model.id: model for model in remote}
+        self.default_status = default_status
         self.fields["provider"] = forms.ChoiceField(label="Provider", choices=provider_choices)
+        self.fields["model"].required = False
+        self.fields["label"].required = False
+        self.fields["status"] = forms.ChoiceField(
+            label="Free or paid",
+            required=False,
+            choices=[
+                (
+                    "",
+                    f"From the provider's pricing ({AddedModel.Status(default_status).label.lower()} when it "
+                    "doesn't say)",
+                )
+            ]
+            + list(AddedModel.Status.choices),
+        )
+        groups = {"Free": [], "Paid": [], "Price not listed": []}
+        for model in remote:
+            group = {"free": "Free", "paid": "Paid"}.get(model.status, "Price not listed")
+            label = model.option_label + (" · already added" if model.id in added else "")
+            groups[group].append((model.id, label))
+        self.fields["listed"].choices = [("", "Choose a model")] + [
+            (name, options) for name, options in groups.items() if options
+        ]
+        if not remote:
+            self.fields["listed"].widget = forms.HiddenInput()
+            self.fields["model"].label = "Model id"
+            self.fields["model"].help_text = "Exactly as the provider lists it."
 
     def clean_model(self):
-        model = self.cleaned_data["model"].strip()
-        if not model or any(char.isspace() for char in model):
+        model = (self.cleaned_data.get("model") or "").strip()
+        if any(char.isspace() for char in model):
             raise forms.ValidationError(
                 "Enter the model id exactly as the provider lists it, without spaces."
             )
         return model
+
+    def clean(self):
+        data = super().clean()
+        typed, picked = data.get("model") or "", data.get("listed") or ""
+        if typed and picked and typed != picked:
+            raise forms.ValidationError("Pick a model from the list or type one, not both.")
+        model_id = typed or picked
+        if not model_id:
+            raise forms.ValidationError("Pick a model from the list, or type its id.")
+        listed = self.remote.get(model_id)
+        data["model"] = self.instance.model = model_id
+        data["label"] = (data.get("label") or "").strip() or (
+            (listed.name or listed.id) if listed else model_id
+        )
+        data["label"] = data["label"][:80]
+        data["status"] = data.get("status") or (
+            listed.status if listed and listed.status else self.default_status
+        )
+        if AddedModel.objects.filter(provider=data.get("provider"), model=model_id).exists():
+            raise forms.ValidationError(f"{model_id} is already added for this provider.")
+        return data

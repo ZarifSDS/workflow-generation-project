@@ -114,6 +114,8 @@ The editor bundle is built three ways: the Dockerfile's `frontend` stage (images
 
 `apps/ai/secrets.py` (Fernet under `STUDIO_SECRETS_KEY`), `apps/ai/models.py` (`ProviderConfig`, `AddedModel`), `apps/ai/providers.py` (stored key over `.env`), `apps/ai/catalog.py` (`all_models()` merges added models; use it, not `CATALOG`, wherever models are listed), views in `apps/studio/views/provider_keys.py`. Registry tests need the database (`pytestmark = pytest.mark.django_db`).
 
+**Add a model** (Settings › AI providers › Add a model) lists the provider's own models: `apps/ai/remote_models.py` reads `GET {base_url}/models` for OpenAI-compatible providers (OpenRouter adds names, context, prices and image input; Gemini's `models/` prefix is dropped) and `/api/tags` for local Ollama, with the stored key sent only to that provider's address, cached ten minutes per provider (`?refresh=1` reloads). The dropdown groups Free / Paid / Price not listed, has a type-to-filter box and marks models already added; an empty name takes the provider's, and an empty status takes the listed price, else the provider's usual status in the built-in catalog (`catalog.usual_status`: Groq, Gemini and Ollama Cloud report no prices). Typing an id still works, and is all that's offered when the list can't be read. Tests: `tests/test_remote_models.py` (respx); `tests/test_provider_keys.py` stubs the listing.
+
 ### Change the article page
 
 Blocks live in `apps/content/models.py` (`ARTICLE_BLOCKS`); the Markdown conversion that fills them is `apps/content/markup.py::to_stream`. Change both together, run `makemigrations`, and update `tests/test_publish.py`.

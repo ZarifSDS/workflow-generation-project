@@ -196,6 +196,15 @@ def all_models():
     return [m for m in CATALOG if m.key not in replaced] + added
 
 
+def usual_status(provider):
+    """The status most of a provider's built-in models have (free-tier providers such as Groq report no
+    prices), for a newly added model whose price the provider doesn't list; "paid" when none is built in."""
+    from collections import Counter
+
+    statuses = Counter(m.status for m in CATALOG if m.provider == provider and m.status != "unavailable")
+    return statuses.most_common(1)[0][0] if statuses else "paid"
+
+
 def provider_labels():
     _, labels = _added()
     return {**labels, **PROVIDER_LABELS}

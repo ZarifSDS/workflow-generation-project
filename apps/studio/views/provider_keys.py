@@ -16,7 +16,7 @@ from django.utils.decorators import method_decorator
 from django.views.decorators.cache import never_cache
 from wagtail.log_actions import log
 
-from apps.ai import catalog, secrets
+from apps.ai import catalog, remote_models, secrets
 from apps.ai.forms import AddedModelForm, AddedProviderForm, KeyForm
 from apps.ai.models import AddedModel, ProviderConfig
 from apps.ai.providers import get_providers
@@ -297,25 +297,54 @@ class DeleteProviderView(ConfirmView):
 
 
 class AddedModelView(KeysPage):
-    template_name = "studio/provider_key_form.html"
+    """Pick the provider, then one of the models it lists (apps.ai.remote_models); typing an id stays
+    possible for a model the list doesn't show."""
+
+    template_name = "studio/provider_model_form.html"
     page_title = "Add a model"
 
+    def prepare(self, **kwargs):
+        self.providers = {
+            name: spec for name, spec in get_providers().items() if spec.adapter in TEXT_ADAPTERS
+        }
+        chosen = self.request.POST.get("provider") or self.request.GET.get("provider", "")
+        self.provider = chosen if chosen in self.providers else ""
+        self.remote, self.remote_error = [], ""
+        if self.provider:
+            try:
+                self.remote = remote_models.list_models(
+                    self.providers[self.provider], refresh=self.request.GET.get("refresh") == "1"
+                )
+            except remote_models.RemoteModelsError as error:
+                self.remote_error = f"Couldn't list its models: {error}. Type the model id instead."
+
     def provider_choices(self):
-        return [
-            (name, self.label_for(name, spec))
-            for name, spec in get_providers().items()
-            if spec.adapter in TEXT_ADAPTERS
+        return [("", "Choose a provider")] + [
+            (name, self.label_for(name, spec)) for name, spec in self.providers.items()
         ]
 
     def get_form(self):
-        initial = {"provider": self.request.GET.get("provider", "")}
+        added = set(AddedModel.objects.filter(provider=self.provider).values_list("model", flat=True))
         return AddedModelForm(
-            self.request.POST or None, initial=initial, provider_choices=self.provider_choices()
+            self.request.POST or None,
+            initial={"provider": self.provider},
+            provider_choices=self.provider_choices(),
+            remote=self.remote,
+            added=added,
+            default_status=catalog.usual_status(self.provider) if self.provider else "paid",
         )
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context.update(form=kwargs.get("form") or self.get_form(), adding=True, model_form=True)
+        context.update(
+            form=kwargs.get("form") or self.get_form(),
+            provider=self.provider,
+            provider_label=self.label_for(self.provider, self.providers.get(self.provider))
+            if self.provider
+            else "",
+            remote_count=len(self.remote),
+            remote_error=self.remote_error,
+        )
         return context
 
     def post(self, request, *args, **kwargs):
@@ -325,6 +354,8 @@ class AddedModelView(KeysPage):
         item = form.save()
         log(instance=item, action="ai.model_added", user=request.user)
         messages.success(request, f"Added {item.label}. It's offered in the model lists now.")
+        if request.POST.get("next") == "another":
+            return redirect(f"{reverse('studio:provider_model_add')}?provider={item.provider}")
         return redirect("studio:provider_keys")
 
 
