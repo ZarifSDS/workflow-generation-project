@@ -15,7 +15,9 @@ from apps.studio import keyword_data, serp
 
 pytestmark = pytest.mark.django_db
 
-SEMRUSH_KEY = "semrush-test-key-0123456789"
+# Made-up keys, built at run time so the secret scan (gitleaks) doesn't read them as real ones.
+SEMRUSH_KEY = "-".join(["semrush", "fake", "key", "for", "tests"])
+AHREFS_KEY = "-".join(["ahrefs", "fake", "key", "for", "tests"])
 
 
 @pytest.fixture(autouse=True)
@@ -178,13 +180,13 @@ def test_platforms_are_added_edited_and_removed(admin_client):
             "platform": "other",
             "order": "40",
             "enabled": "on",
-            "api_key": "ahrefs-test-key-123456",
+            "api_key": AHREFS_KEY,
         },  # fmt: skip
     )
     assert response.status_code == 302
     ahrefs = KeywordSource.objects.get(name="ahrefs")
-    assert ahrefs.api_key_hint.endswith("3456") and not ahrefs.ready
-    assert secrets.decrypt(ahrefs.api_key_encrypted) == "ahrefs-test-key-123456"
+    assert ahrefs.api_key_hint.endswith(AHREFS_KEY[-4:]) and not ahrefs.ready
+    assert secrets.decrypt(ahrefs.api_key_encrypted) == AHREFS_KEY
     # DataForSEO needs its login with the password.
     form = admin_client.post(
         reverse("studio:keyword_source_edit", args=["dataforseo"]),

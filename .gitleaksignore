@@ -1,3 +1,6 @@
 # Findings reviewed and accepted (gitleaks fingerprints). Only add made-up test values here, never real keys.
 # A fake API key in tests/test_security.py, replaced in the next commit.
 40d5ce6527c9440bacfeccfbed571317480cf90f:tests/test_security.py:generic-api-key:13
+# Two made-up keyword-platform keys in tests/test_keyword_data.py, built at run time from the next commit on.
+4720a1ce3148be0fc60a610df46cffe8a300efb9:tests/test_keyword_data.py:generic-api-key:18
+4720a1ce3148be0fc60a610df46cffe8a300efb9:tests/test_keyword_data.py:generic-api-key:181
