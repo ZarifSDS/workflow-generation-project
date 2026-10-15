@@ -57,6 +57,86 @@ def _checks(version, brief):
     }
 
 
+PHASES = {
+    "search_results": "Plan",
+    "site_crawl": "Plan",
+    "research": "Plan",
+    "outline": "Plan",
+    "draft": "Write",
+    "review_edit": "Write",
+    "cleanup": "Write",
+    "localise": "Write",
+    "hero_image": "Finish",
+    "publish": "Finish",
+}
+
+
+def timeline(steps, current):
+    """The step list grouped as Plan, Write and Finish, and "Step x of n" among the steps that run."""
+    groups = []
+    for s in steps:
+        phase = PHASES.get(s.key, "Finish")
+        if not groups or groups[-1][0] != phase:
+            groups.append((phase, []))
+        groups[-1][1].append(s)
+    active = [s for s in steps if s.status != StepRun.Status.SKIPPED]
+    number = next((i for i, s in enumerate(active, 1) if current and s.pk == current.pk), None)
+    return {"phases": groups, "step_number": number, "step_count": len(active)}
+
+
+def guide(run, step, ctx):
+    """The one plain sentence on what to do next (docs/pricing-and-ux-plan.md, W2), and what Approve
+    does. None where the page already says it (running, queued, failed, rejected, someone else's step)."""
+    if step is None or run.status == GenerationRun.Status.REJECTED:
+        return None
+    steps = list(ctx["steps"])
+    later = [s for s in steps if s.order > step.order and s.status != StepRun.Status.SKIPPED]
+    following = later[0] if later else None
+    then = f"start {following.label.lower()}" if following else "finish the run"
+    if step.status == StepRun.Status.READY and ctx.get("can_review"):
+        parts, warn = [], False
+        sop = ctx.get("sop") or {}
+        if sop and not sop.get("passed"):
+            parts.append("The SOP self-review held it for you: its findings are further down this page.")
+            warn = True
+        questions = ctx.get("requester_questions") or []
+        if questions:
+            parts.append(
+                f"Check the {len(questions)} question{'s' if len(questions) != 1 else ''} under the text: "
+                "the outline and the draft use your answers."
+            )
+        markers = ctx.get("markers") or []
+        if markers:
+            parts.append(
+                f"{len(markers)} marker{'s' if len(markers) != 1 else ''} ([VERIFY], [SRC:], [VISUAL:]) "
+                "must be resolved before it can be published."
+            )
+            warn = True
+        action = f"Read it, then approve to {then}."
+        if step.key == "publish":
+            action = "Check the page, then approve to finish the run."
+        return {
+            "tone": "warning" if warn else "info",
+            "lead": f"{step.label} is ready for you.",
+            "parts": parts,
+            "action": action,
+            "approve": f"Approve and {then}",
+            "metadata": step.key in ("cleanup", "publish") and ctx.get("has_metadata"),
+        }
+    if step.status == StepRun.Status.APPROVED:
+        if following is None or run.status == GenerationRun.Status.DONE:
+            return {"tone": "info", "lead": "This run is finished.", "parts": [], "action": ""}
+        return {
+            "tone": "info",
+            "lead": f"{step.label} is approved.",
+            "parts": [],
+            "action": f"Next: {following.label} ({following.get_status_display().lower()}).",
+            "next_url": f"?step={following.key}",
+            "next_label": following.label,
+        }
+    return None
+
+
 def observed_durations(step_key, limit=300):
     """{"provider::model": {"seconds", "runs"}}: the median time each model took for this step in past runs
     (the step's own `duration_seconds`, SOP rounds included), for the model lists. The catalog's typical
@@ -231,6 +311,9 @@ class RunWorkspaceView(StudioPage):
                 markers=markers,
                 has_sources=any(m["kind"] == "SRC" for m in markers),
             )
+        context.update(timeline(context["steps"], step))
+        context["guide"] = guide(self.run, step, context)
+        context["chat_busy"] = any(m.is_open for m in context["chat"])
         return context
 
     def post(self, request, *args, **kwargs):

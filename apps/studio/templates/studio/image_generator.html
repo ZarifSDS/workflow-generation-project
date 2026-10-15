@@ -3,11 +3,11 @@
 {% block main_content %}
 <div class="studio">
     <p class="s-muted">Images without a brief. Every photo goes through the same vision check as the hero step (readable text, safety, alt text). The image model makes photographs only: charts and diagrams are made in a design tool.</p>
-    {% if not generation_connected %}<div class="s-callout" role="status">Generation isn't connected in this environment, so new images stay queued.</div>{% endif %}
+    {% if not generation_connected %}<div class="s-callout s-callout--warning" role="status">Generation isn't connected in this environment, so new images stay queued.</div>{% endif %}
 
-    <nav class="s-row-actions" aria-label="How to start">
-        <a class="button {% if tab != 'article' %}button-secondary{% endif %}" href="{% url 'studio:images' %}" {% if tab == 'article' %}aria-current="page"{% endif %}>For an existing article</a>
-        <a class="button {% if tab != 'single' %}button-secondary{% endif %}" href="{% url 'studio:images' %}?tab=single" {% if tab == 'single' %}aria-current="page"{% endif %}>From a description or photo</a>
+    <nav class="s-segmented" aria-label="How to start">
+        <a href="{% url 'studio:images' %}" {% if tab == 'article' %}aria-current="page"{% endif %}>For an existing article</a>
+        <a href="{% url 'studio:images' %}?tab=single" {% if tab == 'single' %}aria-current="page"{% endif %}>From a description or photo</a>
     </nav>
 
     {% if can_write and tab == "article" %}

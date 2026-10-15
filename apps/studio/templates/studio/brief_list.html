@@ -25,9 +25,9 @@
                         <td>{{ brief.get_content_type_display }}</td>
                         <td>{{ brief.region }}</td>
                         <td>{% with last=brief.runs.first %}{% if last %}<a href="{% url 'studio:run' last.pk %}">{{ brief.runs.count }}</a>{% else %}0{% endif %}{% endwith %}</td>
-                        <td class="s-mono">{{ brief.updated_at|date:"j M Y" }}</td>
+                        <td class="s-num">{{ brief.updated_at|date:"j M Y" }}</td>
                         <td>
-                            {% if can_write %}<form method="post" class="s-cluster">{% csrf_token %}<input type="hidden" name="brief" value="{{ brief.pk }}"><button class="button button-small button-secondary" type="submit" name="mode" value="steps">Start run</button><button class="button button-small button-secondary" type="submit" name="mode" value="autopilot" title="Every step self-reviews against the SOP; the run stops only where a step can't pass or a marker needs you">Autopilot</button></form>{% endif %}
+                            {% if can_write %}<div class="s-cluster"><a class="button button-small button-secondary" href="{% url 'studio:brief_edit' brief.pk %}?start=1#start">Start run…</a><a class="button button-small button-secondary" href="{% url 'studio:brief_edit' brief.pk %}?mode=autopilot&amp;start=1#start" title="Opens the brief with Autopilot chosen: check the time and cost, then start">Autopilot…</a></div>{% endif %}
                         </td>
                     </tr>
                 {% endfor %}

@@ -2,20 +2,8 @@
 {% load static studio_tags %}
 
 {% block main_content %}
-{# A form of its own, so Enter in the brief's fields never triggers it. #}
-<form method="post" class="studio">
-    {% csrf_token %}
-    <details class="s-disclosure s-stack--bottom"{% if sheet_row %} open{% endif %}>
-        <summary>Guest post from the brief sheet: paste a row</summary>
-        <div class="s-stack--top">
-            <label for="sheet_row">Copy the article's row from the Guest Post Plan sheet (with the header row above it if you like) and paste it here. It fills the guest-post fields; check them before you start.</label>
-            <textarea id="sheet_row" name="sheet_row" rows="3" spellcheck="false">{{ sheet_row }}</textarea>
-            <div class="s-row-actions s-stack--top">
-                <button class="button button-secondary" type="submit" name="action" value="fill_from_row">Fill the brief from this row</button>
-            </div>
-        </div>
-    </details>
-</form>
+{# The sheet paste has a form of its own (its fields sit in the wizard via form=), so Enter in the brief's fields never triggers it. #}
+<form method="post" id="sheet-row-form">{% csrf_token %}</form>
 
 <form method="post" class="studio" novalidate data-studio-wizard>
     {% csrf_token %}
@@ -23,45 +11,64 @@
     {{ audience_profiles|json_script:"studio-audiences" }}
 
     <fieldset class="s-step">
-        <legend><span class="s-step-num" aria-hidden="true">1</span>Content type</legend>
+        <legend><span class="s-step-num" aria-hidden="true">1</span>What are you writing?</legend>
         <div class="s-types" role="radiogroup" aria-label="Content type">
             {% for choice in form.content_type %}
                 <label class="s-type">{{ choice.tag }}<b>{{ choice.choice_label }}</b><span class="s-muted">{{ type_help|get_item:choice.data.value }}</span></label>
             {% endfor %}
         </div>
         {% if form.content_type.errors %}<p class="error-message">{{ form.content_type.errors|join:" " }}</p>{% endif %}
+        <details class="s-disclosure" data-types="outbound"{% if sheet_row %} open{% endif %}>
+            <summary>Fill it from the guest-post sheet: paste a row</summary>
+            <div class="s-stack--top">
+                <label for="sheet_row">Copy the article's row from the Guest Post Plan sheet (with the header row above it if you like) and paste it here. It fills the guest-post fields; check them before you start.</label>
+                <textarea id="sheet_row" name="sheet_row" rows="3" spellcheck="false" form="sheet-row-form">{{ sheet_row }}</textarea>
+                <div class="s-row-actions s-stack--top">
+                    <button class="button button-secondary" type="submit" name="action" value="fill_from_row" form="sheet-row-form">Fill the brief from this row</button>
+                </div>
+            </div>
+        </details>
     </fieldset>
 
     <fieldset class="s-step">
-        <legend><span class="s-step-num" aria-hidden="true">2</span>Brief</legend>
+        <legend><span class="s-step-num" aria-hidden="true">2</span>How should it run?</legend>
+        <div class="s-types" role="radiogroup" aria-label="How the run proceeds">
+            <label class="s-type"><input type="radio" name="mode" value="steps"{% if not autopilot_mode %} checked{% endif %}><b>Review each step</b><span class="s-muted">Every step waits for you to read and approve it before the next one starts.</span></label>
+            <label class="s-type"><input type="radio" name="mode" value="autopilot"{% if autopilot_mode %} checked{% endif %}><b>Autopilot</b><span class="s-muted">Each step is checked against the house rules and revised until it passes. The run stops only where a step can't pass or a [VERIFY] claim needs you.</span></label>
+        </div>
+    </fieldset>
+
+    <fieldset class="s-step">
+        <legend><span class="s-step-num" aria-hidden="true">3</span>Brief</legend>
         {% include "wagtailadmin/shared/field.html" with field=form.preset %}
         <div class="s-form-grid">
             <div class="s-full">{% include "wagtailadmin/shared/field.html" with field=form.topic %}</div>
             {% include "wagtailadmin/shared/field.html" with field=form.pkeyword %}
             {% include "wagtailadmin/shared/field.html" with field=form.skeywords_text %}
-            {% include "wagtailadmin/shared/field.html" with field=form.audience %}
-            {% include "wagtailadmin/shared/field.html" with field=form.comprehension %}
-            {% include "wagtailadmin/shared/field.html" with field=form.wordcount %}
-            {% include "wagtailadmin/shared/field.html" with field=form.fkgl %}
             {% include "wagtailadmin/shared/field.html" with field=form.region %}
-            <div data-types="seo_blog lead_magnet whitepaper">{% include "wagtailadmin/shared/field.html" with field=form.cta_style %}</div>
             <div data-types="outbound">{% include "wagtailadmin/shared/field.html" with field=form.site %}</div>
             <div data-types="outbound">{% include "wagtailadmin/shared/field.html" with field=form.site_domain %}</div>
             <div data-types="outbound">{% include "wagtailadmin/shared/field.html" with field=form.narrative_mode %}</div>
             <div data-types="outbound">{% include "wagtailadmin/shared/field.html" with field=form.source_reference %}</div>
             <div data-types="outbound" class="s-full">{% include "wagtailadmin/shared/field.html" with field=form.anchors_text %}</div>
-            <div data-types="seo_blog whitepaper">{% include "wagtailadmin/shared/field.html" with field=form.localise_to %}</div>
             <div class="s-full">{% include "wagtailadmin/shared/field.html" with field=form.notes %}</div>
         </div>
+        <details class="s-disclosure"{% if form.audience.errors or form.comprehension.errors or form.wordcount.errors or form.fkgl.errors or form.cta_style.errors or form.localise_to.errors %} open{% endif %}>
+            <summary>Reader and length <span class="s-muted s-normal">(the defaults suit most articles)</span></summary>
+            <div class="s-form-grid s-stack--top">
+                {% include "wagtailadmin/shared/field.html" with field=form.audience %}
+                {% include "wagtailadmin/shared/field.html" with field=form.comprehension %}
+                {% include "wagtailadmin/shared/field.html" with field=form.wordcount %}
+                {% include "wagtailadmin/shared/field.html" with field=form.fkgl %}
+                <div data-types="seo_blog lead_magnet whitepaper">{% include "wagtailadmin/shared/field.html" with field=form.cta_style %}</div>
+                <div data-types="seo_blog whitepaper">{% include "wagtailadmin/shared/field.html" with field=form.localise_to %}</div>
+            </div>
+        </details>
     </fieldset>
 
-    <fieldset class="s-step">
-        <legend><span class="s-step-num" aria-hidden="true">3</span>Pipeline</legend>
+    <details class="s-disclosure s-pipeline" data-pipeline>
+        <summary>Advanced: models and approvals <span class="s-muted s-normal" data-pipeline-summary>(the default models; Review each step waits after every step)</span></summary>
         {% if profiles_interim %}<p class="s-callout s-callout--info">Default models are interim until the model evaluation is scored. You can change any step.</p>{% endif %}
-        <div class="s-types s-stack--bottom" role="radiogroup" aria-label="How the run proceeds">
-            <label class="s-type"><input type="radio" name="mode" value="steps" checked><b>Review each step</b><span class="s-muted">Every step waits for your approval. The SOP self-review can still check any step you tick.</span></label>
-            <label class="s-type"><input type="radio" name="mode" value="autopilot"><b>Autopilot (one-shot)</b><span class="s-muted">Each step is checked against the SOP by the reviewer model and revised until it passes. The run stops only where a step can't pass or a [VERIFY] claim needs you.</span></label>
-        </div>
         <div class="s-table-wrap">
             <table class="s-table">
                 <thead><tr><th scope="col">Step</th><th scope="col">Model</th><th scope="col">SOP self-review</th><th scope="col">Wait for my approval</th></tr></thead>
@@ -94,24 +101,27 @@
                 </tbody>
             </table>
         </div>
-    </fieldset>
+    </details>
 
     <details class="s-disclosure">
         <summary>Save these settings as a preset</summary>
         <div class="s-row-actions s-stack--top">
             <label for="preset_name" class="w-sr-only">Preset name</label>
-            <input type="text" id="preset_name" name="preset_name" placeholder="e.g. SDS Manager blog · US · FKGL 9">
+            <input type="text" id="preset_name" name="preset_name" placeholder="e.g. SDS Manager blog · US · grade 9">
             <button class="button button-secondary" type="submit" name="action" value="save_preset">Save as preset</button>
         </div>
     </details>
 
-    <div class="s-sticky-actions">
+    <div class="s-sticky-actions" id="start">
         <p class="s-m0 s-small s-run-estimate" data-run-estimate aria-live="polite">{% if run_estimate %}{{ run_estimate }}{% endif %}</p>
-        {% if brief %}
+        {% if brief and start_intent %}
+            <button class="button" type="submit" name="action" value="start" data-controller="w-progress" data-action="w-progress#activate" data-w-progress-active-value="Starting…">Start a new run</button>
+            <button class="button button-secondary" type="submit" name="action" value="save">Save brief only</button>
+        {% elif brief %}
             <button class="button" type="submit" name="action" value="save">Save brief</button>
             <button class="button button-secondary" type="submit" name="action" value="start">Save and start a new run</button>
         {% else %}
-            <button class="button" type="submit" name="action" value="start">Start run</button>
+            <button class="button" type="submit" name="action" value="start" data-controller="w-progress" data-action="w-progress#activate" data-w-progress-active-value="Starting…">Start run</button>
             <button class="button button-secondary" type="submit" name="action" value="save">Save brief only</button>
         {% endif %}
         <span class="s-spacer"></span>

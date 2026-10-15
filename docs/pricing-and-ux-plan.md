@@ -140,4 +140,47 @@ Wagtail headers and breadcrumbs, button classes, form fields, the messages frame
 | 8 | Visual fixes above | S-M |
 | 9 | Grouped step list; Title and meta in the flow (W8) | M |
 
+### Built (2026-10-15)
+
+1. **Run screen order.** The page now reads, top to bottom:
+   - the next-step banner;
+   - the text, with the editor under it;
+   - Questions for you, then Before publishing (the markers), then the version notes;
+   - Approve and Reject;
+   - **Change this**;
+   - Reading grade;
+   - the outline downloads and exports;
+   - the folded SOP log (open when the step was held) and the folded review sequence.
+2. **Next-step banner** in a Wagtail `help_block` (`views/runs.py` `guide`): what is ready, the SOP hold, the open questions and the markers that block publishing, plus a link to Title and meta at Final cleanup and Publish. An approved step links to the next one. Approve says what follows: "Approve and start review and edit".
+3. **Change this**:
+   - *Edit it yourself* opens the editor under the text.
+   - *Ask for specific changes* is the suggestions chat. "Apply as new version" also replaces the old "targeted edits"; the server action still exists.
+   - *Write it again* takes your feedback and a model, and carries the hero's `Headline:` and `Size:` hints.
+   - The side panel's model picker now shows only before a step runs or after it fails.
+   - Approve is the only primary button on the page; Tune is secondary.
+4. **New-brief form**, in this order: what you're writing, then how it should run, then the brief (topic, keywords, region, the guest-post fields, notes).
+   - "Reader and length" is folded, and opens when one of its fields has an error.
+   - "Advanced: models and approvals" is folded, with a live one-line summary: steps, models, and where the run waits.
+   - The sheet paste shows only for guest posts. It is linked to its own form through `form=`, so Enter in the brief's fields never triggers it.
+5. **No one-click runs.** The briefs list's *Start run…* and *Autopilot…* open the brief with the mode chosen, the estimate showing and "Start a new run" as the primary button. The server's quick start remains.
+6. **Plain labels:**
+   - reading grade (not FKGL) in the run header and on the dashboard;
+   - AI-writing score, AI-writing patterns found, punctuation and spacing to fix, banned phrases, text about the text;
+   - "syllables a word";
+   - the dashboard's "(M4)" note is replaced, and the broken "What the SOP checks" link is gone.
+7. **No reload over typing.** While a text box has unsaved text, or the editor is open, the page shows "This run has moved on… Reload to see it" instead of reloading.
+8. **Visual fixes:**
+   - critical and warning callouts;
+   - tabular figures in place of monospace for numbers;
+   - text at 68ch and help text at 70ch;
+   - `.s-stack--bottom` defined, and SOP lists on `.s-plain-list`;
+   - the Image generator's tabs as a segmented control;
+   - Wagtail `w-progress` on Start run and Refresh model lists;
+   - hover on list rows.
+9. **Step list** grouped as Plan · Write · Finish, with "step x of n" by the step title. Model names moved to the tooltip.
+
+**Not done from this list (small, no visible change):** moving the six inline scripts into `studio.js`, and `<dl>`/`<meter>` markup for the side-panel rows. **Not verified yet:** the styled look in a real browser. Checks so far were HTML tests and unstyled snapshots; the estimate and summary scripts also ran in happy-dom.
+
+Tests: `tests/test_run_screen_ux.py` (8).
+
 S is under half a day; M is half a day to a day. Each item ships with tests (HTML assertions, plus a check of the script-built UI in the browser pane) and keeps the existing suite green.

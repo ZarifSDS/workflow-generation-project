@@ -74,6 +74,7 @@
     defaultGates.forEach((wasChecked, box) => { box.checked = autopilot ? false : wasChecked; });
   }
   modeInputs.forEach((input) => input.addEventListener("change", applyMode));
+  if (form.querySelector('input[name="mode"][value="autopilot"]:checked')) applyMode();  // opened as Autopilot
 
   // Run estimate next to Start run: time, money and context, from the chosen models (apps/studio/estimates.py
   // works it out the same way). Prices are what this key is billed per million tokens: free-tier,
@@ -119,8 +120,33 @@
   }
   form.addEventListener("change", estimate);
 
+  // One line under "Advanced: models and approvals": how many steps, which models, where the run stops.
+  const pipelineSummary = form.querySelector("[data-pipeline-summary]");
+  function summarisePipeline() {
+    if (!pipelineSummary) return;
+    const models = new Set(), stops = [];
+    let steps = 0;
+    form.querySelectorAll("tr[data-types]").forEach((row) => {
+      if (row.hidden) return;
+      const enabled = row.querySelector('input[name$="_enabled"]');
+      if (enabled && !enabled.checked) return;
+      steps += 1;
+      const select = row.querySelector("select[data-step-model]");
+      const option = select && select.options[select.selectedIndex];
+      if (option) models.add(option.textContent.split(" · ")[0].trim());
+      const gate = row.querySelector("[data-gate]");
+      if (gate && gate.checked) stops.push(row.querySelector("th").textContent.trim());
+    });
+    const parts = [`${steps} steps`];
+    if (models.size) parts.push([...models].join(", "));
+    parts.push(stops.length ? `waits for you after ${stops.join(", ")}` : "runs through without stopping");
+    pipelineSummary.textContent = `(${parts.join(" · ")})`;
+  }
+  form.addEventListener("change", summarisePipeline);
+
   typeInputs.forEach((input) => input.addEventListener("change", applyType));
   if (presetSelect) presetSelect.addEventListener("change", applyPreset);
   applyType();
   estimate();
+  summarisePipeline();
 })();

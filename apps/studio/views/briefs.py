@@ -57,6 +57,9 @@ class BriefWizardView(StudioPage):
         context.update(
             form=form,
             brief=self.brief,
+            # The briefs list opens a brief with ?mode=autopilot, so the estimate shows before a run starts.
+            autopilot_mode=(self.request.POST or self.request.GET).get("mode") == "autopilot",
+            start_intent=self.request.GET.get("start") == "1",  # opened to start a run: that's the primary
             rows=step_rows(content_type),
             presets=_preset_payload(),
             audience_profiles={

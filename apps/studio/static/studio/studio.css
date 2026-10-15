@@ -23,6 +23,8 @@
 .studio .s-spacer { flex: 1; }
 .studio .s-callout { border: 1px solid var(--s-line); border-left-width: 4px; border-radius: .4rem; padding: .75rem 1rem; }
 .studio .s-callout--info { border-left-color: var(--s-primary); }
+.studio .s-callout--warning { border-left-color: var(--w-color-warning-100, #b85c00); }
+.studio .s-callout--critical { border-left-color: var(--w-color-critical-200, var(--w-color-text-error, #cd4444)); }
 
 /* Status tags with text, never colour alone */
 /* Outlined tags tinted from their own colour, so they keep contrast in Wagtail's light and dark themes. */
@@ -71,13 +73,25 @@
 .studio .s-run-estimate { flex-basis: 100%; color: var(--s-muted); font-variant-numeric: tabular-nums; }
 .studio .s-run-estimate:empty { display: none; }
 .studio .s-run-estimate--warn { color: var(--w-color-text-error, var(--s-label)); }
+/* Run screen: the next-step banner, the "Change this" area and folded logs (docs/pricing-and-ux-plan.md) */
+.studio .s-guide .help-block { margin: 0; }
+.studio .s-guide .help-block p { max-width: 75ch; }
+.studio .s-change { gap: .75rem; }
+.studio .s-change__way { display: flex; flex-wrap: wrap; gap: .5rem 1rem; align-items: center; justify-content: space-between; }
+.studio details.s-fold > summary { cursor: pointer; list-style-position: outside; }
+.studio details.s-fold > summary > h3 { display: inline-flex; }
+.studio details.s-fold:not([open]) { gap: 0; }
 
 /* Run workspace */
 .studio .s-workspace { display: grid; grid-template-columns: 15rem minmax(0, 1fr) 18rem; border: 1px solid var(--s-line); border-radius: .5rem; min-height: 32rem; }
 @media (max-width: 75em) { .studio .s-workspace { grid-template-columns: 13rem minmax(0, 1fr); } .studio .s-panel { grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--s-line); } }
 @media (max-width: 50em) { .studio .s-workspace { grid-template-columns: minmax(0, 1fr); } .studio .s-timeline { border-right: 0; border-bottom: 1px solid var(--s-line); } }
 .studio .s-timeline { border-right: 1px solid var(--s-line); padding: .75rem .5rem; display: grid; gap: .15rem; align-content: start; list-style: none; margin: 0; }
+.studio .s-phase { font-size: .72rem; font-weight: 600; text-transform: none; letter-spacing: .02em; color: var(--s-muted); margin: .6rem .6rem .15rem; }
+.studio .s-phase:first-child { margin-top: 0; }
+.studio .s-phase__steps { list-style: none; margin: 0; padding: 0; display: grid; gap: .15rem; }
 .studio .s-tl { display: grid; grid-template-columns: 1rem minmax(0, 1fr); gap: .6rem; padding: .5rem .6rem; border-radius: .4rem; text-decoration: none; color: var(--s-label); }
+.studio .s-item:hover, .studio .s-opt:hover { background: var(--w-color-surface-menu-item-active, rgba(0,0,0,.05)); }
 .studio .s-tl:hover { background: var(--w-color-surface-menu-item-active, rgba(0,0,0,.05)); }
 .studio .s-tl[aria-current="step"] { background: color-mix(in srgb, var(--s-primary) 16%, transparent); outline: 1px solid var(--s-primary); }
 .studio .s-tl small { display: block; color: var(--s-muted); font-size: .75rem; }
@@ -88,7 +102,7 @@
 .studio .s-dot--neutral { border-style: dashed; border-color: var(--s-primary); }
 .studio .s-dot--muted { opacity: .4; }
 .studio .s-doc { padding: 1rem 1.25rem; min-width: 0; display: grid; gap: .75rem; align-content: start; }
-.studio .s-output { max-width: 75ch; line-height: 1.6; }
+.studio .s-output { max-width: 68ch; line-height: 1.6; }
 .studio .s-output h1 { font-size: 1.5rem; } .studio .s-output h2 { font-size: 1.2rem; margin-top: 1.4rem; } .studio .s-output h3 { font-size: 1.05rem; }
 .studio .s-output table { border-collapse: collapse; font-size: .85rem; display: block; overflow-x: auto; }
 .studio .s-output th, .studio .s-output td { border: 1px solid var(--s-line); padding: .3rem .5rem; text-align: start; }
@@ -161,6 +175,10 @@
 .studio .s-stack--md { gap: .75rem; }
 .studio .s-stack--lg { gap: 1.25rem; }
 .studio .s-stack--top { margin-top: .5rem; }
+.studio .s-stack--bottom { margin-bottom: .75rem; }
+.studio .s-plain-list { margin: .25rem 0 .5rem; padding-inline-start: 1.25rem; }
+/* Help text reads at a comfortable width */
+.studio p.s-muted { max-width: 70ch; }
 .studio .s-cluster { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
 .studio .s-full { flex: 1 1 100%; }
 .studio .s-block { display: block; }

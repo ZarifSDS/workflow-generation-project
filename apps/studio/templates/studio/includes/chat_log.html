@@ -1,0 +1,16 @@
+{% load studio_tags %}{% if chat %}
+<ol class="s-chat__log">
+    {% for m in chat %}
+        <li class="s-chat__msg s-chat__msg--{{ m.role }}{% if m.status == 'failed' %} s-chat__msg--failed{% endif %}">
+            <div class="s-muted s-small">{% if m.role == "user" %}{{ m.created_by.get_username|default:"You" }}{% else %}{% if m.model %}{% model_label m.provider m.model %}{% else %}Assistant{% endif %}{% endif %} · {{ m.created_at|date:"j M H:i" }}{% if m.action != "suggest" and m.role == "user" %} · {{ m.get_action_display }}{% endif %}{% if m.duration_seconds is not None %} · took {{ m.duration_seconds|took }}{% endif %}</div>
+            {% if m.is_open %}
+                <p class="s-m0" role="status">{% if m.status == "pending" %}Waiting for a worker{% else %}Working{% endif %} · <span class="s-mono" data-elapsed-since="{% if m.started_at %}{{ m.started_at|date:'c' }}{% else %}{{ m.created_at|date:'c' }}{% endif %}">0:00</span></p>
+            {% elif m.role == "assistant" %}
+                <div class="s-output">{{ m.content|render_markdown }}</div>
+            {% else %}
+                <p class="s-m0 s-chat__text">{{ m.content|linebreaksbr }}</p>
+            {% endif %}
+        </li>
+    {% endfor %}
+</ol>
+{% endif %}

@@ -22,7 +22,7 @@
             <div class="s-list">
                 {% for run in review %}{% with step=run.current_step %}
                     <div class="s-item">
-                        <div><div class="s-item__title">{{ run.brief.topic }}</div><div class="s-item__sub">{{ run.brief.get_content_type_display }} · {{ run.brief.region }} · FKGL {{ run.brief.fkgl }}</div></div>
+                        <div><div class="s-item__title">{{ run.brief.topic }}</div><div class="s-item__sub">{{ run.brief.get_content_type_display }} · {{ run.brief.region }} · reading grade {{ run.brief.fkgl }}</div></div>
                         <div><span class="s-tag s-tag--info">{{ step.label }} ready</span></div>
                         <div class="s-item__sub">{% model_label step.provider step.model %} · {{ run.updated_at|timesince }} ago</div>
                         <a class="button button-small" href="{% url 'studio:run' run.pk %}?step={{ step.key }}">Review</a>
@@ -42,7 +42,7 @@
                     <div class="s-item">
                         <div><div class="s-item__title">{{ run.brief.topic }}</div><div class="s-item__sub">{{ run.brief.get_content_type_display }} · {{ run.brief.region }}</div></div>
                         <div><span class="s-tag s-tag--{{ step.status|status_style }}">{{ step.label }}: {{ step.get_status_display }}</span></div>
-                        <div class="s-item__sub">{% model_label step.provider step.model %}{% if not generation_connected and step.status == "queued" %} · runs once generation is connected (M4){% endif %}</div>
+                        <div class="s-item__sub">{% model_label step.provider step.model %}{% if not generation_connected and step.status == "queued" %} · waiting: step execution is switched off in these settings{% endif %}</div>
                         <a class="button button-small button-secondary" href="{% url 'studio:run' run.pk %}">Open</a>
                     </div>
                 {% endwith %}{% endfor %}
