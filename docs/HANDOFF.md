@@ -1,8 +1,21 @@
-# Handoff: Content Workflow Studio (state on 2026-10-14 evening, GMT+6: SOP audit done, newcomer reader default, hero items closed, Image generator built)
+# Handoff: Content Workflow Studio (state on 2026-10-15, GMT+6: infographics built and wired in, model lists follow the keys, Luna is the default model)
 
-Read this first in a new session. Then `docs/sop-audit.md` ("Where the audit stands" and each phase's section) before touching `apps/studio/sop.py`, then `docs/development.md` (code map, how-tos, process), `docs/sop.md` (the SOP and the autopilot) and `docs/tools-and-processes.md`. Also see `docs/roadmap.md`, `docs/workflow.md`, `docs/ui-ux-plan.md`, `docs/security.md`, `docs/providers.md`, `docs/model-eval.md` and `AGENTS.md`.
+Read this first in a new session. Then `docs/sop-audit.md` ("Where the audit stands" and each phase's section) before touching `apps/studio/sop.py`, `docs/infographic-audit.md` before touching `apps/quality/infographic.py` or the image planner, then `docs/development.md` (code map, how-tos, process), `docs/sop.md` (the SOP and the autopilot) and `docs/tools-and-processes.md`. Also see `docs/roadmap.md`, `docs/workflow.md`, `docs/ui-ux-plan.md`, `docs/security.md`, `docs/providers.md`, `docs/model-eval.md` and `AGENTS.md`.
 
-## Fresh chat: start here (2026-10-14, late)
+## Fresh chat: start here (2026-10-15)
+
+**State:** everything is committed and pushed (last commit `0bb96f2`, CI green); share mode runs it (migrations up to studio 0015 and ai 0004 applied). Suite: 578 passed, 1 skipped. Working tree clean.
+
+**What exists now, in one breath:** the SOP-guided article pipeline (audit phases 0-8), the newcomer-reader default, the Image generator (photos: branded hero, unbranded lead image, in-article photo with the logo; and branded infographics from six templates, chosen per section by the article planner or made from a description, edited in a form with a live preview), model lists that follow the stored keys (515 listed models, Choose models / Manage models in bulk), and Luna latest (OpenRouter) as the default for every text task.
+
+**Next, in order:**
+1. **Demo-time live runs on the paid model** (Luna is already the default): one blog run and one guest-post run end to end; read each step's SOP panel and hold notes against `docs/sop.md`; run `manage.py sop_replay` and `tests/test_sop_fixtures.py` before and after any check change.
+2. **Infographics with the team:** open a plan page and an infographic job page in a real browser once (the form editor's styling was only checked on unstyled snapshots); try the planner on two or three more published articles. Possible next templates from the audit (they need an icon set or bespoke drawing): paired rows, rising tiers, broad-to-specific panels; then the September-style ones (branching flowchart, pyramid, timeline, cycle). A "Make this visual" action on `[VISUAL:]` markers in Final cleanup would connect infographics to runs.
+3. **Still open:** photo prompts' small deviations from the measured hero spec; a custom guest-post host's image size isn't measured by the crawl; the free planner model over-lists PPE (Luna should do better; check on the live run); sectional drafting; re-branding library images. Done since the last list: scan counts with what-to-do copy, measured durations in the model lists, one grade readout per step (UX audit item 4).
+
+**Owner's standing decisions (2026-10-14/15):** write for complete newcomers, audience-agnostic angles, no persona, but headings keep the query-matching question form; guest posts are only generated, never pushed anywhere; a stored key is the opt-in for every model it lists (paid included); infographics follow the October "style A" and Inter; model setup must be intuitive, not manual.
+
+## Sessions of 2026-10-14 and 2026-10-15 (newest first)
 
 **2026-10-15: branded infographic templates.** `docs/infographic-audit.md` (audit, the live October style, the confirmed templates) and `apps/quality/infographic.py`: six templates (`steps`, `decision`, `columns`, `part_to_whole`, `bars`, `form_anatomy`) drawn in code in the hero-derived house style, with checks (fit, legibility at 800 px, WCAG contrast on what was drawn, counts, sources, figures from the article, house style, logo, alt text). Inter Regular and SemiBold added beside Inter Bold (official 4.1 release, OFL; downloaded with the owner's approval). `manage.py render_infographic <kind> spec.json out/` or `--example`; tests in `tests/test_infographic.py`. Then wired in (migration 0015): the article planner chooses photo, infographic template or nothing per section and fills each spec from the article (checked at plan time, figures against the article); the Image generator has an "Infographic" kind (template plus a description the model writes the spec from, or a pasted spec), with redraw from edited JSON. Live: the UK safe-system-of-work article gave four passing infographics in 32 s. Details in `docs/infographic-audit.md` › Built. The content is edited in a form built from `infographic.EDITOR_SCHEMA` (`static/studio/infographic_editor.js`), with a server-side Preview that shows the image and its checks before a job is made; "Edit as JSON" stays for power users.
 
@@ -21,11 +34,6 @@ Read this first in a new session. Then `docs/sop-audit.md` ("Where the audit sta
 **State before that:** all eight SOP audit phases are committed and pushed (last audit commit `c86d9e0`, CI green). Suite: 502 passed, 1 skipped (the vendor drift test skips in containers, where `~/.claude/skills` is absent). Replay of runs 18-21 (latest versions): 44 → 22 blocking findings, all real defects. Fixture A (the owner's five approved articles) raises zero blocks; Fixture B catches all its planted defects. Share mode runs the latest image.
 
 **What the SOP is for (owner's framing):** an agent in the backend that guides the content workflow: it classifies each finding by level (strategic → hold, structural in an article → send the draft back once, line → revise, mechanical → script), not just a list of checks. The owner's `content-editing` skill (Ryan Law's *How to Edit*; `D:\ai-memory-vault\skills - zipped\sds-manager\SKILL.md`) is the model for those levels; the mapping is in `docs/sop-audit.md`.
-
-**Next, in order:**
-1. A live blog run and a live guest-post run on a **paid model** (owner's call at demo time; don't compare more free models). Read each step's SOP panel and the hold notes against `docs/sop.md`. Run `manage.py sop_replay` and `tests/test_sop_fixtures.py` before and after any check change.
-2. Try the Image generator live (an article plan on a published sdsmanager.com article, then make its images) and the newcomer default on the paid-model run. Open: photo prompts' small deviations from the measured hero spec; a custom guest-post host's image size isn't measured by the crawl (default 1200x630 or a `Size:` note).
-3. Still open from the earlier UX audit: one grade/checks panel per step, scan counts with what-to-do copy, send-back model list with durations; sectional drafting; re-branding library images.
 
 **For the owner, not code:** the published AU WHS risk-management article links a slug that 404s. Planned slugs are in public history from `ee24d43`; a history rewrite is the owner's call.
 
