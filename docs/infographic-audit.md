@@ -55,6 +55,17 @@ The October graphics were viewed one by one to confirm their layouts (earlier, s
 
 Seen in every confirmed style-A graphic: a "Source:" line where figures appear, a subtitle that says what the graphic shows, and the logo in a corner. The first build would cover the most repeatable ones: numbered steps, yes/no decision flow, two-column comparison, part-to-whole bar, horizontal bar chart and annotated form anatomy (all text, shapes and the palette, no bespoke drawings). Paired rows, rising tiers and broad-to-specific panels need icons or drawings, so they follow once an icon set is chosen.
 
+## Built (2026-10-15): the six templates
+
+`apps/quality/infographic.py` draws the six templates that need no bespoke drawing: `steps`, `decision`, `columns`, `part_to_whole`, `bars`, `form_anatomy`. Each takes a small spec (see `apps/quality/infographic_examples.py`, the October graphics' own content) and returns the SVG (text outlined in Inter Regular, SemiBold and Bold, so no font is needed to open it), a 1600 px PNG, a 1200 px WebP and alt text, with its checks:
+
+- blocks: counts and required fields per template, text that doesn't fit its box (reported, never cut), a title over two lines, a word wider than its box, a missing glyph, text under 12 px at 800 px, WCAG contrast below 4.5:1 (3:1 for large text) measured on every text run that was drawn, shares that don't add up to 100%, a chart without a source, figures not in the article (when the article is passed), the logo not installed;
+- advises: house style fixed in the text (dashes, quotes), alt text outside 10-125 characters, a WebP over 100 KB.
+
+One deviation from the live graphics, on purpose: the logo's periwinkle `#626DF9` gives white text only about 4.2:1, so boxes and headers that carry white text use a deeper periwinkle (`#4D55D6`); periwinkle text on white or lavender uses `#4A51C9`. Everything else follows style A. The horizontal bar chart uses periwinkle where the live one had drifted to navy and slate.
+
+`python manage.py render_infographic <kind> spec.json out/` (or `--example`) renders one from a JSON file. Not yet wired into the Image generator or the article planner; that is the next step (the planner's photo-or-infographic choice filling a spec from the article, then these checks).
+
 ## Recommendation
 
 Render infographics from templates, not with an image model. Image models still garble text (seen live on 2026-10-14) and drift off-brand; the house graphics are geometric, so a deterministic renderer reproduces them exactly, and every rule becomes a check. The model's job is the judgement and the content; the code's job is the drawing.
