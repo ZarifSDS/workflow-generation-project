@@ -33,6 +33,28 @@ The September graphics in more detail (the first two posts measured): a consiste
 | Types | Inverted pyramid (ranked tiers), process flow (5 boxes in a row), bar comparison, timeline, branching flowchart (navy trigger, amber action, outlined outcome, dashed "no step") |
 | Defects | Em dashes in captions and headings (house style bans them); alt text that is the file name; flowchart text about 11 px on a 1400 px canvas, about 5-6 px in the article column (unreadable on a phone) |
 
+## Templates, confirmed by viewing (2026-10-15)
+
+The October graphics were viewed one by one to confirm their layouts (earlier, some were classified from file names only). Two file-name guesses were wrong, and the comparison and chart groups each split into two.
+
+| Template | Layout | Live examples | Notes |
+|---|---|---|---|
+| Numbered steps in a row | Cards with periwinkle number circles, arrows between, optional dashed "start again" loop | SSoW 5 steps; September five-tier process | Hero devices: periwinkle title phrase, logo top-left, glow |
+| Yes/no decision flow | Question boxes down the left with yellow number badges; "Yes" arrows to periwinkle outcome boxes; "No" arrows down; fallback in a dashed box; optional yellow warning callout | When do you need a JSEA? | |
+| Two-column comparison | Two coloured column headers (periwinkle, yellow) with an uppercase title and subtitle; bullet lists with matching dots; grey note under | JSEA safety vs environmental impacts | The UK fire comparison is the same idea in off-palette navy and rust, with "OR" between stacked items |
+| Paired-rows comparison | Rows of left item, centre label (the workplace), right item; each item with a line icon; navy accent bars left, periwinkle right; column labels on top | Unsafe act vs unsafe condition by workplace | Needs an icon set; the icons are bespoke |
+| Rising tiers | Cards stepping up like stairs with risk; green, orange and red top borders and icons; label, example task, optional warning box; "risk increases" arrow under | SSoW verbal / written / permit | Adds a green-orange-red risk scale to the palette |
+| Broad-to-specific panels | Three panels joined by arrows (whole site grid, one activity, numbered job list) with a tag pill ("JSA = JHA") | JSA vs risk assessment scope | The middle panel is a bespoke line drawing; only the frame is templatable |
+| Part-to-whole bar | One 100% bar in periwinkle, light periwinkle and yellow segments, big percentages inside, labels under, bracket annotation, source line with year | FLHA 45 percent chart | |
+| Horizontal bar chart | Sorted bars with value labels and a 0-100% axis, top bar highlighted, subtitle on how to read it, source line | Contributing factors in construction accidents | Uses navy and slate rather than periwinkle (drift) |
+| Annotated form anatomy | A wireframe of the form (periwinkle header, numbered sections with yellow badges, placeholder lines, small widgets such as Before/After pills or L/M/H chips) with leader lines to numbered labels on the right | JSEA form parts; FLHA form parts | Identical layout in both posts, so it templates cleanly; text at 7-9 px at 800 px fails the legibility check |
+| Decision flow, branching | Several triggers, actions, a merge, outcomes | RIDDOR (September, style B) | |
+| Ranked pyramid or stack | Tiers from most to least effective | Hierarchy of controls (September) | |
+| Timeline | Dated milestones on a line, a separate-trigger panel | RIDDOR timescales (September) | |
+| Cycle | Steps around a loop, worked example in the centre | AU 4 steps of risk management | Style C, likely image-model made |
+
+Seen in every confirmed style-A graphic: a "Source:" line where figures appear, a subtitle that says what the graphic shows, and the logo in a corner. The first build would cover the most repeatable ones: numbered steps, yes/no decision flow, two-column comparison, part-to-whole bar, horizontal bar chart and annotated form anatomy (all text, shapes and the palette, no bespoke drawings). Paired rows, rising tiers and broad-to-specific panels need icons or drawings, so they follow once an icon set is chosen.
+
 ## Recommendation
 
 Render infographics from templates, not with an image model. Image models still garble text (seen live on 2026-10-14) and drift off-brand; the house graphics are geometric, so a deterministic renderer reproduces them exactly, and every rule becomes a check. The model's job is the judgement and the content; the code's job is the drawing.
@@ -52,4 +74,4 @@ Render infographics from templates, not with an image model. Image models still 
 
 1. **Palette**: the owner asked for the recent posts to be checked first (2026-10-15). Result: the October graphics converge on style A (periwinkle, lavender, logo yellow, near-black text, the hero's devices), so the recommendation changes from navy and amber to style A. Exact values to fix from the source files or the design tool before building: the lavender fill and border, the yellow (logo `#FFC93C` vs the measured `#F0C040`), the text black, and one logo position (top-left full logo, as on the newest ones, or small bottom-right).
 2. **Typeface**: Inter (owner, 2026-10-15). Inter Regular and SemiBold need adding next to the bundled Inter Bold (SIL OFL, a download from the Inter release; ask before downloading).
-3. **Scope**: audit only for now (owner, 2026-10-15). Nothing is built until the owner says so; the first build would be the templates for the three most frequent October types (numbered steps, decision flow, two-column comparison), the planner's photo-or-infographic choice and the checks.
+3. **Scope**: audit only for now (owner, 2026-10-15). Nothing is built until the owner says so; the first build would be the six templates that need no bespoke drawing (see "Templates, confirmed by viewing"), the planner's photo-or-infographic choice and the checks.
