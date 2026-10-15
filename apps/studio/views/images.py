@@ -8,10 +8,13 @@ from django.core.exceptions import PermissionDenied
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
+from django.views.decorators.http import require_POST
 from wagtail.images import get_image_model
 from wagtail.images import get_permission_policy as image_policy
 from wagtail.images.forms import get_image_form
 from wagtail.models import Collection
+
+from apps.quality import infographic
 
 from .. import imagegen, permissions
 from ..forms import ImageJobForm, ImagePlanForm
@@ -68,6 +71,7 @@ class ImageGeneratorView(StudioPage):
             form=form or ImageJobForm(initial=initial),
             plan_form=plan_form or ImagePlanForm(),
             plans=ImagePlan.objects.prefetch_related("jobs__image")[:RECENT],
+            infographic_schema=infographic.EDITOR_SCHEMA,
             jobs=ImageJob.objects.filter(plan__isnull=True).select_related("image")[:RECENT],
         )
         return context
@@ -169,6 +173,7 @@ class ImagePlanView(StudioPage):
         context.update(
             plan=self.plan,
             ideas=[_idea_view(idea) for idea in self.plan.ideas],
+            infographic_schema=infographic.EDITOR_SCHEMA,
             jobs=jobs,
             active=active,
             signature=signature,
@@ -296,6 +301,7 @@ class ImageJobView(StudioPage):
             corners=ImageJob.Corner.choices,
             spec_json=json.dumps(job.spec, indent=2, ensure_ascii=False) if job.spec else "",
             template_label=job.get_template_display() if job.template else "",
+            infographic_schema=infographic.EDITOR_SCHEMA,
         )
         return context
 
@@ -369,3 +375,35 @@ def image_job_download(request, pk, fmt):
     stem = job.metrics.get("file_stem") or f"image-{job.pk}"
     response["Content-Disposition"] = f'attachment; filename="{stem}.{extension}"'
     return response
+
+
+@require_POST
+def infographic_preview(request):
+    """Draw an infographic from the editor's content without making a job: the image and its checks."""
+    import base64
+
+    from apps.quality import infographic
+
+    if not request.user.has_perm(permissions.WRITING):
+        return JsonResponse({"error": "Your account can't make images."}, status=403)
+    try:
+        body = json.loads(request.body or b"{}")
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "The editor sent something unreadable; reload the page."}, status=400)
+    template, spec = body.get("template"), body.get("spec")
+    if template not in infographic.TEMPLATES:
+        return JsonResponse({"error": "Choose a template first."}, status=400)
+    if not isinstance(spec, dict) or not spec:
+        return JsonResponse({"error": "Fill in the content first."}, status=400)
+    article = None
+    if str(body.get("plan") or "").isdigit():
+        plan = ImagePlan.objects.filter(pk=body["plan"]).first()
+        article = plan.article_text if plan and plan.article_text else None
+    try:
+        result = infographic.render(template, spec, article=article)
+    except infographic.InfographicError as error:
+        return JsonResponse({"error": str(error)}, status=400)
+    image = f"data:image/webp;base64,{base64.b64encode(result.webp).decode()}" if result.webp else ""
+    return JsonResponse(
+        {"image": image, "alt": result.alt, "problems": result.problems, "blocked": result.blocked}
+    )

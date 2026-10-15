@@ -10,6 +10,7 @@ from .views.images import (
     image_job_download,
     image_job_status,
     image_plan_status,
+    infographic_preview,
 )
 from .views.metadata import MetadataView
 from .views.provider_keys import (
@@ -47,6 +48,7 @@ urlpatterns = [
     path("images/", ImageGeneratorView.as_view(), name="images"),
     path("images/<int:pk>/", ImageJobView.as_view(), name="image_job"),
     path("images/articles/<int:pk>/", ImagePlanView.as_view(), name="image_plan"),
+    path("images/infographic-preview/", infographic_preview, name="infographic_preview"),
     path("images/articles/<int:pk>/status/", image_plan_status, name="image_plan_status"),
     path("images/<int:pk>/status/", image_job_status, name="image_job_status"),
     path("images/<int:pk>/download/<slug:fmt>/", image_job_download, name="image_job_download"),

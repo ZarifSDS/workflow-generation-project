@@ -39,6 +39,7 @@
                     {% endif %}
                     {% if field.help_text %}<p class="s-muted">{{ field.help_text }}</p>{% endif %}
                     {% for error in field.errors %}<p class="s-keys__error" role="alert">{{ error }}</p>{% endfor %}
+                    {% if field.name == "spec_json" %}{% include "studio/includes/infographic_editor.html" with target=field.id_for_label select=form.template.id_for_label %}{% endif %}
                 </div>
             {% endfor %}
             <div class="s-row-actions"><button class="button" type="submit" name="action" value="single">Make the image</button></div>
@@ -92,5 +93,11 @@
             {% endif %}
         </section>
     {% endif %}
+    {{ infographic_schema|json_script:"infographic-schema" }}
 </div>
+{% endblock %}
+
+{% block extra_js %}
+    {{ block.super }}
+    {% load static %}<script src="{% static 'studio/infographic_editor.js' %}" defer></script>
 {% endblock %}

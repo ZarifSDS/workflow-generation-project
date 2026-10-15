@@ -27,9 +27,10 @@
                         <p class="s-m0"><span class="s-tag s-tag--{% if idea.passes %}ok">Passes its checks{% else %}warn">Needs edits{% endif %}</span> {{ idea.description }}</p>
                         {% if idea.summary %}<ul class="s-small">{% for line in idea.summary %}<li>{{ line }}</li>{% endfor %}</ul>{% endif %}
                         {% if idea.checks %}<ul class="s-small s-muted">{% for check in idea.checks %}<li>{{ check }}</li>{% endfor %}</ul>{% endif %}
-                        <details><summary>Edit the content (JSON)</summary>
+                        <details><summary>Edit the content</summary>
                             <label class="w-sr-only" for="spec-{{ forloop.counter0 }}">Content for {{ idea.section }}</label>
                             <textarea id="spec-{{ forloop.counter0 }}" name="spec-{{ forloop.counter0 }}" rows="12" spellcheck="false" class="s-mono">{{ idea.spec_json }}</textarea>
+                            {% with index=forloop.counter0|stringformat:"d" %}{% include "studio/includes/infographic_editor.html" with target="spec-"|add:index template=idea.template plan=plan.pk %}{% endwith %}
                         </details>
                     {% else %}
                         <div class="s-keys__field"><label for="description-{{ forloop.counter0 }}">What the photo shows</label><textarea id="description-{{ forloop.counter0 }}" name="description-{{ forloop.counter0 }}" rows="2">{{ idea.description }}</textarea></div>
@@ -67,10 +68,12 @@
         </section>
     {% endif %}
 </div>
+    {{ infographic_schema|json_script:"infographic-schema" }}
 {% endblock %}
 
 {% block extra_js %}
     {{ block.super }}
+    {% load static %}<script src="{% static 'studio/infographic_editor.js' %}" defer></script>
     {% if active %}
     <script>
     (function () {

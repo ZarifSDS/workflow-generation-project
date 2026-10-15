@@ -1,0 +1,2 @@
+{# The infographic content editor (static/studio/infographic_editor.js) for the JSON textarea `target`. #}
+<div class="s-ig" data-infographic-editor data-target="{{ target }}"{% if template %} data-template="{{ template }}"{% endif %}{% if select %} data-template-select="{{ select }}"{% endif %} data-preview-url="{% url 'studio:infographic_preview' %}"{% if plan %} data-plan="{{ plan }}"{% endif %}></div>

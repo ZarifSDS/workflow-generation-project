@@ -214,3 +214,14 @@
 .s-checklist__group { border: 0; padding: 0; margin: 0 0 0.75rem; }
 .s-checklist__group legend { font-weight: 600; margin-bottom: 0.25rem; }
 .s-checklist__item { display: flex; gap: 0.5rem; align-items: baseline; padding: 0.15rem 0; font-size: 0.875rem; }
+
+/* Infographic content editor (infographic_editor.js) */
+.s-ig { display: grid; gap: 0.75rem; margin-top: 0.5rem; }
+.s-ig__form { display: grid; gap: 0.75rem; }
+.s-ig__field { display: grid; gap: 0.25rem; }
+.s-ig__list { display: grid; gap: 0.5rem; }
+.s-ig__rows { display: grid; gap: 0.5rem; }
+.s-ig__row { border: 1px solid var(--w-color-border-furniture, #d9d9e3); border-radius: 0.375rem; padding: 0.5rem 0.75rem; display: grid; gap: 0.5rem; }
+.s-ig__row > legend { font-weight: 600; padding: 0 0.25rem; }
+.s-ig__row > [data-remove] { justify-self: start; }
+.s-ig__preview img { max-width: 100%; border: 1px solid var(--w-color-border-furniture, #d9d9e3); border-radius: 0.375rem; }

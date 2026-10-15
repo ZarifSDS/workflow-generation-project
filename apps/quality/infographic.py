@@ -861,6 +861,159 @@ SPEC_GUIDE = {
 }
 
 
+_TITLE = {
+    "key": "title",
+    "label": "Title",
+    "type": "text",
+    "required": True,
+    "hint": "What the graphic shows; mark one key phrase **like this** for periwinkle.",
+}
+_SUBTITLE = {"key": "subtitle", "label": "Subtitle", "type": "text", "hint": "How to read it, in one line."}
+_SOURCE = {
+    "key": "source",
+    "label": "Source",
+    "type": "text",
+    "required": True,
+    "hint": "Author or body, publication, year: as the article gives them.",
+}
+
+# The form editor's fields per template (static/studio/infographic_editor.js builds the form from this).
+# Types: text, textarea, number, lines (one item per line), list (rows of `fields`, `min`-`max`),
+# bracket (a segment number and a label), widget (form anatomy: none, chips or split, with its items).
+EDITOR_SCHEMA = {
+    "steps": [
+        _TITLE,
+        _SUBTITLE,
+        {"key": "example_label", "label": "Example label", "type": "text", "hint": "e.g. Slicer example"},
+        {
+            "key": "steps",
+            "label": "Steps",
+            "type": "list",
+            "min": 3,
+            "max": 6,
+            "item": "step",
+            "fields": [
+                {
+                    "key": "title",
+                    "label": "Step",
+                    "type": "text",
+                    "required": True,
+                    "hint": "At most 6 words",
+                },
+                {"key": "example", "label": "Example", "type": "text", "hint": "Optional, at most 12 words"},
+            ],
+        },
+        {
+            "key": "loop",
+            "label": "Loop back note",
+            "type": "text",
+            "hint": "Optional: when the process repeats",
+        },
+    ],
+    "decision": [
+        _TITLE,
+        _SUBTITLE,
+        {
+            "key": "questions",
+            "label": "Questions",
+            "type": "list",
+            "min": 2,
+            "max": 5,
+            "item": "question",
+            "fields": [
+                {"key": "question", "label": "Question", "type": "textarea", "required": True},
+                {
+                    "key": "yes",
+                    "label": "If yes",
+                    "type": "text",
+                    "required": True,
+                    "hint": "At most 12 words",
+                },
+            ],
+        },
+        {"key": "fallback", "label": "If every answer is no", "type": "textarea", "required": True},
+        {"key": "warning", "label": "Warning", "type": "text", "hint": "Optional: one related requirement"},
+    ],
+    "columns": [
+        _TITLE,
+        _SUBTITLE,
+        {
+            "key": "columns",
+            "label": "Columns",
+            "type": "list",
+            "min": 2,
+            "max": 2,
+            "item": "column",
+            "fields": [
+                {"key": "title", "label": "Heading", "type": "text", "required": True},
+                {"key": "subtitle", "label": "Gloss", "type": "text", "hint": "e.g. Harm to the crew"},
+                {
+                    "key": "items",
+                    "label": "Bullets (one per line, 2 to 8)",
+                    "type": "lines",
+                    "required": True,
+                },
+            ],
+        },
+        {"key": "note", "label": "Note under the columns", "type": "textarea"},
+    ],
+    "part_to_whole": [
+        _TITLE,
+        _SUBTITLE,
+        {
+            "key": "segments",
+            "label": "Shares (they add up to 100%)",
+            "type": "list",
+            "min": 2,
+            "max": 4,
+            "item": "share",
+            "fields": [
+                {"key": "value", "label": "Percent", "type": "number", "required": True},
+                {"key": "label", "label": "Label", "type": "text", "required": True},
+            ],
+        },
+        {"key": "bracket", "label": "Bracket over a share", "type": "bracket", "hint": "Optional"},
+        _SOURCE,
+    ],
+    "bars": [
+        _TITLE,
+        _SUBTITLE,
+        {"key": "unit", "label": "Unit after each value", "type": "text", "hint": "% when left empty"},
+        {
+            "key": "bars",
+            "label": "Bars (sorted for you, the top one highlighted)",
+            "type": "list",
+            "min": 3,
+            "max": 8,
+            "item": "bar",
+            "fields": [
+                {"key": "label", "label": "Label", "type": "text", "required": True},
+                {"key": "value", "label": "Value", "type": "number", "required": True},
+            ],
+        },
+        _SOURCE,
+    ],
+    "form_anatomy": [
+        _TITLE,
+        _SUBTITLE,
+        {"key": "form_title", "label": "Name on the form", "type": "text", "required": True},
+        {
+            "key": "parts",
+            "label": "Parts",
+            "type": "list",
+            "min": 4,
+            "max": 10,
+            "item": "part",
+            "fields": [
+                {"key": "name", "label": "Part", "type": "text", "required": True},
+                {"key": "description", "label": "What it holds", "type": "text"},
+                {"key": "widget", "label": "Drawn inside", "type": "widget"},
+            ],
+        },
+    ],
+}
+
+
 def spec_guide(kinds=None):
     """The template guide for a prompt: when each fits, its fields and an example spec as JSON."""
     import json

@@ -173,7 +173,7 @@ def test_the_planner_offers_infographics_with_their_checks(admin_user, model, ad
     assert any("add up to 105%" in c for c in plan.ideas[2]["checks"])
     page = admin_client.get(reverse("studio:image_plan", args=[plan.pk]))
     assert "Infographic (Numbered steps)" in page.text and "Passes its checks" in page.text
-    assert "Needs edits" in page.text and "Edit the content (JSON)" in page.text
+    assert "Needs edits" in page.text and "Edit the content</summary>" in page.text
     # Make the steps one, with an edited title; its figures are checked against the article.
     edited = dict(STEPS_SPEC, title="Five steps to a safe system of work")
     admin_client.post(
@@ -249,3 +249,91 @@ def test_the_generator_form_takes_an_infographic(admin_client):
     job = ImageJob.objects.get()
     assert ok["Location"] == reverse("studio:image_job", args=[job.pk])
     assert job.spec == STEPS_SPEC and job.template == "steps"
+
+
+# ---- The form editor ----
+
+
+def test_the_editor_schema_covers_every_template_and_example():
+    for kind, (_, lists, required, _) in infographic.TEMPLATES.items():
+        fields = {f["key"]: f for f in infographic.EDITOR_SCHEMA[kind]}
+        assert set(EXAMPLES[kind]) <= set(fields), kind  # every example field can be edited
+        for name in [*required, *lists]:
+            assert fields[name].get("required") or fields[name]["type"] == "list", (kind, name)
+        for name, (low, high) in lists.items():
+            assert (fields[name]["min"], fields[name]["max"]) == (low, high), (kind, name)
+            sub = {f["key"] for f in fields[name]["fields"]}
+            for item in EXAMPLES[kind][name]:
+                assert set(item) <= sub, (kind, name, item)
+
+
+def test_the_preview_draws_without_making_a_job(admin_client, admin_user):
+    url = reverse("studio:infographic_preview")
+    ok = admin_client.post(url, {"template": "steps", "spec": STEPS_SPEC}, content_type="application/json")
+    data = ok.json()
+    assert ok.status_code == 200 and data["image"].startswith("data:image/webp;base64,")
+    assert data["blocked"] is False and data["alt"] and not ImageJob.objects.exists()
+    bad = admin_client.post(url, {"template": "pie", "spec": STEPS_SPEC}, content_type="application/json")
+    assert bad.status_code == 400 and "template" in bad.json()["error"]
+    empty = admin_client.post(url, {"template": "steps", "spec": {}}, content_type="application/json")
+    assert "Fill in the content" in empty.json()["error"]
+    # With a plan, figures are checked against its article.
+    plan = ImagePlan.objects.create(article_text=ARTICLE, created_by=admin_user)
+    shares = copy.deepcopy(SHARES_SPEC)
+    shares["segments"][0]["value"], shares["segments"][1]["value"] = 40, 40
+    checked = admin_client.post(
+        url, {"template": "part_to_whole", "spec": shares, "plan": plan.pk}, content_type="application/json"
+    ).json()
+    assert checked["blocked"] and any("Not in the article: 40" in p["text"] for p in checked["problems"])
+
+
+def test_the_preview_needs_writing_rights(client, django_user_model):
+    from django.contrib.auth.models import Permission
+
+    user = django_user_model.objects.create_user("viewer", password="x")
+    user.user_permissions.add(
+        Permission.objects.get(codename="access_admin"), Permission.objects.get(codename="access_studio")
+    )
+    client.force_login(user)
+    response = client.post(
+        reverse("studio:infographic_preview"),
+        {"template": "steps", "spec": STEPS_SPEC},
+        content_type="application/json",
+    )
+    assert response.status_code == 403
+
+
+def test_the_editor_is_on_the_job_plan_and_generator_pages(admin_user, model, admin_client):
+    job = _job(admin_user, template="steps", spec=STEPS_SPEC)
+    page = admin_client.get(reverse("studio:image_job", args=[job.pk])).text
+    assert 'data-target="again-spec"' in page and 'data-template="steps"' in page
+    assert 'id="infographic-schema"' in page and "studio/infographic_editor.js" in page
+    plan = ImagePlan.objects.create(
+        article_text=ARTICLE,
+        created_by=admin_user,
+        status="ready",
+        ideas=[
+            {
+                "kind": "infographic",
+                "section": "How to Create a Safe System of Work",
+                "template": "steps",
+                "template_label": "Numbered steps",
+                "spec": STEPS_SPEC,
+                "description": "Steps",
+                "passes": True,
+            }
+        ],
+    )
+    page = admin_client.get(reverse("studio:image_plan", args=[plan.pk])).text
+    assert 'data-target="spec-0"' in page and f'data-plan="{plan.pk}"' in page and 'id="spec-0"' in page
+    page = admin_client.get(reverse("studio:images") + "?tab=single").text
+    assert 'data-target="id_spec_json"' in page and 'data-template-select="id_template"' in page
+
+
+def test_the_editor_script_waits_for_the_page():
+    from pathlib import Path
+
+    script = (Path(__file__).parent.parent / "apps/studio/static/studio/infographic_editor.js").read_text(
+        "utf-8"
+    )
+    assert "DOMContentLoaded" in script

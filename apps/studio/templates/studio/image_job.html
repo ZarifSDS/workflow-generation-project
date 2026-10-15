@@ -44,9 +44,10 @@
             <form method="post" class="s-keys__form">{% csrf_token %}
                 {% if job.kind == "infographic" %}
                     <div class="s-keys__field">
-                        <label for="again-spec">The content (JSON)</label>
+                        <label for="again-spec">The content</label>
                         <textarea id="again-spec" name="spec" rows="14" spellcheck="false" class="s-mono">{{ spec_json }}</textarea>
-                        <p class="s-muted">Edit the words or figures and redraw. Keep labels short; every figure must be in the article.</p>
+                        {% include "studio/includes/infographic_editor.html" with target="again-spec" template=job.template plan=job.plan_id %}
+                        <p class="s-muted">Edit the words or figures, preview, then redraw. Keep labels short; every figure must be in the article.</p>
                     </div>
                     <div class="s-row-actions">
                         <button class="button" type="submit" name="action" value="redraw">Redraw with this content</button>
@@ -71,10 +72,12 @@
         </section>
     {% endif %}
 </div>
+    {% if job.kind == "infographic" %}{{ infographic_schema|json_script:"infographic-schema" }}{% endif %}
 {% endblock %}
 
 {% block extra_js %}
     {{ block.super }}
+    {% if job.kind == "infographic" %}{% load static %}<script src="{% static 'studio/infographic_editor.js' %}" defer></script>{% endif %}
     {% if job.is_open %}
     <script>
     (function () {
