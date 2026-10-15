@@ -2,9 +2,27 @@
 
 Read this first in a new session. Then `docs/sop-audit.md` ("Where the audit stands" and each phase's section) before touching `apps/studio/sop.py`, `docs/infographic-audit.md` before touching `apps/quality/infographic.py` or the image planner, `docs/content-editing-plan.md` before changing checks or the reading grade, then `docs/development.md` (code map, how-tos, process), `docs/sop.md` (the SOP and the autopilot) and `docs/tools-and-processes.md`. Also see `docs/roadmap.md`, `docs/workflow.md`, `docs/ui-ux-plan.md`, `docs/security.md`, `docs/providers.md`, `docs/model-eval.md` and `AGENTS.md`.
 
-## Fresh chat: start here (2026-10-15)
+## Fresh chat: start here (2026-10-15, end of day)
 
-**State:** everything is committed and pushed (last code commit `0bb96f2`, CI green; since then only docs: the handoff, `docs/content-editing-plan.md` in `fb6d49f`, and this update); share mode runs it (migrations up to studio 0015 and ai 0004 applied). Suite: 578 passed, 1 skipped. Working tree clean.
+**State:** everything is committed and pushed (last code commit `18b263c`, CI green); share mode runs it (migrations up to studio 0015 and ai 0007 applied). Suite: 656 passed, 1 skipped. Working tree clean. Today's work is summarised in the paragraphs below this section (newest first under "Reading grade" onwards).
+
+**FIRST THING NEXT SESSION (owner's request, 2026-10-15): more image models, selectable everywhere models are chosen.**
+- **Where:** add image-generation models, for the hero and for every other image (lead images, in-article photos, infographic rendering where a model is used, the Image generator), to the selectable models. They should be in Settings › Default models (the image tasks: hero image generation and any image task without a default yet), the per-step model lists in the wizard and on the run screen, and the Image generator's choices.
+- **Top of the list, in this order:**
+  1. Gemini 3.1 Flash image ("Nano Banana 2.1")
+  2. Gemini 3.1 Flash Lite image ("Nano Banana 2 Lite")
+  3. ByteDance Seedream 5.0 Flash
+  4. GPT Image 2.5 Flare
+  5. FLUX Klein
+  6. FLUX 3 (or FLUX 2 where 3 isn't offered)
+- **Below them:** every other image model the stored keys give access to, mapped the way text models are (provider lists, prices per image where the provider gives them, Choose and Manage models).
+- **Owner's guidance for defaults and labels:** Gemini is best for images with text in them (headlines, labels, infographic-like photos). GPT Image 2.5 Flare is best for combining three or more brand assets in one image through the image API (logo, product shots, reference photos), so it needs the image-edit or reference-image endpoint, not only text-to-image.
+- **Before building:**
+  - Verify the exact model ids and endpoints from each provider's own docs or model list. The names above are as the owner gave them; "Flare" and "Lite" may be spelled differently by the provider.
+  - Check which providers the stored keys already cover: Gemini key, OpenRouter (lists image models with per-image prices), Cloudflare (FLUX Klein today).
+  - Check how `apps/ai/images/` adapters, `catalog.CATALOG` (kind "image"), `remote_models` (it skips non-text models today: `is_chat`, `output_modalities`) and `pricing` (text-only today; image prices are per image) need extending.
+  - Add an image adapter per API shape (Gemini generateContent with image output, OpenAI-style images/generations and images/edits, OpenRouter image output, Cloudflare). Keep the vision check and the branding as they are.
+- Then the "Next, in order" list below.
 
 **What exists now, in one breath:** the SOP-guided article pipeline (audit phases 0-8), the newcomer-reader default, the Image generator (photos: branded hero, unbranded lead image, in-article photo with the logo; and branded infographics from six templates, chosen per section by the article planner or made from a description, edited in a form with a live preview), model lists that follow the stored keys (515 listed models, Choose models / Manage models in bulk), and Luna latest (OpenRouter) as the default for every text task.
 
