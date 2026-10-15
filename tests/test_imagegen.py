@@ -265,7 +265,7 @@ def planner(fakes, monkeypatch):
 
     def generate(provider, model, messages, options):
         user = messages[-1]["content"]
-        if isinstance(user, str) and "Plan the images for this article" in user:
+        if isinstance(user, str) and "Plan the visuals for this article" in user:
             seen.append(user)
             text = json.dumps(PLAN)
             return GenerationResult(
@@ -316,7 +316,7 @@ def test_a_studio_article_gets_a_tailored_plan(admin_client, article_run, planne
     assert plan.ideas[0]["headline"] == "SDS Retention: How Long to Keep Them"
     assert "flowchart" in plan.notes
     page = admin_client.get(reverse("studio:image_plan", args=[plan.pk]))
-    assert "Suggested images" in page.text and "Not photos" in page.text
+    assert "Suggested visuals" in page.text and "Needs a designer" in page.text
 
 
 def test_ticked_ideas_become_images_of_the_article(admin_user, admin_client, article_run, planner, fakes):

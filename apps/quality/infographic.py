@@ -826,6 +826,53 @@ TEMPLATES = {
     ),
 }
 
+LABELS = {
+    "steps": "Numbered steps",
+    "decision": "Yes/no decision flow",
+    "columns": "Two-column comparison",
+    "part_to_whole": "Part-to-whole bar",
+    "bars": "Horizontal bar chart",
+    "form_anatomy": "Form anatomy",
+}
+
+# When each template fits and what its spec holds, for the models that fill specs (the article planner and
+# the Image generator's "Infographic" kind). The examples show the exact shape.
+SPEC_GUIDE = {
+    "steps": "A process the section explains as 3-6 ordered steps. Fields: title (may mark one key phrase "
+    "**like this**), subtitle, steps [{title: at most 6 words, example: optional, at most 12 words}], "
+    "example_label (when steps carry examples, e.g. 'Slicer example'), "
+    "loop (optional: when the process repeats).",
+    "decision": "A section that tells the reader when something applies, as 2-5 yes/no questions asked "
+    "in order. "
+    "Fields: title (a question), subtitle, questions [{question, yes: what to do if yes, at most 12 words}], "
+    "fallback (what applies when every answer is no), warning (optional: one related requirement).",
+    "columns": "Two categories the section contrasts (hazards vs impacts, act vs condition). Fields: title, "
+    "subtitle, columns: exactly 2 [{title, subtitle: a short gloss, items: 2-8 short bullets}], "
+    "note (optional).",
+    "part_to_whole": "Shares of one whole that the article cites with its source (they add up to 100%). "
+    "Fields: title (the finding, not the topic), subtitle (what the whole is), segments: 2-4 [{value: a "
+    "number, label}], bracket (optional: {segment: index, text}), source (author, publication, year).",
+    "bars": "3-8 comparable figures the article cites with its source (percentages or counts). "
+    "Fields: title, "
+    "subtitle (how to read it), bars [{label, value: a number}], unit ('%' by default), source.",
+    "form_anatomy": "The parts of a form or document the section walks through (4-10 parts). Fields: title, "
+    "subtitle, form_title, parts [{name, description: one line, widget: optional {type: 'chips', items: "
+    "['L','M','H']} or {type: 'split', items: [left, right]}}].",
+}
+
+
+def spec_guide(kinds=None):
+    """The template guide for a prompt: when each fits, its fields and an example spec as JSON."""
+    import json
+
+    from .infographic_examples import EXAMPLES
+
+    blocks = []
+    for kind in kinds or TEMPLATES:
+        example = json.dumps(EXAMPLES[kind], ensure_ascii=False)
+        blocks.append(f"- {kind} ({LABELS[kind]}): {SPEC_GUIDE[kind]}\n  Example spec: {example}")
+    return "\n".join(blocks)
+
 
 # ---- Spec hygiene, alt text and the build ----
 
@@ -881,11 +928,54 @@ def _validate(kind, spec):
                 problems.append(
                     {"level": "block", "text": f"Each column takes 2 to 8 items ({column.get('title')!r})."}
                 )
+    # Values arrive as numbers or as text ("45%", "1,200"); both are read, anything else is reported.
+    for name in ("segments", "bars"):
+        for item in spec.get(name) or []:
+            if not isinstance(item, dict):
+                problems.append({"level": "block", "text": f"Each of the {name} needs a label and a value."})
+                continue
+            try:
+                item["value"] = float(str(item.get("value")).strip().rstrip("%").replace(",", ""))
+            except ValueError:
+                problems.append(
+                    {
+                        "level": "block",
+                        "text": f"{item.get('value')!r} isn't a number ({item.get('label')!r}).",
+                    }
+                )
+    nested = {
+        "steps": ["title"],
+        "questions": ["question", "yes"],
+        "columns": ["title", "items"],
+        "segments": ["label"],
+        "bars": ["label"],
+        "parts": ["name"],
+    }
+    for key, fields in nested.items():
+        for item in spec.get(key) or []:
+            if not isinstance(item, dict):
+                problems.append(
+                    {"level": "block", "text": f"Each of the {key} must be an object with its fields."}
+                )
+                break
+            if missing := [name for name in fields if not item.get(name)]:
+                problems.append({"level": "block", "text": f"One of the {key} has no {', '.join(missing)}."})
+                break
+    if any(p["level"] == "block" for p in problems):
+        return problems
     if kind == "part_to_whole":
         total = sum(float(s.get("value") or 0) for s in spec.get("segments") or [])
         if spec.get("unit", "%") == "%" and abs(total - 100) > 1:
             problems.append({"level": "block", "text": f"The shares add up to {_fmt(total)}%, not 100%."})
     return problems
+
+
+def _a(name):
+    """ "Safe system of work" -> "a safe system of work"; an acronym or a name stays as it is."""
+    name = name.strip()
+    if not name or name.split()[0].isupper() or name.lower().startswith(("the ", "a ", "an ")):
+        return name
+    return ("an " if name[0].lower() in "aeiou" else "a ") + name[0].lower() + name[1:]
 
 
 def alt_text(kind, spec):
@@ -905,7 +995,9 @@ def alt_text(kind, spec):
             f"{len(spec.get('bars', []))} bars, highest "
             f"{max(spec['bars'], key=lambda b: float(b['value']))['label']}"
         ),
-        "form_anatomy": lambda: f"the {len(spec.get('parts', []))} parts of the form",
+        "form_anatomy": lambda: (
+            f"{len(spec.get('parts', []))} parts of {_a(spec.get('form_title') or 'the form')}"
+        ),
     }[kind]
     try:
         text = f"{title}: {detail()}."
@@ -939,9 +1031,10 @@ def numbers_missing_from(spec, article):
     return sorted({value for value in values if value not in found})
 
 
-def render(kind, spec, article=None):
+def render(kind, spec, article=None, source_name="the article", raster=True):
     """Draw a template; returns an Infographic with its checks. Raises InfographicError for an unknown
-    kind."""
+    kind. `article`, when given, is what every figure must come from (`source_name` names it in the
+    message); `raster=False` checks without making the PNG and WebP (the planner's quick check)."""
     if missing := fonts_missing():
         raise InfographicError(f"The Inter fonts aren't installed ({', '.join(missing)}).")
     spec, fixes = _clean(spec)
@@ -982,15 +1075,15 @@ def render(kind, spec, article=None):
         problems.append(
             {
                 "level": "block",
-                "text": f"Not in the article: {', '.join(invented[:5])}. Figures must "
-                "come from the article's own sources.",
+                "text": f"Not in {source_name}: {', '.join(invented[:5])}. Figures must come from "
+                f"{source_name} (its own sources), never be invented.",
             }
         )
     alt = alt_text(kind, spec)
     if not 10 <= len(alt) <= 125:
         problems.append({"level": "advise", "text": "The alt text needs a look (10 to 125 characters)."})
-    png, webp = _raster(svg)
-    if len(webp) > WEBP_BUDGET:
+    png, webp = _raster(svg) if raster else (b"", b"")
+    if raster and len(webp) > WEBP_BUDGET:
         problems.append(
             {
                 "level": "advise",

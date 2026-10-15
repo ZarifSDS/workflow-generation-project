@@ -2,10 +2,10 @@
 
 {% block main_content %}
 <div class="studio">
-    <p class="s-muted s-m0">{% if job.plan %}<a href="{% url 'studio:image_plan' job.plan_id %}">{{ job.plan.title|default:"The article" }}</a> · {{ job.section }} · {% endif %}{{ job.get_kind_display }}{% if job.headline %} · <span class="s-mono">{{ job.headline }}</span>{% endif %}{% if job.source and not job.photo_prompt %} · from an uploaded photo{% endif %}</p>
+    <p class="s-muted s-m0">{% if job.plan %}<a href="{% url 'studio:image_plan' job.plan_id %}">{{ job.plan.title|default:"The article" }}</a> · {{ job.section }} · {% endif %}{% if template_label %}Infographic: {{ template_label }}{% else %}{{ job.get_kind_display }}{% endif %}{% if job.headline %} · <span class="s-mono">{{ job.headline }}</span>{% endif %}{% if job.source and not job.photo_prompt %} · from an uploaded photo{% endif %}</p>
 
     {% if job.is_open %}
-        <div class="s-callout" role="status">{% if job.status == "queued" %}Waiting for the worker…{% else %}Making the image (photo, vision check, finishing). This page updates on its own.{% endif %}</div>
+        <div class="s-callout" role="status">{% if job.status == "queued" %}Waiting for the worker…{% elif job.kind == "infographic" %}Writing the content and drawing the infographic. This page updates on its own.{% else %}Making the image (photo, vision check, finishing). This page updates on its own.{% endif %}</div>
     {% elif job.status == "failed" %}
         <div class="s-callout" role="alert"><strong>It didn't work.</strong> {{ job.error }}</div>
     {% endif %}
@@ -13,11 +13,12 @@
     {% if job.image %}
         <img class="s-image" src="{{ job.image.file.url }}" alt="{{ job.metrics.alt_text }}">
         {% if job.needs_a_look %}<div class="s-callout" role="alert"><strong>Check before use:</strong> the vision check found something a person must look at (below).</div>{% endif %}
+        {% if job.kind == "infographic" %}<p class="s-muted s-small s-m0">Drawn from the template: check the facts and wording against the article before use. The checks below cover fit, legibility, contrast, house style and figures.</p>{% endif %}
         <div class="s-row-actions">
             {% for fmt, label in downloads %}<a class="button button-small button-secondary" href="{% url 'studio:image_job_download' job.pk fmt %}" download>{{ label }}</a>{% endfor %}
         </div>
     {% elif job.status == "done" %}
-        <div class="s-callout" role="alert">No finished image: {{ job.metrics.headline_problem|default:"see the problems below." }}</div>
+        <div class="s-callout" role="alert">{% if job.kind == "infographic" %}<strong>Not drawn.</strong> Fix the problems below in the content (or shorten it), then redraw.{% else %}No finished image: {{ job.metrics.headline_problem|default:"see the problems below." }}{% endif %}</div>
         {% if job.photo %}<img class="s-image" src="{{ job.photo.file.url }}" alt="The photo before finishing">{% endif %}
     {% endif %}
 
@@ -33,6 +34,7 @@
             {% for note in job.metrics.notes %}<p class="s-muted s-small">{{ note }}</p>{% endfor %}
             {% if job.photo and job.image %}<p class="s-muted s-m0 s-small"><a href="{{ job.photo.file.url }}">The photo before finishing</a></p>{% endif %}
             {% if job.metrics.image_prompt %}<details><summary>Photo prompt</summary><p class="s-small">{{ job.metrics.image_prompt }}</p></details>{% endif %}
+            {% if job.metrics.spec_source %}<p class="s-muted s-m0 s-small">Content {% if job.metrics.spec_source == "given" %}as given{% else %}{{ job.metrics.spec_source }}{% endif %}.</p>{% endif %}
         </section>
     {% endif %}
 
@@ -40,7 +42,17 @@
         <section class="s-box" aria-labelledby="again-head">
             <h3 class="s-section" id="again-head">Another version</h3>
             <form method="post" class="s-keys__form">{% csrf_token %}
-                {% if job.kind == "hero" %}
+                {% if job.kind == "infographic" %}
+                    <div class="s-keys__field">
+                        <label for="again-spec">The content (JSON)</label>
+                        <textarea id="again-spec" name="spec" rows="14" spellcheck="false" class="s-mono">{{ spec_json }}</textarea>
+                        <p class="s-muted">Edit the words or figures and redraw. Keep labels short; every figure must be in the article.</p>
+                    </div>
+                    <div class="s-row-actions">
+                        <button class="button" type="submit" name="action" value="redraw">Redraw with this content</button>
+                        {% if job.description %}<button class="button button-secondary" type="submit" name="action" value="rewrite">Write the content again from the description</button>{% endif %}
+                    </div>
+                {% elif job.kind == "hero" %}
                     <div class="s-keys__field"><label for="again-headline">Headline</label><input id="again-headline" name="headline" value="{{ job.headline }}" maxlength="200"><p class="s-muted">Shorten it if it didn't fit. Markup: <code>**Topic:** | rest</code>.</p></div>
                 {% else %}
                     <div class="s-keys__field"><label for="again-width">Size (width × height)</label><span class="s-cluster"><input id="again-width" name="width" type="number" min="200" max="4000" value="{{ job.metrics.size.0 }}" aria-label="Width"><input name="height" type="number" min="200" max="4000" value="{{ job.metrics.size.1 }}" aria-label="Height"></span></div>
@@ -48,11 +60,13 @@
                         <div class="s-keys__field"><label for="again-corner">Logo corner</label><select id="again-corner" name="corner">{% for value, label in corners %}<option value="{{ value }}" {% if value == job.corner %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
                     {% endif %}
                 {% endif %}
+                {% if job.kind != "infographic" %}
                 <div class="s-row-actions">
                     {% if job.photo or job.source %}<button class="button" type="submit" name="action" value="same_photo">Same photo, these settings</button>{% endif %}
                     {% if job.description or job.photo_prompt %}<button class="button button-secondary" type="submit" name="action" value="new_photo">New photo</button>{% endif %}
                     <a class="button button-secondary" href="{% url 'studio:images' %}?from={{ job.pk }}">Edit everything</a>
                 </div>
+                {% endif %}
             </form>
         </section>
     {% endif %}

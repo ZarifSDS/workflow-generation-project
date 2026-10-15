@@ -519,6 +519,7 @@ class ImageJob(models.Model):
         HERO = "hero", "Blog hero for sdsmanager.com (veil, logo, headline)"
         LEAD = "lead", "Unbranded lead image (guest posts and other sites)"
         INLINE = "inline", "In-article image with the SDS Manager logo"
+        INFOGRAPHIC = "infographic", "Infographic (a branded diagram or chart, drawn from a template)"
 
     class Status(models.TextChoices):
         QUEUED = "queued", "Queued"
@@ -533,7 +534,7 @@ class ImageJob(models.Model):
         BL = "bl", "Bottom left"
         BR = "br", "Bottom right"
 
-    kind = models.CharField(max_length=10, choices=Kind.choices, default=Kind.HERO)
+    kind = models.CharField(max_length=12, choices=Kind.choices, default=Kind.HERO)
     description = models.TextField(
         "What the image shows",
         blank=True,
@@ -553,6 +554,25 @@ class ImageJob(models.Model):
     width = models.PositiveIntegerField(null=True, blank=True)
     height = models.PositiveIntegerField(null=True, blank=True)
     corner = models.CharField(max_length=4, choices=Corner.choices, default=Corner.AUTO)
+    template = models.CharField(
+        "Infographic template",
+        max_length=20,
+        blank=True,
+        choices=[
+            ("steps", "Numbered steps"),
+            ("decision", "Yes/no decision flow"),
+            ("columns", "Two-column comparison"),
+            ("part_to_whole", "Part-to-whole bar"),
+            ("bars", "Horizontal bar chart"),
+            ("form_anatomy", "Form anatomy"),
+        ],
+        help_text="Infographics: the layout (apps/quality/infographic.py).",
+    )
+    spec = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Infographics: the content the template draws (title, items, values).",
+    )
     source = models.ForeignKey(
         "wagtailimages.Image",
         null=True,

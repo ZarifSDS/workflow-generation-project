@@ -170,10 +170,27 @@ class ImageJobForm(forms.ModelForm):
         help_text="A licensed photo (yours, Pexels, Unsplash, a stock library). It replaces the generated "
         "one; never upload a watermarked comp.",
     )
+    spec_json = forms.CharField(
+        label="Infographic content as JSON (optional)",
+        required=False,
+        widget=forms.Textarea(attrs={"rows": 4, "spellcheck": "false"}),
+        help_text="Infographics: leave empty and the model writes it from your description, using only its "
+        "facts and figures. Paste a spec to draw exactly that.",
+    )
 
     class Meta:
         model = ImageJob
-        fields = ["kind", "headline", "description", "photo_prompt", "region", "width", "height", "corner"]
+        fields = [
+            "kind",
+            "template",
+            "headline",
+            "description",
+            "photo_prompt",
+            "region",
+            "width",
+            "height",
+            "corner",
+        ]
         widgets = {
             "kind": forms.RadioSelect,
             "description": forms.Textarea(attrs={"rows": 2}),
@@ -182,6 +199,8 @@ class ImageJobForm(forms.ModelForm):
         help_texts = {
             "width": "Lead and in-article images. Empty: 1200x630 for a lead image, 1200x675 in an article.",
             "corner": "In-article images: where the logo goes.",
+            "description": "Photos: the scene. Infographics: the facts, steps or figures to show, with their "
+            "source; every number must be here.",
         }
 
     def clean(self):
@@ -196,12 +215,33 @@ class ImageJobForm(forms.ModelForm):
             raise forms.ValidationError("Give both a width and a height, or neither.")
         if data.get("kind") == ImageJob.Kind.HERO and not data.get("headline", "").strip():
             self.add_error("headline", "A blog hero needs a headline (the article's H1).")
+        if data.get("kind") == ImageJob.Kind.INFOGRAPHIC:
+            return self._clean_infographic(data)
         if not (
             data.get("upload") or data.get("description", "").strip() or data.get("photo_prompt", "").strip()
         ):
             raise forms.ValidationError(
                 "Describe what the image shows, write a photo prompt, or upload a photo."
             )
+        return data
+
+    def _clean_infographic(self, data):
+        import json
+
+        if not data.get("template"):
+            self.add_error("template", "Choose the infographic's template.")
+        raw = (data.get("spec_json") or "").strip()
+        data["spec"] = {}
+        if raw:
+            try:
+                data["spec"] = json.loads(raw)
+            except json.JSONDecodeError as error:
+                self.add_error("spec_json", f"That isn't valid JSON ({error.msg}, line {error.lineno}).")
+            else:
+                if not isinstance(data["spec"], dict):
+                    self.add_error("spec_json", 'The spec is one JSON object: {"title": ..., ...}.')
+        elif not data.get("description", "").strip():
+            raise forms.ValidationError("Describe what the infographic shows (its facts), or paste a spec.")
         return data
 
 

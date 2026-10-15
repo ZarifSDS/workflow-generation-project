@@ -1,5 +1,6 @@
 """The standalone Image generator: images not tied to a brief (apps/studio/imagegen.py)."""
 
+import json
 import re
 
 from django.contrib import messages
@@ -77,8 +78,21 @@ class ImageGeneratorView(StudioPage):
         job = ImageJob.objects.filter(pk=source).first() if source.isdigit() else None
         if job is None:
             return {}
-        fields = ("kind", "headline", "description", "photo_prompt", "region", "width", "height", "corner")
-        return {name: getattr(job, name) for name in fields}
+        fields = (
+            "kind",
+            "template",
+            "headline",
+            "description",
+            "photo_prompt",
+            "region",
+            "width",
+            "height",
+            "corner",
+        )
+        initial = {name: getattr(job, name) for name in fields}
+        if job.spec:
+            initial["spec_json"] = json.dumps(job.spec, indent=2, ensure_ascii=False)
+        return initial
 
     def post(self, request, *args, **kwargs):
         if request.POST.get("action") == "plan":
@@ -88,6 +102,8 @@ class ImageGeneratorView(StudioPage):
             messages.error(request, "Some fields need attention.")
             return self.render_to_response(self.get_context_data(form=form, tab="single"))
         job = form.save(commit=False)
+        if job.kind == ImageJob.Kind.INFOGRAPHIC:
+            job.spec = form.cleaned_data.get("spec") or {}
         if upload := form.cleaned_data.get("upload"):
             try:
                 job.source = _save_upload(upload, request.user)
@@ -152,6 +168,7 @@ class ImagePlanView(StudioPage):
         active, signature = _plan_state(self.plan)
         context.update(
             plan=self.plan,
+            ideas=[_idea_view(idea) for idea in self.plan.ideas],
             jobs=jobs,
             active=active,
             signature=signature,
@@ -177,7 +194,18 @@ class ImagePlanView(StudioPage):
                 needs = "a description and a headline" if idea["kind"] == "hero" else "a description"
                 messages.error(request, f"“{idea['section']}” needs {needs}.")
                 return redirect("studio:image_plan", pk=plan.pk)
-            chosen.append({**idea, "description": description[:600], "headline": headline[:200]})
+            spec = idea.get("spec")
+            if idea["kind"] == "infographic" and request.POST.get(f"spec-{index}", "").strip():
+                try:
+                    spec = json.loads(request.POST[f"spec-{index}"])
+                except json.JSONDecodeError as error:
+                    messages.error(
+                        request, f"The content of “{idea['section']}” isn't valid JSON ({error.msg})."
+                    )
+                    return redirect("studio:image_plan", pk=plan.pk)
+            chosen.append(
+                {**idea, "description": description[:600], "headline": headline[:200], "spec": spec}
+            )
         if not chosen:
             messages.error(request, "Tick at least one image to make.")
             return redirect("studio:image_plan", pk=plan.pk)
@@ -187,6 +215,31 @@ class ImagePlanView(StudioPage):
             f"Making {len(chosen)} image{'s' if len(chosen) != 1 else ''}. They appear below as they finish.",
         )
         return redirect("studio:image_plan", pk=plan.pk)
+
+
+def _idea_view(idea):
+    """An idea for the plan page: an infographic's content as readable lines and as editable JSON."""
+    if idea.get("kind") != "infographic":
+        return idea
+    spec = idea.get("spec") or {}
+    lines = []
+    for key in ("steps", "questions", "segments", "bars", "parts"):
+        for item in spec.get(key) or []:
+            if isinstance(item, dict):
+                text = (
+                    item.get("title") or item.get("question") or item.get("label") or item.get("name") or ""
+                )
+                value = item.get("value")
+                lines.append(f"{text}: {value}" if value not in (None, "") else str(text))
+    for column in spec.get("columns") or []:
+        if isinstance(column, dict):
+            lines.append(f"{column.get('title', '')}: {', '.join(map(str, column.get('items') or []))}")
+    title = str(spec.get("title") or "").replace("**", "")
+    return {
+        **idea,
+        "summary": ([title] if title else []) + lines[:10],
+        "spec_json": json.dumps(spec, indent=2, ensure_ascii=False),
+    }
 
 
 def _plan_state(plan):
@@ -226,21 +279,34 @@ class ImageJobView(StudioPage):
         job = self.job
         files = job.metrics.get("files") or {}
         downloads = []
+        infographic_job = job.kind == ImageJob.Kind.INFOGRAPHIC
         if job.image:
             size = job.metrics.get("size") or [job.image.width, job.image.height]
             downloads = [("png", f"PNG ({job.image.width}×{job.image.height})")]
-            webp = "WebP (720×405, for the CMS)" if files.get("webp") else f"WebP ({size[0]}×{size[1]})"
-            downloads.append(("webp", webp))
-            if files.get("svg"):
-                downloads.append(("svg", "Layered SVG"))
-        context.update(job=job, downloads=downloads, corners=ImageJob.Corner.choices)
+            if infographic_job:
+                downloads += [("webp", f"WebP ({size[0]}×{size[1]}, for the CMS)"), ("svg", "SVG (editable)")]
+            else:
+                webp = "WebP (720×405, for the CMS)" if files.get("webp") else f"WebP ({size[0]}×{size[1]})"
+                downloads.append(("webp", webp))
+                if files.get("svg"):
+                    downloads.append(("svg", "Layered SVG"))
+        context.update(
+            job=job,
+            downloads=downloads,
+            corners=ImageJob.Corner.choices,
+            spec_json=json.dumps(job.spec, indent=2, ensure_ascii=False) if job.spec else "",
+            template_label=job.get_template_display() if job.template else "",
+        )
         return context
 
     def post(self, request, *args, **kwargs):
         """Another try: the same inputs and a new photo, or the same photo with a new headline, size or
         logo corner."""
         job = self.job
-        same_photo = request.POST.get("action") == "same_photo"
+        action = request.POST.get("action")
+        if job.kind == ImageJob.Kind.INFOGRAPHIC:
+            return self._again_infographic(request, job, action)
+        same_photo = action == "same_photo"
         if same_photo and not (job.photo or job.source):
             messages.error(request, "This job has no photo to reuse.")
             return redirect("studio:image_job", pk=job.pk)
@@ -262,6 +328,23 @@ class ImageJobView(StudioPage):
             changes["corner"] = ""
         new = imagegen.again(job, request.user, same_photo=same_photo, **changes)
         messages.success(request, "Making the new version.")
+        return redirect("studio:image_job", pk=new.pk)
+
+    def _again_infographic(self, request, job, action):
+        """Redraw with edited content, or have the model write the content again from the description."""
+        if action == "rewrite":
+            new = imagegen.again(job, request.user, rewrite=True)
+        else:
+            try:
+                spec = json.loads(request.POST.get("spec", ""))
+            except json.JSONDecodeError as error:
+                messages.error(request, f"That isn't valid JSON ({error.msg}, line {error.lineno}).")
+                return redirect("studio:image_job", pk=job.pk)
+            if not isinstance(spec, dict):
+                messages.error(request, "The content is one JSON object.")
+                return redirect("studio:image_job", pk=job.pk)
+            new = imagegen.again(job, request.user, spec=spec)
+        messages.success(request, "Drawing the new version.")
         return redirect("studio:image_job", pk=new.pk)
 
 

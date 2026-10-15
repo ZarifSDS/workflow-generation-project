@@ -64,7 +64,12 @@ Seen in every confirmed style-A graphic: a "Source:" line where figures appear, 
 
 One deviation from the live graphics, on purpose: the logo's periwinkle `#626DF9` gives white text only about 4.2:1, so boxes and headers that carry white text use a deeper periwinkle (`#4D55D6`); periwinkle text on white or lavender uses `#4A51C9`. Everything else follows style A. The horizontal bar chart uses periwinkle where the live one had drifted to navy and slate.
 
-`python manage.py render_infographic <kind> spec.json out/` (or `--example`) renders one from a JSON file. Not yet wired into the Image generator or the article planner; that is the next step (the planner's photo-or-infographic choice filling a spec from the article, then these checks).
+`python manage.py render_infographic <kind> spec.json out/` (or `--example`) renders one from a JSON file.
+
+**Wired in (2026-10-15):**
+- **The article planner** (`prompts/image_plan.md`) now judges, per section, photo, one of the six templates, or nothing (ordered steps, a yes/no test, two contrasted categories, shares of a whole with a source, comparable cited figures, the parts of a form or document), with the template guide (`infographic.SPEC_GUIDE` and the examples) in the prompt. It fills each infographic's spec from the article; each one is drawn once at plan time without the PNG, so the plan page shows "Passes its checks" or "Needs edits" with the reasons, a readable summary and the editable JSON. Writer's diagram cues become the matching infographic when one fits; what no template draws is listed under "Needs a designer". At most five visuals besides the hero, four of them photos. The article as read is kept on the plan, and a planned infographic's figures are checked against it when it is made.
+- **The Image generator** has an "Infographic" kind: choose the template, then describe the facts (the model writes the spec from them, and every figure must be in the description) or paste a spec. The job page shows the checks, PNG, WebP (1200 px) and SVG downloads, and "Redraw with this content" (edit the JSON) or "Write the content again from the description". A blocked infographic gets no image, only the problems to fix.
+- First live run (UK safe system of work, Luna as the planner): 32 s, a hero photo and four infographics (form anatomy, steps, decision flow, two columns) that all passed their checks and drew cleanly; the step-2 control matrix went to "Needs a designer".
 
 ## Recommendation
 

@@ -112,3 +112,10 @@ def test_a_missing_glyph_is_caught():
     # A character Inter lacks (house style strips emoji such as a snowman before drawing).
     spec = dict(EXAMPLES["steps"], subtitle="Five steps 中 for any task")
     assert any("no glyph" in p["text"] for p in infographic.render("steps", spec).problems)
+
+
+def test_alt_text_names_what_the_form_anatomy_shows():
+    spec = dict(EXAMPLES["form_anatomy"], form_title="Safe system of work")
+    assert infographic.alt_text("form_anatomy", spec).endswith("9 parts of a safe system of work.")
+    jsea = dict(EXAMPLES["form_anatomy"], form_title="JSEA form")
+    assert infographic.alt_text("form_anatomy", jsea).endswith("9 parts of JSEA form.")

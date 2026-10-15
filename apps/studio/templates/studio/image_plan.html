@@ -13,23 +13,34 @@
 
     {% if plan.ideas %}
         <form method="post" aria-labelledby="ideas-head">{% csrf_token %}
-            <h3 class="s-section" id="ideas-head">Suggested images</h3>
-            <p class="s-muted">Edit any description, tick the images to make, then make them together. A blog hero gets the veil, logo and headline; an in-article photo gets the logo in the corner that clashes least.</p>
-            {% for idea in plan.ideas %}
+            <h3 class="s-section" id="ideas-head">Suggested visuals</h3>
+            <p class="s-muted">Edit any description, tick the visuals to make, then make them together. A blog hero gets the veil, logo and headline; an in-article photo gets the logo in the corner that clashes least; an infographic is drawn from its template in the house style, with only the article's own facts and figures.</p>
+            {% for idea in ideas %}
                 <fieldset class="s-box">
-                    <legend><strong>{% if idea.kind == "hero" %}Hero{% else %}In the article: {{ idea.section }}{% endif %}</strong>{% if idea.section in made %} <span class="s-tag s-tag--ok">Made</span>{% endif %}</legend>
+                    <legend><strong>{% if idea.kind == "hero" %}Hero{% elif idea.kind == "infographic" %}Infographic ({{ idea.template_label }}): {{ idea.section }}{% else %}Photo: {{ idea.section }}{% endif %}</strong>{% if idea.section in made %} <span class="s-tag s-tag--ok">Made</span>{% endif %}</legend>
                     {% if idea.why %}<p class="s-muted s-small s-m0">{{ idea.why }}</p>{% endif %}
                     {% if idea.kind == "hero" %}
                         <div class="s-keys__field"><label for="headline-{{ forloop.counter0 }}">Headline (the article's H1)</label><input id="headline-{{ forloop.counter0 }}" name="headline-{{ forloop.counter0 }}" value="{{ idea.headline }}" maxlength="200"></div>
                     {% endif %}
-                    <div class="s-keys__field"><label for="description-{{ forloop.counter0 }}">What the photo shows</label><textarea id="description-{{ forloop.counter0 }}" name="description-{{ forloop.counter0 }}" rows="2">{{ idea.description }}</textarea></div>
-                    <label class="s-cluster"><input type="checkbox" name="pick-{{ forloop.counter0 }}" value="1" {% if idea.section not in made %}checked{% endif %}> Make this image</label>
+                    {% if idea.kind == "infographic" %}
+                        <input type="hidden" name="description-{{ forloop.counter0 }}" value="{{ idea.description }}">
+                        <p class="s-m0"><span class="s-tag s-tag--{% if idea.passes %}ok">Passes its checks{% else %}warn">Needs edits{% endif %}</span> {{ idea.description }}</p>
+                        {% if idea.summary %}<ul class="s-small">{% for line in idea.summary %}<li>{{ line }}</li>{% endfor %}</ul>{% endif %}
+                        {% if idea.checks %}<ul class="s-small s-muted">{% for check in idea.checks %}<li>{{ check }}</li>{% endfor %}</ul>{% endif %}
+                        <details><summary>Edit the content (JSON)</summary>
+                            <label class="w-sr-only" for="spec-{{ forloop.counter0 }}">Content for {{ idea.section }}</label>
+                            <textarea id="spec-{{ forloop.counter0 }}" name="spec-{{ forloop.counter0 }}" rows="12" spellcheck="false" class="s-mono">{{ idea.spec_json }}</textarea>
+                        </details>
+                    {% else %}
+                        <div class="s-keys__field"><label for="description-{{ forloop.counter0 }}">What the photo shows</label><textarea id="description-{{ forloop.counter0 }}" name="description-{{ forloop.counter0 }}" rows="2">{{ idea.description }}</textarea></div>
+                    {% endif %}
+                    <label class="s-cluster"><input type="checkbox" name="pick-{{ forloop.counter0 }}" value="1" {% if idea.section not in made and idea.passes is not False %}checked{% endif %}> Make this {% if idea.kind == "infographic" %}infographic{% else %}image{% endif %}</label>
                 </fieldset>
             {% endfor %}
-            {% if plan.notes %}<div class="s-callout" role="note"><strong>Not photos:</strong><ul>{% for line in plan.notes.splitlines %}<li>{{ line|cut:"Not a photo: " }}</li>{% endfor %}</ul></div>{% endif %}
+            {% if plan.notes %}<div class="s-callout" role="note"><strong>Needs a designer:</strong><ul>{% for line in plan.notes.splitlines %}<li>{{ line|cut:"Not a photo: " }}</li>{% endfor %}</ul></div>{% endif %}
             {% if can_write %}
                 <div class="s-row-actions">
-                    <button class="button" type="submit" name="action" value="make">Make the ticked images</button>
+                    <button class="button" type="submit" name="action" value="make">Make the ticked visuals</button>
                     <button class="button button-secondary" type="submit" name="action" value="replan">Suggest again</button>
                 </div>
             {% endif %}

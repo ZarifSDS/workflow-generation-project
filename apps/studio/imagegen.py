@@ -26,7 +26,7 @@ from django.utils.text import slugify
 from apps.ai.redact import redact
 from apps.ai.service import generate_image
 from apps.ai.types import ProviderError
-from apps.quality import hero
+from apps.quality import hero, infographic
 
 from . import executors, prompting
 from .models import ImageJob
@@ -146,6 +146,8 @@ def _finish(job, data, vision, context, markup):
 
 def run(job):
     """Make the job's image. Returns the metrics; raises ImageJobError or ProviderError."""
+    if job.kind == ImageJob.Kind.INFOGRAPHIC:
+        return _run_infographic(job)
     context = _context(job)
     markup = hero.headline_markup(job.headline or job.description, job.region) if job.kind == "hero" else ""
     if job.kind == ImageJob.Kind.HERO and not markup.strip():
@@ -217,6 +219,79 @@ def run(job):
     }
 
 
+def _json_object(text):
+    match = re.search(r"\{.*\}", text or "", re.S)
+    try:
+        data = json.loads(match.group(0)) if match else None
+    except json.JSONDecodeError:
+        data = None
+    return data if isinstance(data, dict) else None
+
+
+def write_spec(template, description):
+    """The template's spec, filled by the model from a description (the only source it may use)."""
+    caller = SimpleNamespace(key="hero_image")
+    context = {
+        "template": f"{template} ({infographic.LABELS[template]})",
+        "guide": infographic.spec_guide([template]),
+        "description": description,
+    }
+    result = executors._call_text(
+        caller, prompting.render("infographic_spec", context), max_tokens=4000, task="hero_prompt"
+    )
+    spec = _json_object(result.text)
+    if spec is None:
+        raise ImageJobError("The model didn't return a usable infographic spec. Try again or paste one.")
+    return spec
+
+
+def _run_infographic(job):
+    """Draw an infographic from its template and spec (written from the description when there is none),
+    with the template's checks; a blocked one gets no image, only the problems to fix."""
+    if job.template not in infographic.TEMPLATES:
+        raise ImageJobError("Choose an infographic template.")
+    spec_source = "given"
+    if not job.spec:
+        if not job.description.strip():
+            raise ImageJobError(
+                "Describe what the infographic shows (its facts and figures), or paste a spec."
+            )
+        job.spec = write_spec(job.template, job.description)
+        spec_source = "written from the description"
+    # Figures must come from the article (a planned infographic) or from the description it was written from.
+    if job.plan_id and job.plan.article_text:
+        article, source_name = job.plan.article_text, "the article"
+    elif spec_source != "given":
+        article, source_name = job.description, "your description"
+    else:
+        article, source_name = None, "the article"
+    try:
+        result = infographic.render(job.template, job.spec, article=article, source_name=source_name)
+    except infographic.InfographicError as error:
+        raise ImageJobError(str(error)) from error
+    title = str(job.spec.get("title") or job.description or "infographic").replace("**", "")
+    stem = slugify(title)[:80] or "infographic"
+    files, final = {}, None
+    if not result.blocked:
+        final = _save_image(f"Infographic: {title}", result.png, f"{stem}.png", result.alt)
+        for kind, data in (("webp", result.webp), ("svg", result.svg.encode())):
+            files[kind] = default_storage.save(f"studio/images/job-{job.pk}/{stem}.{kind}", ContentFile(data))
+    job.photo, job.image = None, final
+    return {
+        "template": job.template,
+        "spec_source": spec_source,
+        "problems": result.problems,
+        "flags": [p["text"] for p in result.problems],
+        "blocked": result.blocked,
+        "alt_text": result.alt,
+        "files": files,
+        "file_stem": stem,
+        "size": [infographic.WEBP_WIDTH, round(result.height * infographic.WEBP_WIDTH / infographic.W)],
+        "headline": "",
+        "needs_a_look": result.blocked,
+    }
+
+
 def enqueue(job):
     from django.conf import settings
 
@@ -252,8 +327,20 @@ def execute(job_id):
 def again(job, user, **changes):
     """A new job from this one's inputs; with `same_photo`, its photo is reused (a new headline or size)."""
     same_photo = changes.pop("same_photo", False)
-    fields = ("kind", "description", "headline", "photo_prompt", "region", "width", "height", "corner")
+    fields = (
+        "kind",
+        "description",
+        "headline",
+        "photo_prompt",
+        "region",
+        "width",
+        "height",
+        "corner",
+        "template",
+    )
     values = {name: getattr(job, name) for name in fields}
+    values["spec"] = {} if changes.pop("rewrite", False) else changes.pop("spec", None) or job.spec
+    values["plan"], values["section"] = job.plan, job.section
     values.update({key: value for key, value in changes.items() if value not in (None, "")})
     source = (job.photo or job.source) if same_photo else None  # a new photo is generated otherwise
     new = ImageJob.objects.create(**values, source=source, created_by=user)
@@ -289,7 +376,8 @@ def validate_size(width, height):
 # ---- Images tailored to an existing article ----
 
 ARTICLE_WORDS = 5000  # enough for any blog in the index; the planner reads structure, not every word
-MAX_INLINE = 4
+MAX_INLINE = 4  # photos
+MAX_VISUALS = 5  # photos and infographics besides the hero
 VISUAL_CUE = re.compile(r"\[VISUAL:\s*([^\]]+)\]")
 SDSMANAGER_HOSTS = ("sdsmanager.com", "www.sdsmanager.com")
 
@@ -404,8 +492,9 @@ def outline_of(text):
     return (h1.group(1).strip("* ") if h1 else ""), sections, cues
 
 
-def _plan_ideas(raw, h1, sections):
-    """The planner's JSON, checked: one hero with the article's H1, in-article ideas on real sections."""
+def _plan_ideas(raw, h1, sections, article=""):
+    """The planner's JSON, checked: one hero with the article's H1, in-article ideas on real sections, and
+    each infographic drawn once (without the PNG) so the plan shows whether it passes its checks."""
     match = re.search(r"\{.*\}", raw, re.S)
     try:
         data = json.loads(match.group(0)) if match else {}
@@ -418,7 +507,7 @@ def _plan_ideas(raw, h1, sections):
     for item in data["ideas"]:
         if not isinstance(item, dict) or not str(item.get("description") or "").strip():
             continue
-        kind = "hero" if item.get("kind") == "hero" else "inline"
+        kind = item.get("kind") if item.get("kind") in ("hero", "infographic") else "inline"
         if kind == "hero":
             if hero_seen:
                 continue
@@ -426,8 +515,33 @@ def _plan_ideas(raw, h1, sections):
             section = "Hero"
         else:
             section = known.get(str(item.get("section") or "").strip().lower())
-            if section is None or sum(i["kind"] == "inline" for i in ideas) >= MAX_INLINE:
+            visuals = sum(i["kind"] != "hero" for i in ideas)
+            photos = sum(i["kind"] == "inline" for i in ideas)
+            if section is None or visuals >= MAX_VISUALS or (kind == "inline" and photos >= MAX_INLINE):
                 continue
+        if kind == "infographic":
+            template, spec = item.get("template"), item.get("spec")
+            if template not in infographic.TEMPLATES or not isinstance(spec, dict):
+                continue
+            try:
+                check = infographic.render(template, spec, article=article, raster=False)
+            except infographic.InfographicError:
+                continue
+            ideas.append(
+                {
+                    "kind": kind,
+                    "section": section,
+                    "headline": "",
+                    "description": " ".join(str(item["description"]).split())[:600],
+                    "why": " ".join(str(item.get("why") or "").split())[:300],
+                    "template": template,
+                    "template_label": infographic.LABELS[template],
+                    "spec": spec,
+                    "checks": [p["text"] for p in check.problems],
+                    "passes": not check.blocked,
+                }
+            )
+            continue
         ideas.append(
             {
                 "kind": kind,
@@ -456,18 +570,20 @@ def plan(plan_obj):
         "cues": "\n".join(f"- under “{s}”: {c}" for s, c in cues) or "(none)",
         "article": " ".join(words[:ARTICLE_WORDS]) if len(words) > ARTICLE_WORDS else text,
         "max_inline": MAX_INLINE,
+        "max_visuals": MAX_VISUALS,
+        "templates": infographic.spec_guide(),
     }
     caller = SimpleNamespace(key="hero_image")
     result = executors._call_text(
-        caller, prompting.render("image_plan", context), max_tokens=4000, task="hero_prompt"
+        caller, prompting.render("image_plan", context), max_tokens=8000, task="hero_prompt"
     )
-    ideas, skipped = _plan_ideas(result.text, h1, sections)
+    ideas, skipped = _plan_ideas(result.text, h1, sections, text)
     if not ideas:
         raise ImageJobError("The model proposed no usable images for this article. Try again.")
     if h1 and not any(idea["kind"] == "hero" for idea in ideas):
         ideas.insert(0, {"kind": "hero", "section": "Hero", "headline": h1, "description": h1, "why": ""})
     notes = "\n".join(f"Not a photo: {item}" for item in skipped)
-    return h1, ideas, notes
+    return h1, ideas, notes, text
 
 
 def enqueue_plan(plan_obj):
@@ -491,8 +607,9 @@ def execute_plan(plan_id):
         plan_obj.status, plan_obj.error = ImagePlan.Status.RUNNING, ""
         plan_obj.save(update_fields=["status", "error"])
     try:
-        title, ideas, notes = plan(plan_obj)
+        title, ideas, notes, text = plan(plan_obj)
         plan_obj.title = plan_obj.title or title or plan_obj.source_label
+        plan_obj.article_text = text  # what infographic figures are checked against when they are made
         plan_obj.ideas, plan_obj.notes, plan_obj.status = ideas, notes, ImagePlan.Status.READY
     except (ProviderError, executors.StepError, ImageJobError) as error:
         message = executors.friendly_error(error) if isinstance(error, ProviderError) else str(error)
@@ -508,7 +625,7 @@ def execute_plan(plan_id):
 
 
 def make_from_plan(plan_obj, chosen, user):
-    """One ImageJob per chosen idea ({kind, section, headline, description}), queued."""
+    """One ImageJob per chosen idea ({kind, section, headline, description, template, spec}), queued."""
     jobs = []
     for idea in chosen:
         job = ImageJob.objects.create(
@@ -518,6 +635,8 @@ def make_from_plan(plan_obj, chosen, user):
             region=plan_obj.region,
             plan=plan_obj,
             section=idea.get("section", ""),
+            template=idea.get("template", "") if idea["kind"] == "infographic" else "",
+            spec=idea.get("spec") or {} if idea["kind"] == "infographic" else {},
             created_by=user,
         )
         enqueue(job)
