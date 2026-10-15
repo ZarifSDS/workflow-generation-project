@@ -86,7 +86,7 @@ def metrics_module():
 
 
 def fkgl(text):
-    """FKGL with the skill's own syllable heuristic; None for very short text."""
-    m = metrics_module()
-    grade, words, _sentences = m.fkgl(m.split_sentences(m.strip_markdown(text)))
-    return round(grade, 1) if words >= 30 else None
+    """FKGL with the studio's one counting (apps/quality/readability.py); None for short text."""
+    from . import readability
+
+    return readability.fkgl(text)

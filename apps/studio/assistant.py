@@ -98,6 +98,11 @@ def _grades(step, text, target):
         f"- {'  ' if r['level'] == 3 else ''}{r['name']}: "
         + (str(r["grade"]) if r["grade"] is not None else "too short")
         + (" (above target)" if r["over"] else "")
+        + (
+            f"; {len(r['hard']) + len(r['very_hard'])} hard sentence(s)"
+            if r.get("hard") or r.get("very_hard")
+            else ""
+        )
         for r in rows
     )
 

@@ -220,8 +220,10 @@ class RunWorkspaceView(StudioPage):
         if version and kind == "text" and step.key in assistant.ARTICLE_STEPS:
             markers = house.find_markers(version.content)
             context.update(
-                section_rows=review.unit_rows(version.content, self.run.brief.fkgl),
-                article_metrics=review.article_metrics(version.content),
+                section_rows=review.unit_rows(version.content, self.run.brief.fkgl, self.run.brief.terms()),
+                article_metrics=review.article_metrics(
+                    version.content, self.run.brief.fkgl, self.run.brief.terms()
+                ),
                 markers=markers,
                 has_sources=any(m["kind"] == "SRC" for m in markers),
             )

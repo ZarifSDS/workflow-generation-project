@@ -7,7 +7,6 @@ import re
 import subprocess
 from dataclasses import dataclass, field
 
-import textstat
 from django.conf import settings
 from django.core.files.images import ImageFile
 
@@ -143,7 +142,7 @@ def site_crawl(step):
             rows.append(f"| {page.url} | Skipped | – | – | {page.reason} |")
             continue
         words = len(page.text.split())
-        grade = round(textstat.flesch_kincaid_grade(page.text), 1) if words > 100 else None
+        grade = quality_scripts.fkgl(page.text)
         first_person = len(re.findall(r"\b(I|I'm|I've|my|me)\b", page.text))
         rows.append(
             f"| {page.url} | {'Direct' if page.method == 'direct' else 'Reader service'} | {words} | "

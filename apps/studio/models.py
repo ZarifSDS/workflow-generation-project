@@ -143,6 +143,10 @@ class ContentBrief(BriefFieldsMixin):
     def __str__(self):
         return self.topic
 
+    def terms(self):
+        """The brief's keywords: never counted as complex words."""
+        return [self.pkeyword, *(self.skeywords or [])]
+
     def as_prompt_dict(self):
         """Shape used by the prompts and metrics (same keys as eval/briefs.yaml)."""
         return {

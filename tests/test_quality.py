@@ -25,7 +25,8 @@ In this article we will explore SDS retention requirements for employers. Keep t
 
 ## How long to keep safety data sheets
 
-{LONG_SENTENCE} Documentation obligations encompass comprehensive organisational accountability considerations.
+{LONG_SENTENCE} {LONG_SENTENCE} {LONG_SENTENCE} Documentation obligations encompass comprehensive \
+organisational accountability considerations.
 
 ## Practical policy
 
@@ -223,19 +224,20 @@ def test_grading_leaves_headings_out_and_ends_list_items():
         "## Steps for Reading the Hazard Section of a Safety Data Sheet\n\nRead section two first. "
         "It lists the hazards you need before you open the container.\n\n- Signal word\n"
         "- Pictograms and hazard statements\n- Precautionary statements for handling\n- Supplier contact details\n"
-    ) * 2
+    ) * 4  # a grade needs 100 words
     graded = review.grading_text(text)
     assert "Steps for Reading" not in graded  # a heading isn't part of a sentence
     assert "- Signal word.\n" in graded and "- Supplier contact details.\n" in graded
     punctuated = text.replace("word\n", "word.\n").replace("statements\n", "statements.\n")
     punctuated = punctuated.replace("handling\n", "handling.\n").replace("details\n", "details.\n")
     assert review.grade(text) == review.grade(punctuated)  # the list reads as its items
-    old = scripts.fkgl(review.prose(text))  # the previous reading: heading joined, list run on
+    m = scripts.metrics_module()  # the previous reading: heading joined, list run on
+    old = m.fkgl(m.split_sentences(m.strip_markdown(review.prose(text))))[0]
     assert review.grade(text) < old
 
 
 def test_the_vocabulary_floor_keeps_short_dense_sentences_untuned():
-    dense = "Organisational accountability necessitates comprehensive documentation procedures. " * 8
+    dense = "Organisational accountability necessitates comprehensive documentation procedures. " * 20
     floor = review.vocabulary_floor(dense)
     assert floor and review.grade(dense) <= floor + 1  # its sentences are short: only words lift the grade
     stacked = (

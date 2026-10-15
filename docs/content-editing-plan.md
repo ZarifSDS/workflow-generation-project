@@ -51,6 +51,8 @@ The source is the owner's `content-editing` skill (Ryan Law's *How to Edit*: str
 
 ## The reading grade (FKGL): making it more accurate
 
+**Built on 2026-10-15** (the owner chose option C in `docs/reading-grade-options.md`): steps 1, 3-6 and 8, step 7 replaced by Hemingway/Yoast-style sentence and word flags, step 2 in part, step 9 open. What was built and where it differs from the steps below: `docs/reading-grade-options.md` › Built.
+
 **How it is computed today.** Section and article grades use the blog skill's own formula (`vendor/ehs_seo_blog/scripts/metrics.py`, through `review.grade`): syllables are counted as vowel groups with a silent-e rule, sentences are split at `.!?` followed by a space and a capital or digit, and words are runs of letters. Its weak points:
 
 | Weak point | Effect |

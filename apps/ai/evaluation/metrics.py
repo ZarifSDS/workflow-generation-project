@@ -2,7 +2,7 @@
 
 import re
 
-import textstat
+from apps.quality import readability
 
 # (US, UK) spelling pairs swept by region. Kept to unambiguous words.
 SPELLING_PAIRS = [
@@ -61,8 +61,8 @@ def sections(markdown):
 
 
 def fkgl(text):
-    plain = plain_text(text)
-    return round(textstat.flesch_kincaid_grade(plain), 1) if len(words(plain)) >= 30 else None
+    """The studio's one reading-grade counting (apps/quality/readability.py)."""
+    return readability.fkgl(plain_text(text))
 
 
 def count(pattern, text):

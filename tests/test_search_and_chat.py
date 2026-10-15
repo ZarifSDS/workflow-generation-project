@@ -41,7 +41,7 @@ LONG_ARTICLE = (
     "circumstances change, because regulatory authorities scrutinise organisational documentation. "
     * 5
     + "\n\n"
-    "### Second part\n\n" + "Keep it simple. Short words help. " * 15 + "\n\n"
+    "### Second part\n\n" + "Keep it simple. Short words help. " * 18 + "\n\n"  # 108 words: graded alone
     "## Small section\n\n" + "A few plain words here for the reader to see. " * 3 + "\n"
 )
 

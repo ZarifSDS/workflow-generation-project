@@ -574,9 +574,9 @@ def test_draft_without_any_heading_still_reaches_a_page(admin_user, model, fake_
     plain = (
         "OSHA treats a safety data sheet as an exposure record. Keep it for 30 years after the chemical "
         "leaves the site. Archive old sheets in one place, and name one person who owns the archive so "
-        "nobody has to guess where the records are."
-    )
-    model.article = plain
+        "nobody has to guess where the records are. "
+    ) * 3  # a grade needs 100 words
+    model.article = plain.strip()
     run = services.create_run(make_brief(admin_user), config("seo_blog", False), user=admin_user)
     trail = drive(run, approve=False)
     assert trail[-1] == ("publish", S.APPROVED, R.DONE)
@@ -933,25 +933,32 @@ def test_accept_rewrite_rejects_empty_shrunken_and_headingless_output():
     assert review.accept_rewrite(before, before + "\n\n## C\n\nAn added section is fine.")[0]
 
 
-LONG_SECTION = (
-    "## Why Records Matter\n\n"
-    "Employers that discontinue a hazardous chemical may discard its safety data sheet only when they "
-    "maintain a record of the chemical identity and the period of use for at least 30 years under the "
-    "OSHA standard, because the agency considers the information an exposure record."
+# Each body three times over: a grade needs 100 words (readability.MIN_WORDS).
+LONG_SECTION = "## Why Records Matter\n\n" + " ".join(
+    [
+        "Employers that discontinue a hazardous chemical may discard its safety data sheet only when they "
+        "maintain a record of the chemical identity and the period of use for at least 30 years under the "
+        "OSHA standard, because the agency considers the information an exposure record."
+    ]
+    * 3
 )
-CHOPPY = (
-    "## Why Records Matter\n\n"
-    "Employers may stop using a chemical. They may discard its safety data sheet. They must keep a record. "
-    "The record names the chemical identity. It gives the period of use. Keep it for at least 30 years. "
-    "The OSHA standard requires this. The agency calls it an exposure record."
+CHOPPY = "## Why Records Matter\n\n" + " ".join(
+    [
+        "Employers may stop using a chemical. They may discard its safety data sheet. "
+        "They must keep a record. The record names the chemical identity. It gives the period of use. "
+        "Keep it for at least 30 years. The OSHA standard requires this. "
+        "The agency calls it an exposure record."
+    ]
+    * 3
 )
-# Sentence lengths 16 (the metrics script glues the heading to the first sentence), 23, 1 and 13 words:
-# three length bands, so the rewrite isn't "flat".
-VARIED = (
-    "## Why Records Matter\n\n"
-    "Employers that stop using a hazardous chemical may discard its safety data sheet. They must keep a "
-    "record of the chemical identity and the period of use for at least 30 years under the OSHA standard. "
-    "Why? The agency treats that information as an exposure record for the people involved."
+# Sentence lengths 13, 23, 1 and 13 words: three length bands, so the rewrite isn't "flat".
+VARIED = "## Why Records Matter\n\n" + " ".join(
+    [
+        "Employers that stop using a hazardous chemical may discard its safety data sheet. They must keep a "
+        "record of the chemical identity and the period of use for at least 30 years under the OSHA "
+        "standard. Why? The agency treats that information as an exposure record for the people involved."
+    ]
+    * 3
 )
 
 

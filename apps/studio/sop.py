@@ -1685,10 +1685,15 @@ def measurements(step_key, text, ctx):
     sections more than a grade above target."""
     if step_key not in ARTICLE_STEPS:
         return ""
-    metrics = quality_review.article_metrics(text)
     target = ctx.get("fkgl")
+    metrics = quality_review.article_metrics(text, target)
     line = f"\nMeasured by script (estimates): article FKGL {metrics['fkgl']}"
     line += f" against a target of {target:g}" if target else ""
+    line += (
+        f" ({metrics['words_per_sentence']} words a sentence, "
+        f"{metrics['syllables_per_word']} syllables a word"
+        f"; {len(metrics['hard'])} hard and {len(metrics['very_hard'])} very hard sentences)"
+    )
     line += f"; sentence lengths {'look flat' if metrics['flat'] else 'vary'}; {metrics['words']} words"
     line += f" against a guide of {ctx['wordcount']}" if ctx.get("wordcount") else ""
     lines = [line + "."]

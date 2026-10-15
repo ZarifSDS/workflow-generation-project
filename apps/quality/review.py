@@ -5,7 +5,8 @@ target reading grade → 5 re-scan and report.
 
 - Scanning uses the vendored skill scripts: deslop's lexical (with the ehs-seo-blog banned-word list and
   Title Case allowed, as that skill prescribes), structure and redundancy scans, clarity-review's frame
-  scan, and the ehs-seo-blog metrics (FKGL and the sentence-length distribution).
+  scan, and the reading grade (`readability`: FKGL counted one way everywhere, the sentence-length
+  distribution, and the Hemingway/Yoast-style diagnosis).
 - Reading grade follows the ehs-seo-blog rules: it's lowered by syntactic unpacking only; an edit that
   drops a section by more than MAX_GRADE_JUMP grades is accepted only if its sentence lengths aren't flat.
 - A "section" is an H2 section, or, when an H2 section is longer than LONG_SECTION_WORDS and has H3s, its
@@ -21,7 +22,7 @@ target reading grade → 5 re-scan and report.
 import re
 from dataclasses import dataclass, field
 
-from . import scripts
+from . import readability, scripts
 
 TUNE_TOLERANCE = 1.0  # sections more than this above the target are tuned
 MAX_TUNED_SECTIONS = 10  # tuning calls per review, hardest sections first
@@ -87,17 +88,33 @@ def heading_name(heading_line):
 
 
 def section_units(text, max_words=LONG_SECTION_WORDS):
-    """Like split_sections, but a long H2 section with H3s becomes its intro plus one unit per H3.
-    ''.join reassembles the text exactly."""
+    """Like split_sections, but a long H2 section with H3s becomes its intro plus one unit per H3, with a
+    piece under readability.MIN_WORDS pooled with the pieces after it (an FAQ's H2 and its short answers are
+    graded together instead of each being too short to grade). ''.join reassembles the text exactly."""
     units = []
     for heading, body in split_sections(text):
         if len((heading + body).split()) <= max_words or not re.search(r"(?m)^###\s", body):
             units.append((heading, body))
             continue
         parts = re.split(r"(?m)^(###\s+.+\n)", body)
-        units.append((heading, parts[0]))
-        units += [(parts[i], parts[i + 1]) for i in range(1, len(parts) - 1, 2)]
+        pieces = [(heading, parts[0])] + [(parts[i], parts[i + 1]) for i in range(1, len(parts) - 1, 2)]
+        units += _pooled(pieces)
     return units
+
+
+def _pooled(pieces):
+    groups, current = [], []
+    for piece in pieces:
+        current.append(piece)
+        if len(prose("".join(h + b for h, b in current)).split()) >= readability.MIN_WORDS:
+            groups.append(current)
+            current = []
+    if current:
+        if groups:
+            groups[-1] += current
+        else:
+            groups.append(current)
+    return [(group[0][0], "".join(h + b for h, b in group)[len(group[0][0]) :]) for group in groups]
 
 
 def prose(text):
@@ -120,8 +137,13 @@ def grading_text(text):
     return re.sub(r"(?m)^(\s*(?:[-*+]|\d+[.)])\s+.*?[^.!?:;\s])[ \t]*$", r"\1.", text)
 
 
+def measure(text, terms=()):
+    """The readability measure of a section or article as it is graded (one counting everywhere)."""
+    return readability.measure(grading_text(text), terms)
+
+
 def grade(text):
-    return scripts.fkgl(grading_text(text))
+    return measure(text).fkgl
 
 
 NATURAL_SENTENCE = 15  # words: a natural average; tuning below it means uniformly short sentences
@@ -132,25 +154,28 @@ def vocabulary_floor(text):
     + 11.8 x syllables per word - 15.59, with 15 words a sentence. EHS prose runs at about 1.7 syllables a
     word, so a target of 9 is out of reach without the banned uniform short sentences; the skill allows a
     grade or two above target where the terms require it. Tuning aims at max(target, floor)."""
-    m = scripts.metrics_module()
-    words = re.findall(r"[A-Za-z]+(?:'[A-Za-z]+)?", m.strip_markdown(grading_text(text)))
-    if len(words) < 30:
+    m = measure(text)
+    if m.words < 30:
         return None
-    per_word = sum(m.count_syllables(w) for w in words) / len(words)
-    return round(0.39 * NATURAL_SENTENCE + 11.8 * per_word - 15.59, 1)
+    return round(0.39 * NATURAL_SENTENCE + 11.8 * m.syllables / m.words - 15.59, 1)
 
 
 STACKED_WORDS = 25  # a sentence this long usually stacks clauses
 
 
-def stacked_sentences(text, limit=6):
-    """The sentences worth unpacking: the longest ones over STACKED_WORDS words, in reading order."""
-    m = scripts.metrics_module()
-    found = [
-        s for s in m.split_sentences(m.strip_markdown(grading_text(text))) if len(s.split()) > STACKED_WORDS
-    ]
-    keep = set(sorted(found, key=lambda s: -len(s.split()))[:limit])
-    return [s for s in found if s in keep]
+def stacked_sentences(text, limit=6, target=None):
+    """The sentences worth unpacking, in reading order: with a target, the hard and very hard ones (each
+    sentence's own grade against the target, as Hemingway flags them), hardest first up to `limit`; without
+    one, the longest over STACKED_WORDS words."""
+    sentences = measure(text).sentences
+    if target is not None:
+        hard, very = readability.Measure(sentences).hard(target)
+        found = [s for s in sentences if s in hard or s in very]
+        keep = {id(s) for s in sorted(found, key=lambda s: -s.grade)[:limit]}
+    else:
+        found = [s for s in sentences if s.words > STACKED_WORDS]
+        keep = {id(s) for s in sorted(found, key=lambda s: -s.words)[:limit]}
+    return [s.text for s in found if id(s) in keep]
 
 
 ARTICLES = {"the", "a", "an", "this", "that", "these", "those", "each", "every"}
@@ -160,11 +185,10 @@ PRONOUNS = {"it", "they", "you", "we", "he", "she", "its", "their", "your"}
 def opener_run(text):
     """The longest run of consecutive sentences in one paragraph that open with the same subject words
     ("The operator… The operator… The operator…", the tuning tell from run 19)."""
-    m = scripts.metrics_module()
     longest = 0
     for paragraph in re.split(r"\n\s*\n", grading_text(text)):
         openers = []
-        for sentence in m.split_sentences(m.strip_markdown(paragraph)):
+        for sentence in readability.split_sentences(readability.strip_markdown(paragraph)):
             words = [w.lower() for w in re.findall(r"[A-Za-z']+", sentence)]
             subject = next((w for w in words if w not in ARTICLES), "")
             # A pronoun callback ("It… It…") is the connected style the tuning prompt asks for, not the tell.
@@ -177,21 +201,49 @@ def opener_run(text):
     return longest
 
 
-def unit_rows(text, target=None):
-    """Per-section rows for the workspace's grade table: index, level, name, words, grade, over target."""
+def diagnosis(m, target=None):
+    """What raises a grade, as Hemingway and Yoast show it: the two drivers (sentence length, word length),
+    hard and very hard sentences against the target, complex words and the passive share. Advisory only."""
+    hard, very = m.hard(target)
+    return {
+        "words_per_sentence": m.words_per_sentence,
+        "syllables_per_word": m.syllables_per_word,
+        "long_share": m.long_share(),
+        "hard": [s.text for s in hard],
+        "very_hard": [s.text for s in very],
+        "complex_share": m.complex_share,
+        "complex_words": sorted({w.lower() for w in m.complex})[:12],
+        "complex_over": m.complex_share > readability.COMPLEX_SHARE,
+        "passive_share": m.passive_share,
+        "passive": sum(s.passive for s in m.sentences),
+        "passive_over": m.passive_share > readability.PASSIVE_SHARE,
+    }
+
+
+def unit_rows(text, target=None, terms=()):
+    """Per-section rows for the workspace's grade table: index, level, name, words, grade, over target,
+    the floor its words allow, and the diagnosis."""
     rows = []
+    whole = set(split_sections(text))
     for index, (heading, body) in enumerate(section_units(text)):
-        value = grade(heading + body) if graded(heading) else None
+        is_graded = graded(heading)
+        m = measure(heading + body, terms) if is_graded else None
+        value = m.fkgl if m else None
         level = 3 if heading.startswith("###") else (2 if heading else 0)
         rows.append(
             {
                 "index": index,
                 "level": level,
                 "name": heading_name(heading),
+                # H3s graded with this unit because they were too short alone (0 for a whole H2 section).
+                "pooled": 0 if (heading, body) in whole else len(re.findall(r"(?m)^###\s", body)),
                 "words": len(prose(body).split()),
                 "grade": value,
-                "graded": graded(heading),
+                "graded": is_graded,
                 "over": bool(value and target is not None and value > float(target) + TUNE_TOLERANCE),
+                "floor": vocabulary_floor(heading + body) if value is not None else None,
+                # Sentence flags need no minimum length: a short section still shows its hard sentences.
+                **(diagnosis(m, target) if m and m.sentences else {}),
             }
         )
     return rows
@@ -206,30 +258,28 @@ def article_text(text):
     return join_sections([(h, b) for h, b in split_sections(text) if graded(h)])
 
 
-def article_metrics(text):
-    """Whole-article FKGL and sentence-length distribution, from the ehs-seo-blog metrics script."""
-    m = scripts.metrics_module()
-    sentences = m.split_sentences(m.strip_markdown(grading_text(article_text(text))))
-    value, words, _ = m.fkgl(sentences)
-    distribution = m.length_distribution(sentences) or {}
+def article_metrics(text, target=None, terms=()):
+    """Whole-article FKGL (± readability.MARGIN), the sentence-length distribution and the diagnosis."""
+    m = measure(article_text(text), terms)
+    distribution = readability.length_distribution(m.sentences)
     return {
-        "fkgl": round(value, 1) if words >= 30 else None,
-        "words": words,
-        "sentences": len(sentences),
+        "fkgl": m.fkgl,
+        "margin": readability.MARGIN,
+        "words": m.words,
+        "sentences": len(m.sentences),
         "buckets": distribution.get("buckets", {}),
         "flatness_ratio": distribution.get("flatness_ratio"),
         "flat": bool(distribution.get("flatness_ratio") and distribution["flatness_ratio"] >= FLAT_RATIO),
+        **diagnosis(m, target),
     }
 
 
 def _sentences(text):
-    m = scripts.metrics_module()
-    return len(m.split_sentences(m.strip_markdown(prose(text))))
+    return len(readability.measure(prose(text)).sentences)
 
 
 def _flatness(text):
-    m = scripts.metrics_module()
-    distribution = m.length_distribution(m.split_sentences(m.strip_markdown(prose(text)))) or {}
+    distribution = readability.length_distribution(readability.measure(prose(text)).sentences)
     return distribution.get("flatness_ratio") or 0
 
 
@@ -350,7 +400,7 @@ def tune_unit(text, index, target, region, call):
         raise ValueError(f"“{heading_name(heading)}” isn't article prose, so it isn't tuned.")
     original = (heading + body).strip()
     before = grade(original)
-    stacked = stacked_sentences(original)
+    stacked = stacked_sentences(original, target=target) or stacked_sentences(original)
     edited = (
         call(
             "review_wordlevel",
@@ -360,7 +410,7 @@ def tune_unit(text, index, target, region, call):
                 "target": target,
                 "region": region,
                 "stacked": "\n".join(f"- {s}" for s in stacked)
-                or "- (none over 25 words: unpack only where a clause stacks)",
+                or "- (no hard sentence and none over 25 words: unpack only where a clause stacks)",
             },
         )
         or ""
@@ -425,7 +475,9 @@ def run_sequence(text, brief, call):
     # 1. Scan the final draft.
     lexical, structure = _lexical(result.text), _scan("structure", result.text) or {}
     redundancy = _scan("redundancy", result.text) or {}
-    start_metrics, start = article_metrics(result.text), section_grades(result.text)
+    terms = [brief.get("pkeyword") or "", *(brief.get("skeywords") or [])]
+    start_metrics = article_metrics(result.text, target, terms)
+    start = section_grades(result.text)
     over = [name for name, value in start if value and value > target + TUNE_TOLERANCE]
     result.metrics = {"before": start_metrics, "slop_before": lexical.get("slop_index")}
     _record(
@@ -437,7 +489,8 @@ def run_sequence(text, brief, call):
         f"{len(lexical.get('findings') or [])} lexical and {len(redundancy.get('findings') or [])} "
         f"cross-section repetition finding(s). Article FKGL {start_metrics['fkgl']} "
         f"(estimate) against target "
-        f"{target:g}; {len(over)} section(s) more than {TUNE_TOLERANCE:g} above it."
+        f"{target:g}; {len(over)} section(s) more than {TUNE_TOLERANCE:g} above it; "
+        + _diagnosis_line(start_metrics)
         + (" Sentence lengths look flat." if start_metrics["flat"] else ""),
     )
 
@@ -484,7 +537,7 @@ def run_sequence(text, brief, call):
     _auto_tune(result, call, brief, target)
 
     # 5. Re-scan and report.
-    final_metrics, final = article_metrics(result.text), section_grades(result.text)
+    final_metrics, final = article_metrics(result.text, target, terms), section_grades(result.text)
     lexical_after = _lexical(result.text)
     result.metrics.update(after=final_metrics, slop_after=lexical_after.get("slop_index"))
     still = [name for name, value in final if value and value > target + TUNE_TOLERANCE]
@@ -495,11 +548,22 @@ def run_sequence(text, brief, call):
         False,
         f"Slop index {lexical.get('slop_index', '–')} → {lexical_after.get('slop_index', '–')}. Article FKGL "
         f"{start_metrics['fkgl']} → {final_metrics['fkgl']} (estimate); {len(still)} section(s) still more "
-        f"than {TUNE_TOLERANCE:g} above target (use Tune, or accept it where legal terms set the floor)."
+        f"than {TUNE_TOLERANCE:g} above target (use Tune, or accept it where legal terms set the floor); "
+        + _diagnosis_line(final_metrics)
         + (" Sentence lengths look flat: vary cadence." if final_metrics["flat"] else ""),
     )
     result.grades = _grade_rows(start, after_edit, final)
     return result
+
+
+def _diagnosis_line(metrics):
+    """One sentence of the diagnosis for the step report."""
+    return (
+        f"{len(metrics['hard'])} hard and {len(metrics['very_hard'])} very hard sentence(s); "
+        f"{metrics['words_per_sentence']} words a sentence, "
+        f"{metrics['syllables_per_word']} syllables a word; "
+        f"complex words {metrics['complex_share']}%, passive sentences {metrics['passive_share']}%."
+    )
 
 
 def _deslop_findings(lexical, structure, redundancy):
