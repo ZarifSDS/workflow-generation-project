@@ -1,19 +1,22 @@
-"""Resolve the [VERIFY] and [SRC: url] markers in an edited article by looking the claims up.
+"""Resolve every marker in an edited article: no marker and no References section survives review.
 
-The draft marks claims it couldn't confirm ([VERIFY…]) and the sources it used ([SRC: url]). Final cleanup
-holds while any are left, which used to leave the work to a person. After the review-and-edit sequence,
-each marked claim is now checked (at most MAX_CLAIMS):
+The draft marks claims it couldn't confirm ([VERIFY…]), the sources it used ([SRC: url]) and image ideas
+([VISUAL: …]), and ends with a References section. Those are notes on where the facts came from, never
+part of the publication (owner's rule, 2026-10-15). After the review-and-edit sequence, each marked claim
+is checked (at most MAX_CLAIMS):
 
 1. Evidence: for [SRC: url], that page first; for every claim, the top results of the search API
    (apps.studio.serp, the brief's region) for the claim's own words, and the text of the best pages
    (apps.studio.webfetch, robots respected), cut to the passages that share the most words with the claim.
 2. Judgement: the step's reasoning model reads the claim and the passages (prompts/verify_claim.md) and
    answers SUPPORTED, CONTRADICTED (with the corrected sentence) or NOT FOUND, naming the source.
-3. Resolution: supported → the marker goes and the source joins the References; contradicted → the
-   sentence is corrected, the marker goes and the source joins the References; not found → the marker
-   stays for a person, with a note. Every decision is listed in the step's notes.
+3. Resolution: supported → the marker goes; contradicted → the sentence is corrected and the marker
+   goes; not found (or not checked) → the sentence is taken out, since an unconfirmed claim isn't
+   published. Every decision is listed in the step's notes, so a person can put a sentence back.
+4. Finalising (`finalise`): the References section, the [SRC:] links and the [VISUAL:] cues leave the
+   article for the step's source list (version metrics and notes), and the image planner's cues.
 
-Never raises: a search or model failure leaves the marker in place and says so.
+Never raises: a search or model failure counts as not found.
 """
 
 import logging
@@ -21,6 +24,7 @@ import re
 from dataclasses import dataclass, field
 
 import httpx
+from django.conf import settings
 
 from apps.quality import house
 
@@ -28,7 +32,7 @@ from . import serp, webfetch
 
 logger = logging.getLogger(__name__)
 
-MAX_CLAIMS = 12
+MAX_CLAIMS = 20
 RESULTS_PER_CLAIM = 5
 PAGES_PER_CLAIM = 2
 PASSAGE_CHARS = 1400
@@ -43,8 +47,9 @@ STOPWORDS = set(
 class Claim:
     kind: str  # "VERIFY" or "SRC"
     marker: str  # the marker as written
-    sentence: str  # the sentence it marks, without markers
+    sentence: str  # the sentence it marks, without markers (with the one before when it is short)
     url: str = ""  # [SRC: url]
+    own: str = ""  # the marked sentence alone: what is taken out when no source confirms it
     context: str = ""  # the paragraph around it, so "These requirements" has its referent
     verdict: str = ""  # SUPPORTED, CONTRADICTED, NOT FOUND, or "" (not checked)
     source_url: str = ""
@@ -59,6 +64,8 @@ class Verification:
     claims: list = field(default_factory=list)
     skipped: int = 0  # past MAX_CLAIMS
     problems: list = field(default_factory=list)
+    sources: list = field(default_factory=list)  # [(title, url)]: the References and every [SRC:], kept apart
+    visual_cues: list = field(default_factory=list)  # [(section, cue)] for the image planner
 
     @property
     def resolved(self):
@@ -70,10 +77,13 @@ class Verification:
         counts = {}
         for claim in self.claims:
             counts[claim.verdict or "not checked"] = counts.get(claim.verdict or "not checked", 0) + 1
-        text = ", ".join(f"{n} {verdict.lower()}" for verdict, n in counts.items())
-        left = len(self.claims) - len(self.resolved) + self.skipped
-        return f"Checked {len(self.claims)} marked claim(s) against search results: {text}. " + (
-            f"{left} marker(s) stay for a person." if left else "Every marker was resolved."
+        names = {"SUPPORTED": "confirmed", "CONTRADICTED": "corrected", "NOT FOUND": "not confirmed"}
+        text = ", ".join(f"{n} {names.get(verdict, verdict.lower())}" for verdict, n in counts.items())
+        out = sum(c.verdict == "NOT FOUND" for c in self.claims) + self.skipped
+        return (
+            f"Checked {len(self.claims)} marked claim(s) against search results: {text}. "
+            + (f"{out} unconfirmed sentence(s) taken out (listed in the notes). " if out else "")
+            + "No markers are left; the sources are kept apart from the article."
         )
 
     def notes(self):
@@ -84,11 +94,17 @@ class Verification:
                 lines.append(f"- Corrected{where}: “{claim.sentence}” → “{claim.corrected}”. {claim.why}")
             elif claim.verdict == "SUPPORTED":
                 lines.append(f"- Confirmed{where}: “{claim.sentence[:160]}”. {claim.why}")
+            elif claim.verdict == "":
+                lines.append(f"- Not checked ({claim.why}), marker removed: “{claim.own or claim.sentence}”.")
             else:
                 reason = claim.why or "not checked"
-                lines.append(f"- Still to check by hand: “{claim.sentence[:160]}” {claim.marker}. {reason}")
+                lines.append(
+                    f"- Taken out, no source confirmed it: “{claim.own or claim.sentence}”. {reason}"
+                )
         if self.skipped:
-            lines.append(f"- {self.skipped} more marked claim(s) weren't checked (limit {MAX_CLAIMS} a run).")
+            lines.append(
+                f"- {self.skipped} more marked sentence(s) taken out unchecked (limit {MAX_CLAIMS})."
+            )
         return lines
 
 
@@ -115,16 +131,15 @@ def find_claims(text):
             ]
             starts = sorted(set(s for s in starts if s < len(body)))
             start = starts[-1]
+            own = _plain(before[start:])
             if len(re.findall(r"[A-Za-z]{2,}", _plain(before[start:]))) < 6 and len(starts) > 1:
                 start = starts[-2]
             sentence = _plain(before[start:])
-            if len(sentence.split()) < 4:
-                continue
             raw = match.group(1).strip()
             kind = "SRC" if raw.upper().startswith("SRC") else "VERIFY"
             url = raw.split(":", 1)[1].strip() if kind == "SRC" else ""
             context = _plain(paragraph)[:900]
-            claims.append(Claim(kind, match.group(0).strip(), sentence, url=url, context=context))
+            claims.append(Claim(kind, match.group(0).strip(), sentence, url=url, context=context, own=own))
     return claims
 
 
@@ -262,9 +277,20 @@ def resolve(text, region, call, client=None, topic=""):
         logger.exception("Finding marked claims failed")
         return result
     result.skipped = max(0, len(claims) - MAX_CLAIMS)
+    extra = claims[MAX_CLAIMS:]
     claims = claims[:MAX_CLAIMS]
     result.claims = claims
     references = []
+    if not getattr(settings, "STUDIO_VERIFY_LOOKUPS", True):
+        # Lookups off (tests, or no search API wanted): markers still go, sentences stay, the notes say so.
+        result.skipped = 0
+        for claim in claims + extra:
+            claim.verdict, claim.why = "", "lookups are switched off"
+            result.text = _apply(result.text, claim)
+        result.claims = claims + extra
+        result.text, found, result.visual_cues = finalise(result.text)
+        result.sources = _unique(found + [(c.url, c.url) for c in claims + extra if c.url])
+        return result
     with client or webfetch._client() as http:
         for claim in claims:
             try:
@@ -314,14 +340,26 @@ def resolve(text, region, call, client=None, topic=""):
             if claim.verdict in ("SUPPORTED", "CONTRADICTED"):
                 result.text = _apply(result.text, claim)
                 references.append((claim.source_title, claim.source_url))
-    result.text = _add_references(result.text, references)
+            else:
+                result.text = _remove(result.text, claim)
+    for claim in extra:
+        result.text = _remove(result.text, claim)
+    result.text, found, result.visual_cues = finalise(result.text)
+    # Every [SRC:] the draft gave is a source, even where its sentence went: a record of what was read.
+    cited = [(c.url, c.url) for c in claims + extra if c.url]
+    result.sources = _unique(found + references + cited)
     return result
+
+
+def _owns(paragraph, claim):
+    """The paragraph holds this claim's marker and its sentence (the same marker can appear many times)."""
+    return claim.marker in paragraph and _words(claim.own) <= _words(_plain(paragraph))
 
 
 def _apply(text, claim):
     """Remove the claim's marker (and, when corrected, replace its sentence) in the article."""
     for paragraph in re.split(r"\n\s*\n", text):
-        if claim.marker not in paragraph:
+        if not _owns(paragraph, claim):
             continue
         new = (
             paragraph.replace(" " + claim.marker, "", 1)
@@ -346,29 +384,79 @@ def _replace_sentence(paragraph, sentence, corrected):
     )
 
 
-def _add_references(text, references):
-    """Add each new source to the References section (created at the end, where the draft puts it)."""
-    new = []
-    for title, url in references:
-        if url and url not in text and url not in [u for _, u in new]:
-            new.append((title, url))
-    if not new:
-        return text
-    match = re.search(r"(?im)^##\s+References\s*$", text)
+def _remove(text, claim):
+    """Take an unconfirmed claim's sentence (and its marker) out of the article."""
+    for paragraph in re.split(r"\n\s*\n", text):
+        if not _owns(paragraph, claim):
+            continue
+        new = paragraph.replace(claim.marker, "", 1)
+        own = claim.own.strip()
+        if own:
+            pattern = r"\W+".join(re.escape(w) for w in re.findall(r"\w+", own))
+            match = re.search(pattern + r"[^.!?\n]*[.!?]?[\"')\]]*", new)
+            if match:
+                new = new[: match.start()] + new[match.end() :]
+        new = re.sub(r"[ \t]{2,}", " ", re.sub(r" +([,.;:!?])", r"\1", new))
+        new = re.sub(r"(?m)^\s*(?:[-*]|\d+[.)])\s*$\n?", "", new).strip()
+        return (
+            text.replace(paragraph, new, 1)
+            if new
+            else text.replace(paragraph + "\n\n", "", 1).replace(paragraph, "", 1)
+        )
+    return text
+
+
+def _unique(sources):
+    seen, found = set(), []
+    for title, url in sources:
+        key = url or title
+        if key and key not in seen:
+            seen.add(key)
+            found.append((title, url))
+    return found
+
+
+ANY_MARKER = re.compile(r"[ \t]*\[\s*(VERIFY\b[^\]]*|SRC\s*:\s*[^\]]*|VISUAL\s*:\s*[^\]]*)\]", re.I)
+LINK = re.compile(r"\[([^\]]+)\]\((https?://[^)\s]+)\)")
+
+
+def finalise(text):
+    """(article, sources, visual cues): the References section, [SRC:] links and [VISUAL:] cues taken out,
+    and any marker left over removed. Sources are [(title, url)], cues [(section, cue)]."""
+    sources, cues = [], []
+    match = re.search(r"(?im)^##\s+(?:References|Sources)\s*$", text)
     if match:
         nxt = re.search(r"(?m)^##\s+", text[match.end() :])
         end = match.end() + nxt.start() if nxt else len(text)
-        numbers = [int(n) for n in re.findall(r"(?m)^(\d+)\.\s", text[match.end() : end])]
-        if numbers:  # continue the section's own numbered style
-            lines = "\n".join(
-                f"{numbers[-1] + i}. [{(title or url).strip()}]({url})"
-                for i, (title, url) in enumerate(new, 1)
-            )
-        else:
-            lines = "\n".join(f"- [{(title or url).strip()}]({url})" for title, url in new)
-        return text[:end].rstrip() + "\n" + lines + "\n\n" + text[end:].lstrip()
-    lines = "\n".join(f"- [{(title or url).strip()}]({url})" for title, url in new)
-    return text.rstrip() + f"\n\n## References\n\n{lines}\n"
+        for line in text[match.end() : end].splitlines():
+            line = re.sub(r"^\s*(?:[-*]|\d+[.)])\s*", "", line).strip()
+            if not line:
+                continue
+            links = LINK.findall(line)
+            urls = re.findall(r"https?://[^\s)\]]+", line)
+            if links:
+                sources += [(title, url) for title, url in links]
+            elif urls:
+                sources.append((line.split("http")[0].strip(" ,:-") or urls[0], urls[0]))
+            else:
+                sources.append((line, ""))
+        text = (text[: match.start()].rstrip() + "\n\n" + text[end:].lstrip()).strip() + "\n"
+    section = "(intro)"
+    lines = []
+    for line in text.splitlines():
+        heading = re.match(r"^##\s+(.+?)\s*$", line)
+        if heading:
+            section = heading.group(1).strip("* ")
+        for marker in ANY_MARKER.finditer(line):
+            raw = marker.group(1)
+            if raw.upper().startswith("SRC"):
+                url = raw.split(":", 1)[1].strip()
+                sources.append((url, url))
+            elif raw.upper().startswith("VISUAL"):
+                cues.append((section, " ".join(raw.split(":", 1)[1].split())))
+        lines.append(re.sub(r" +([,.;:!?])", r"\1", ANY_MARKER.sub("", line)))
+    text = re.sub(r"\n{3,}", "\n\n", "\n".join(lines)).strip() + "\n"
+    return text, _unique(sources), cues
 
 
 def remaining(text):

@@ -211,6 +211,17 @@ def test_platforms_are_added_edited_and_removed(admin_client):
         },  # fmt: skip
     )
     assert keyword_data.sources()[0].name == "dataforseo"  # the lowest order is asked first
+    # DataForSEO's dashboard token (base64 of "login:password") works in either field.
+    import base64
+
+    token = base64.b64encode(b"me@example.com:" + "-".join(["dfs", "fake", "pass"]).encode()).decode()
+    admin_client.post(
+        reverse("studio:keyword_source_edit", args=["dataforseo"]),
+        {"label": "DataForSEO", "platform": "dataforseo", "order": "5", "enabled": "on", "login": token},
+    )
+    stored = KeywordSource.objects.get(name="dataforseo")
+    assert keyword_data.dataforseo_credentials(stored) == ("me@example.com", "dfs-fake-pass")
+    assert secrets.decrypt(stored.login_encrypted) == "me@example.com"
     admin_client.post(reverse("studio:keyword_source_key_remove", args=["dataforseo"]))
     assert not KeywordSource.objects.get(name="dataforseo").api_key_encrypted
     admin_client.post(reverse("studio:keyword_source_delete", args=["semrush"]))

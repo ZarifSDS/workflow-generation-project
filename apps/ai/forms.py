@@ -106,9 +106,18 @@ class KeywordSourceForm(forms.ModelForm):
 
     def clean(self):
         data = super().clean()
-        if data.get("platform") == KeywordSource.Platform.DATAFORSEO and data.get("api_key"):
-            if not data.get("login") and not self.instance.login_encrypted:
-                self.add_error("login", "DataForSEO needs the API login with the password.")
+        if data.get("platform") == KeywordSource.Platform.DATAFORSEO:
+            # DataForSEO's dashboard also shows a base64 "login:password" token: accept it in either field.
+            from apps.studio.keyword_data import basic_token_parts
+
+            for field in ("login", "api_key"):
+                if parts := basic_token_parts(data.get(field)):
+                    data["login"], data["api_key"] = parts
+                    break
+            if data.get("api_key") and not data.get("login") and not self.instance.login_encrypted:
+                self.add_error(
+                    "login", "DataForSEO needs the API login (your account email) with the password."
+                )
         return data
 
 

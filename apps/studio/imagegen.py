@@ -478,6 +478,14 @@ def load_article(plan):
     raise ImageJobError("There is no article to read.")
 
 
+def run_visual_cues(run):
+    """[(section, cue)] the review-and-edit step took out of the article (verify.finalise)."""
+    step = run.steps.filter(key="review_edit").first()
+    version = step.latest_version if step else None
+    cues = ((version.metrics or {}).get("verification") or {}).get("visual_cues") if version else None
+    return [(section, cue) for section, cue in cues or []]
+
+
 def outline_of(text):
     """(H1, [H2...], [(section, cue)...]) from the article's Markdown."""
     h1 = re.search(r"(?m)^#\s+(.+?)\s*$", text)
@@ -562,6 +570,9 @@ def plan(plan_obj):
     """Read the article and ask the model for tailored image ideas. Returns (title, ideas, notes)."""
     text = load_article(plan_obj)
     h1, sections, cues = outline_of(text)
+    if plan_obj.run_id and not cues:
+        # [VISUAL:] cues leave the article at review and edit (no markers past review); they are kept there.
+        cues = run_visual_cues(plan_obj.run)
     words = text.split()
     context = {
         "region": plan_obj.get_region_display(),

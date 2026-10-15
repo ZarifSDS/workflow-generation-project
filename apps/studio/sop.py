@@ -817,7 +817,9 @@ def check_article(text, ctx, *, metadata=True):
                     allows={"drop_urls": _links_in(" ".join(close_links))},
                 )
             )
-    if prof["references"] != "none" and _section_body(text, "References") is None:
+    # Only the draft keeps a References section: from review and edit on, the sources are kept apart from the
+    # article (verify.finalise) and never published.
+    if metadata and prof["references"] != "none" and _section_body(text, "References") is None:
         findings.append(Finding(prof["references"], "no `## References` section"))
     if (floor := prof["min_internal_links"]) and (n := len(INTERNAL_LINK.findall(text))) < floor:
         findings.append(

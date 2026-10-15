@@ -18,10 +18,14 @@ Read this first in a new session. Then `docs/sop-audit.md` ("Where the audit sta
   - It searches for the claim with the article's topic in front (Serper, in the brief's region), official sources first (.gov, regulators, standards bodies). It reads the best pages; for an [SRC:] claim, its own page first.
   - It picks the passage that matches the claim, preferring the paragraph of a cited subsection such as "(l)".
   - The step's model judges SUPPORTED, CONTRADICTED (with a corrected sentence) or NOT FOUND, with the whole paragraph as context.
-  - SUPPORTED or CONTRADICTED removes the marker and adds the source to References, numbered like the list already there.
-  - Safety rules: a claim about a rule needs an official source; a correction may only bring in figures and references the source passage shows; when in doubt the verdict is NOT FOUND and the marker stays for a person.
+  - **Owner's rule (2026-10-15): no marker and no References section passes the review stage.** References only record where the facts came from; they are never published.
+  - SUPPORTED removes the marker. CONTRADICTED corrects the sentence and removes the marker. NOT FOUND (or anything past 20 claims) takes the sentence out; the notes list it so a person can put it back.
+  - `verify.finalise` then moves the References section, every [SRC:] link and the [VISUAL:] cues out of the article, into the version metrics (`verification.sources`, `verification.visual_cues`) and the notes ("Sources (kept out of the article)", "Image ideas from the draft"). The image planner reads the cues from there (`imagegen.run_visual_cues`).
+  - The SOP's "no References section" check applies to the draft only. Final cleanup still holds if someone writes a marker back in.
+  - Safety rules: a claim about a rule needs an official source; a correction may only bring in figures and references the source passage shows; when in doubt the verdict is NOT FOUND.
   - The step notes list every decision ("Marked claims checked"). Confirmed claims' regulation subsections are allowed by the SOP's citation check (`sop.run_loop(verified=…)`).
-  - Live on run 22 (9 markers): all 9 found, 3 confirmed from osha.gov and a named publisher, 6 left for a person, no wrong corrections. An earlier version corrected 1910.119(l) wrongly; that led to the context, authority and correction rules above. About 2 minutes and 9 Serper credits per article. Tests: `tests/test_verify.py` (8).
+  - `STUDIO_VERIFY_LOOKUPS` (on by default; off in tests) switches the search and model checks off. Markers are then still stripped, but the sentences stay and the notes say "not checked".
+  - Live on run 22 (9 markers): all 9 found, 4 confirmed (osha.gov and a named publisher), 5 unconfirmed sentences taken out (113 of 2,310 words), 0 markers and no References left, 7 sources kept apart, no wrong corrections. An earlier version corrected 1910.119(l) wrongly; that led to the context, authority and correction rules above. About 2 minutes and 9 Serper credits per article. Tests: `tests/test_verify.py` (11); the marker tests in `tests/test_stress.py` and `tests/test_pipeline.py` were updated to the rule.
 - **Keyword mapping:**
   - DataForSEO answered live once its stored login was decoded. It had been entered as the base64 "Basic" token, which is now accepted in either field.
   - Two filter rules were added: a keyword naming only another market is dropped ("… qld" in a UK brief), and so is a non-question the platform has no volume for.

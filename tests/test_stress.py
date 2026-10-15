@@ -14,7 +14,7 @@ from django.urls import reverse
 from apps.ai.types import GenerationResult, ImageResult, ProviderError
 from apps.content.models import ArticlePage
 from apps.quality import hero, house, review
-from apps.studio import executors, prompting, serp, services, textclean, webfetch
+from apps.studio import executors, prompting, serp, services, textclean, verify, webfetch
 from apps.studio.models import ContentBrief, GenerationRun, MetadataOption, StepRun
 from apps.studio.tasks import execute_step
 from tests.test_permissions import _denied, _user
@@ -461,30 +461,50 @@ def marked_run(admin_user, monkeypatch):
     return run
 
 
-def test_markers_survive_review_and_hold_cleanup_even_with_gates_off(marked_run):
-    run = marked_run
-    reviewed = content(run, "review_edit")
-    for marker in (
-        "[VERIFY]",
-        "[SRC: https://www.osha.gov/1910.1020]",
-        "[VISUAL: a timeline",
-        "[HERO: a tidy",
-    ):
-        assert marker in reviewed, marker
+@pytest.fixture
+def marked_cleanup(admin_user, monkeypatch):
+    """Final cleanup given an article that still has markers: one an editor wrote back in after review."""
+    monkeypatch.setattr(executors, "generate", Model(article=MARKED_ARTICLE))
+    run = services.create_run(make_brief(admin_user), config("seo_blog", False), user=admin_user)
+    for key in ("search_results", "research", "outline", "draft", "review_edit"):
+        current = step(run, key)
+        if current.status == S.SKIPPED:
+            continue
+        services.add_version(current, MARKED_ARTICLE)
+        current.status = S.APPROVED
+        current.save()
     cleanup = step(run, "cleanup")
-    assert cleanup.gate is False and cleanup.status == S.READY
-    assert run.status == R.NEEDS_REVIEW
-    cleaned = cleanup.latest_version.content
-    assert "[HERO:" not in cleaned  # the hero cue is removed: the Hero image step makes the hero
-    assert "[VERIFY]" in cleaned and "[SRC:" in cleaned and "[VISUAL:" in cleaned
+    cleanup.status = S.QUEUED
+    cleanup.save()
+    execute_step(cleanup.pk)
+    run.refresh_from_db()
+    return run
+
+
+def test_no_marker_passes_review_and_the_sources_are_kept_apart(fake_images, marked_run):
+    run = marked_run
+    assert "[VERIFY]" in content(run, "draft")
+    reviewed = step(run, "review_edit").latest_version
+    for marker in ("[VERIFY", "[SRC:", "[VISUAL:", "## References"):
+        assert marker not in reviewed.content, marker
+    assert "[HERO: a tidy" in reviewed.content  # the hero cue is for Final cleanup, which removes it
+    verification = reviewed.metrics["verification"]
+    assert "https://www.osha.gov/1910.1020" in [url for _, url in verification["sources"]]
+    assert verification["visual_cues"][0][1] == "a timeline of the 30 year retention period"
+    assert "## Sources (kept out of the article)" in reviewed.note
+    cleanup = step(run, "cleanup")
+    assert cleanup.status == S.APPROVED and "[HERO:" not in cleanup.latest_version.content
+    assert run.status == R.DONE  # nothing held the run
+
+
+def test_markers_written_back_after_review_hold_cleanup_until_resolved(
+    marked_cleanup, admin_user, fake_images
+):
+    run = marked_cleanup
+    cleanup = step(run, "cleanup")
+    assert cleanup.status == S.READY and run.status == R.NEEDS_REVIEW
     assert [m["kind"] for m in cleanup.latest_version.metrics["markers"]] == ["VERIFY", "SRC", "VISUAL"]
     assert "Publishing is blocked" in cleanup.latest_version.note
-    assert step(run, "hero_image").status == S.PENDING
-
-
-def test_markers_are_resolved_step_by_step_then_published(marked_run, admin_user, fake_images):
-    run = marked_run
-    cleanup = step(run, "cleanup")
     with pytest.raises(ValueError, match="Resolve the working markers"):
         services.approve_step(cleanup, admin_user)
 
@@ -512,8 +532,8 @@ def test_markers_are_resolved_step_by_step_then_published(marked_run, admin_user
     assert "VERIFY" not in body and "VISUAL" not in body and "SRC:" not in body
 
 
-def test_approving_cleanup_with_an_edit_that_adds_a_marker_is_refused(marked_run, admin_user):
-    cleanup = step(marked_run, "cleanup")
+def test_approving_cleanup_with_an_edit_that_adds_a_marker_is_refused(marked_cleanup, admin_user):
+    cleanup = step(marked_cleanup, "cleanup")
     clean = house.strip_sources(cleanup.latest_version.content).replace(" [VERIFY]", "")
     clean = clean.replace("[VISUAL: a timeline of the 30 year retention period]\n\n", "")
     with pytest.raises(ValueError, match="1 VERIFY"):
@@ -551,8 +571,8 @@ def test_review_rewrite_that_drops_a_marker_is_refused(admin_user, monkeypatch):
     reviewed = step(run, "review_edit").latest_version
     deslop = next(s for s in reviewed.metrics["review"]["substeps"] if s["number"] == 2)
     assert deslop["changed"] is False and "[VERIFY]" in deslop["summary"]
-    assert "[VERIFY]" in reviewed.content
-    assert reviewed.content.strip() == content(run, "draft").strip()
+    # The refused rewrite left the draft's text; then the markers and References left the article.
+    assert reviewed.content.strip() == verify.finalise(content(run, "draft"))[0].strip()
 
 
 # ---- 3. Hostile model outputs ----
@@ -597,7 +617,7 @@ def test_review_rewrite_dropping_all_headings_is_refused_and_text_unchanged(admi
     substeps = {s["number"]: s for s in reviewed.metrics["review"]["substeps"]}
     assert substeps[2]["changed"] is False and "headings were dropped" in substeps[2]["summary"]
     assert substeps[3]["changed"] is False and "headings were dropped" in substeps[3]["summary"]
-    assert reviewed.content.strip() == ARTICLE.strip()
+    assert reviewed.content.strip() == verify.finalise(ARTICLE)[0].strip()  # sources kept apart
     assert "## Review sequence" in reviewed.note
 
 

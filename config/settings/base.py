@@ -316,6 +316,9 @@ STUDIO_WEBHOOK_SECRET = os.environ.get("STUDIO_WEBHOOK_SECRET", "")
 # SOP self-review (autopilot, docs/sop.md): how many times a step's model may revise its output after the
 # reviewer's findings before the step holds for a person.
 STUDIO_SOP_MAX_ROUNDS = int(os.environ.get("STUDIO_SOP_MAX_ROUNDS", "3"))
+# Review and edit looks up each [VERIFY]/[SRC:] claim with the search API and the step's model
+# (apps/studio/verify.py). Off: markers are still removed, but the sentences stay unchecked.
+STUDIO_VERIFY_LOOKUPS = os.environ.get("STUDIO_VERIFY_LOOKUPS", "1") != "0"
 
 # Reference prices and context windows for models whose provider lists none (apps/ai/pricing.py): LiteLLM's
 # community-maintained list (MIT), read at most once a week during a model sync. Empty switches it off.

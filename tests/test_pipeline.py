@@ -127,26 +127,21 @@ def test_draft_creates_title_meta_and_slug_options(brief, fake_llm, admin_user):
     assert run.metadata_options.get(kind="slug").text == "sds-retention-requirements"
 
 
-def test_cleanup_holds_for_review_while_markers_remain(brief, fake_llm, admin_user):
+def test_no_marker_passes_review_so_cleanup_runs_on(brief, fake_llm, admin_user):
     run = services.create_run(brief, {})
     for key in ("research", "outline", "draft", "review_edit"):
         execute_step(run.steps.get(key=key).pk)
         approve(run.steps.get(key=key), admin_user)
-    review = run.steps.get(key="review_edit")
-    assert "## Review sequence" in review.latest_version.note
+    review = run.steps.get(key="review_edit").latest_version
+    assert "## Review sequence" in review.note
+    # The draft carries a [VERIFY] marker; review and edit resolves it (owner's rule: no marker past review).
+    assert "[VERIFY]" in run.steps.get(key="draft").latest_version.content
+    assert "[VERIFY" not in review.content and "Verify marked claims" in review.note
     cleanup = run.steps.get(key="cleanup")
     assert cleanup.status == StepRun.Status.QUEUED
     execute_step(cleanup.pk)
     cleanup.refresh_from_db()
-    # The draft carries a [VERIFY] marker, so the normally automatic step waits and Publish can't run.
-    assert cleanup.status == StepRun.Status.READY
-    assert "Publishing is blocked" in cleanup.latest_version.note
-    with pytest.raises(ValueError, match="Resolve the working markers"):
-        services.approve_step(cleanup, admin_user)
-    resolved = cleanup.latest_version.content.replace(" [VERIFY]", "")
-    services.approve_step(cleanup, admin_user, edited_content=resolved)
-    cleanup.refresh_from_db()
-    assert cleanup.status == StepRun.Status.APPROVED
+    assert cleanup.status == StepRun.Status.APPROVED  # automatic again: nothing is left to resolve
     assert run.steps.get(key="hero_image").status == StepRun.Status.QUEUED
 
 

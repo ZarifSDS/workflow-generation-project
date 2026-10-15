@@ -307,6 +307,15 @@ def review_edit(step):
         )
     if checked.claims:
         note += "\n\n## Marked claims checked\n\n" + "\n".join(checked.notes())
+    if checked.sources:
+        # Kept apart from the article and never published: a record of where the facts came from.
+        note += "\n\n## Sources (kept out of the article)\n\n" + "\n".join(
+            f"- [{title}]({url})" if url else f"- {title}" for title, url in checked.sources
+        )
+    if checked.visual_cues:
+        note += "\n\n## Image ideas from the draft\n\n" + "\n".join(
+            f"- {section}: {cue}" for section, cue in checked.visual_cues
+        )
     if fallbacks:
         note = f"Used the fallback model for some sub-steps because {fallbacks[0]} failed.\n\n{note}"
     return StepOutput(
@@ -332,6 +341,8 @@ def review_edit(step):
                     }
                     for c in checked.claims
                 ],
+                "sources": [list(source) for source in checked.sources],
+                "visual_cues": [list(cue) for cue in checked.visual_cues],
             },
         },
     )
