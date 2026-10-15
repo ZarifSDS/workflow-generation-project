@@ -141,9 +141,34 @@ def _semrush(source, keywords, region, client):
     return metrics
 
 
+def basic_token_parts(value):
+    """(login, password) when `value` is DataForSEO's ready-made base64 "login:password" token (its
+    dashboard shows one), else None."""
+    import binascii
+
+    value = (value or "").strip().removeprefix("Basic ").strip()
+    if not value or "@" in value or ":" in value:
+        return None
+    try:
+        decoded = base64.b64decode(value + "=" * (-len(value) % 4), validate=True).decode()
+    except (binascii.Error, UnicodeDecodeError):
+        return None
+    login, sep, password = decoded.partition(":")
+    return (login, password) if sep and "@" in login and password else None
+
+
+def dataforseo_credentials(source):
+    """(login, password) from what was stored, accepting the base64 token in either field."""
+    login = secrets.decrypt(source.login_encrypted) if source.login_encrypted else ""
+    password = secrets.decrypt(source.api_key_encrypted) if source.api_key_encrypted else ""
+    for value in (login, password):
+        if parts := basic_token_parts(value):
+            return parts
+    return login, password
+
+
 def _dataforseo(source, keywords, region, client):
-    login = secrets.decrypt(source.login_encrypted)
-    password = secrets.decrypt(source.api_key_encrypted)
+    login, password = dataforseo_credentials(source)
     token = base64.b64encode(f"{login}:{password}".encode()).decode()
     url = (source.base_url or "https://api.dataforseo.com").rstrip("/")
     response = client.post(
@@ -259,7 +284,7 @@ def collect(brief, serp_data=None, suggestions=()):
     found, seen = [], set()
 
     def add(keyword, origin):
-        key = " ".join(str(keyword).lower().split())
+        key = " ".join(str(keyword).lower().replace("’", "'").replace("‘", "'").split())
         if key and key not in seen:
             seen.add(key)
             found.append(Candidate(key, origin))
@@ -276,9 +301,72 @@ def collect(brief, serp_data=None, suggestions=()):
     return found
 
 
-def apply_rules(candidates, metrics, rules, topic=""):
+# Places and regulators that tie a keyword to one market. A keyword naming another market than the brief's
+# (and none of its own) is for other readers: "risk assessment template qld" in a UK brief. OTHER lists
+# markets the studio never writes for.
+MARKET_TERMS = {
+    "US": ["usa", "united states", "osha", "american"],
+    "UK": [
+        "uk",
+        "united kingdom",
+        "britain",
+        "british",
+        "england",
+        "scotland",
+        "wales",
+        "hse",
+        "coshh",
+        "riddor",
+    ],
+    "AU": [
+        "australia",
+        "australian",
+        "qld",
+        "queensland",
+        "nsw",
+        "new south wales",
+        "victoria",
+        "tasmania",
+        "safe work australia",
+        "safework",
+        "worksafe",
+        "whs",
+    ],  # fmt: skip
+    "CA": ["canada", "canadian", "ontario", "alberta", "british columbia", "quebec", "whmis", "ccohs"],
+    "NZ": ["nz", "new zealand", "worksafe nz", "aotearoa"],
+    "EU": ["ireland", "irish", "hsa", "eu", "europe", "european"],
+    "OTHER": [
+        "singapore",
+        "india",
+        "malaysia",
+        "philippines",
+        "south africa",
+        "uae",
+        "dubai",
+        "nigeria",
+        "kenya",
+        "pakistan",
+        "hong kong",
+        "saudi",
+        "qatar",
+    ],  # fmt: skip
+}
+
+
+def _markets_named(keyword):
+    found = set()
+    for region, terms in MARKET_TERMS.items():
+        if any(re.search(rf"\b{re.escape(term)}\b", keyword) for term in terms):
+            found.add(region)
+    return found
+
+
+def apply_rules(candidates, metrics, rules, topic="", region="", measured=None):
     """Keep or drop each candidate, with the reason. The brief's own keywords are always kept (the writer
-    chose them); a question is kept without a volume (it may still be the FAQ's best question)."""
+    chose them); a question is kept without a volume (it may still be the FAQ's best question). With a
+    region, a keyword naming only other markets is dropped. `measured` (default: any metrics at all) means
+    a source answered, so a non-question it has no volume for is dropped: nobody searches for it."""
+    measured = bool(metrics) if measured is None else measured
     primary = next((c for c in candidates if c.origin == "primary"), None)
     core = {_stem(w) for w in _words(primary.keyword if primary else "")} | {_stem(w) for w in _words(topic)}
     excluded = rules.excluded()
@@ -297,6 +385,11 @@ def apply_rules(candidates, metrics, rules, topic=""):
         elif shape in kept_shapes and candidate.origin != "question":
             # A question that rephrases a kept keyword stays: it's a heading or FAQ candidate.
             candidate.kept, candidate.reason = False, "same words as a kept keyword"
+        elif region and (named := _markets_named(candidate.keyword)) and region not in named:
+            others = ", ".join(sorted(named - {"OTHER"})) or "another country"
+            candidate.kept, candidate.reason = False, f"for another market ({others}), not {region}"
+        elif measured and candidate.origin != "question" and (m is None or m.volume is None):
+            candidate.kept, candidate.reason = False, "no search volume measured"
         elif m and rules.drop_navigational and m.intent.split(",")[0].strip() == "navigational":
             candidate.kept, candidate.reason = False, "navigational: people looking for one site"
         elif m and m.volume is not None and m.volume < rules.min_volume and candidate.origin != "question":
@@ -332,7 +425,9 @@ def gather(brief, serp_data=None, suggestions=(), client=None):
         if data.candidates:
             source, metrics, problems = measure([c.keyword for c in data.candidates], brief.region, client)
         data.source = source
-        apply_rules(data.candidates, metrics, KeywordRules.current(), brief.topic)
+        apply_rules(
+            data.candidates, metrics, KeywordRules.current(), brief.topic, brief.region, measured=bool(source)
+        )
         if not source:
             data.note = (
                 "No keyword source answered"

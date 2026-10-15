@@ -57,6 +57,7 @@ One or two lines: the intent, the format chosen and the target length against th
 
 ## Keyword and Anchor Map
 | Keyword or anchor | Kind (primary, secondary, related, internal anchor, external anchor, product) | Section |
+Keywords come from the research's Keyword Table, which uses only the kept keywords of the search results' "Keyword data" table: never a dropped one. Where volumes are given, the higher-volume keywords go in the sections (and H2s) where they read naturally; never force one.
 
 ## Structure Decisions
 One line per decision (order, split, merge, depth, what was left out): the decision, the reason, and the alternative you considered. Include how the outline compares with the ranking pages.

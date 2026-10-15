@@ -387,7 +387,22 @@ def check_research(text, ctx):
     pk = (ctx.get("pkeyword") or "").lower()
     if pk and pk not in text.lower():
         findings.append(Finding("block", f"the primary keyword '{ctx['pkeyword']}' never appears"))
+    findings += _dropped_keywords_back(text, "Keyword Table", ctx)
     return findings
+
+
+def _dropped_keywords_back(text, section, ctx):
+    """The keyword filter (keyword_data.py) dropped these for a reason; a plan must not bring them back."""
+    dropped = ctx.get("dropped_keywords") or {}
+    first_cells = {
+        re.sub(r"[*`\"“”]", "", row.strip().strip("|").split("|")[0]).strip().lower().replace("’", "'")
+        for row in _table_rows(_section_body(text, section))
+    }
+    back = sorted(k for k in dropped if k in first_cells)
+    if not back:
+        return []
+    reasons = "; ".join(f"'{k}' ({dropped[k]})" for k in back[:5])
+    return [Finding("advise", f"the {section} uses keyword(s) the keyword data dropped: {reasons}")]
 
 
 ARTICLE_PATH = re.compile(r"/(?:sds-management-articles|blog|articles?|resources|lead-magnets?)/")
@@ -490,6 +505,7 @@ def check_outline(text, ctx):
     findings = _mechanics(text)
     if missing := _missing_sections(text, OUTLINE_SECTIONS):
         findings.append(Finding("block", "missing section(s): " + ", ".join(missing)))
+    findings += _dropped_keywords_back(text, "Keyword and Anchor Map", ctx)
     lines = _headings_only(text)
     pk = (ctx.get("pkeyword") or "").lower()
     if not lines:
@@ -1144,6 +1160,13 @@ CHECKS = {
 }
 
 
+def dropped_keywords(step):
+    """{keyword: why} the Search results step's keyword filter dropped (its version metrics)."""
+    search = step.run.steps.filter(key="search_results").first()
+    version = search.latest_version if search else None
+    return dict(((version.metrics or {}).get("keywords") or {}).get("dropped") or {}) if version else {}
+
+
 def context_from(step):
     brief = step.run.brief
     counts = {}
@@ -1166,6 +1189,7 @@ def context_from(step):
         "metadata_counts": counts if step.key == "draft" else {},
         "allowed_urls": allowed_urls(step),
         "allowed_citations": allowed_citations(step) if step.key in ARTICLE_STEPS else None,
+        "dropped_keywords": dropped_keywords(step) if step.key in ("research", "outline") else {},
         **(outline_plan(prompting.approved_output(step.run, "outline")) if step.key in ARTICLE_STEPS else {}),
     }
 
@@ -1387,7 +1411,12 @@ def _inputs_for(step):
     run = step.run
     parts = []
     if step.key in ("research", "outline"):
-        parts.append(("Search results the step saw", prompting.approved_output(run, "search_results"), 3500))
+        search = prompting.approved_output(run, "search_results") or ""
+        parts.append(("Search results the step saw", search.split("## Keyword data")[0], 3500))
+        if "## Keyword data" in search:  # past the 3,500-character cut otherwise
+            parts.append(
+                ("Keyword data (kept and dropped, with why)", search.split("## Keyword data", 1)[1], 3000)
+            )
         parts.append(("Published sdsmanager.com articles (internal index)", base_related(step), 600))
     if step.key in ARTICLE_STEPS and run.brief.content_type != "outbound":
         # The rubric judges links against these ("deepest relevant registry page", "URLs from the index").
@@ -1712,10 +1741,17 @@ def measurements(step_key, text, ctx):
     return "\n".join(lines) + "\n"
 
 
-def run_loop(step, text, call, max_rounds=None):
-    """The review-revise loop. `call(prompt_name, context, task)` returns (text, "provider/model")."""
+def run_loop(step, text, call, max_rounds=None, verified=()):
+    """The review-revise loop. `call(prompt_name, context, task)` returns (text, "provider/model").
+    `verified` are claims the edit step confirmed against a source (verify.py): the regulation
+    subsections they cite may stay, as the citation check otherwise allows only the inputs' ones."""
     max_rounds = settings.STUDIO_SOP_MAX_ROUNDS if max_rounds is None else max_rounds
     ctx = context_from(step)
+    if ctx.get("allowed_citations") is not None:
+        for claim in verified:
+            if claim.get("verdict") in ("SUPPORTED", "CONTRADICTED"):
+                sentence = claim.get("corrected") or claim.get("sentence") or ""
+                ctx["allowed_citations"] |= {_citation(m) for m in CITATION.finditer(sentence)}
     base = prompting.context_for(step)
     result = SopResult(text=text, passed=False)
     inputs = _inputs_for(step)
@@ -1864,7 +1900,8 @@ def apply(step, output):
         return result.text, f"{result.provider}/{result.model}"
 
     try:
-        sop = run_loop(step, output.content, call)
+        verified = ((output.extra_metrics or {}).get("verification") or {}).get("claims") or ()
+        sop = run_loop(step, output.content, call, **({"verified": verified} if verified else {}))
         if sop.route == "send_back" and step.key in SEND_BACK_STEPS:
             # A structural defect isn't fixed by editing sentences: regenerate the step once from its plan
             # with the findings as the note, and keep whichever result is better.

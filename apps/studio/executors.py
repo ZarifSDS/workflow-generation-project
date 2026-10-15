@@ -16,7 +16,7 @@ from apps.ai.types import ProviderError
 from apps.quality import hero, house, review
 from apps.quality import scripts as quality_scripts
 
-from . import keyword_data, prompting, serp, textclean, webfetch
+from . import keyword_data, prompting, serp, textclean, verify, webfetch
 from .models import MetadataOption, StepVersion
 from .pipeline import profile_for
 
@@ -266,9 +266,11 @@ def review_edit(step):
     brief = step.run.brief
     used = []
 
+    budgets = {"review_wordlevel": 8000, "verify_claim": 3000}  # reasoning models think before answering
+
     def call(prompt_name, context):
         messages = prompting.render(prompt_name, {**prompting.context_for(step), **context})
-        result = _call_text(step, messages, max_tokens=8000 if prompt_name == "review_wordlevel" else 16000)
+        result = _call_text(step, messages, max_tokens=budgets.get(prompt_name, 16000))
         used.append(result)
         return result.text
 
@@ -282,6 +284,17 @@ def review_edit(step):
         },
         call,
     )
+    # 6. Look up every [VERIFY]/[SRC:] claim with the search API and let the model settle it (verify.py).
+    checked = verify.resolve(outcome.text, brief.region, call, topic=brief.pkeyword or brief.topic)
+    outcome.text = checked.text
+    outcome.substeps.append(
+        {
+            "number": 6,
+            "name": "Verify marked claims",
+            "changed": bool(checked.resolved),
+            "summary": checked.summary(),
+        }
+    )
     last = used[-1] if used else None
     fallbacks = [r.stats["fallback_from"] for r in used if r.stats.get("fallback_from")]
     lines = [f"{s['number']}. **{s['name']}**: {s['summary']}" for s in outcome.substeps]
@@ -292,6 +305,8 @@ def review_edit(step):
         note += "\n\n## Questions for the author (substantive, not rewritten)\n\n" + "\n".join(
             f"- {item}" for item in outcome.questions
         )
+    if checked.claims:
+        note += "\n\n## Marked claims checked\n\n" + "\n".join(checked.notes())
     if fallbacks:
         note = f"Used the fallback model for some sub-steps because {fallbacks[0]} failed.\n\n{note}"
     return StepOutput(
@@ -307,7 +322,17 @@ def review_edit(step):
                 "metrics": outcome.metrics,
                 "questions": outcome.questions,
                 "clarity_edits": outcome.clarity_edits,
-            }
+            },
+            "verification": {
+                "summary": checked.summary(),
+                "claims": [
+                    {
+                        k: getattr(c, k)
+                        for k in ("kind", "sentence", "verdict", "source_url", "corrected", "why")
+                    }
+                    for c in checked.claims
+                ],
+            },
         },
     )
 
