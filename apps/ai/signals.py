@@ -4,7 +4,12 @@ from django.db.models.signals import post_delete, post_save
 from django.dispatch import receiver
 
 from . import catalog, defaults, pricing, redact
-from .models import AddedModel, ModelInfo, ProviderConfig, TaskDefault
+from .models import AddedModel, KeywordSource, ModelInfo, ProviderConfig, TaskDefault
+
+
+@receiver([post_save, post_delete], sender=KeywordSource)
+def clear_keyword_secrets(**kwargs):
+    redact.clear_stored_cache()
 
 
 @receiver([post_save, post_delete], sender=ProviderConfig)

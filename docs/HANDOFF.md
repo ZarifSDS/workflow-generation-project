@@ -12,6 +12,19 @@ Read this first in a new session. Then `docs/sop-audit.md` ("Where the audit sta
 
 **Model prices, context windows and the usage ledger, built 2026-10-15** (`docs/pricing-and-ux-plan.md` Part 1 › Built). Every model dropdown shows its price per million tokens and its context window. Values are resolved by the model sync: a hand-entered value first, then the provider's list, then LiteLLM's reference list. Each key has a "Billed as" setting, so free-tier and subscription keys cost $0. Every call is recorded with its tokens and cost. Costs show on the run screen and on a new Usage and cost page, and the wizard shows a live time and cost estimate with a context guard. Migration `ai.0005` is applied to the live database. Committed as `34b6a21` (CI green) and running in share mode. **Part 2 (UX) is built too** (plan › Part 2 › Built): text-first run screen, next-step banner, one "Change this" area, folded new-brief form, no one-click runs, plain labels, no reload over typing, visual fixes and a grouped step list. Suite: 635 passed. The owner should look at the run screen and the new-brief form in a real browser once.
 
+**Keyword data providers and keyword filtration, built 2026-10-15** (`apps/studio/keyword_data.py`, `views/keyword_sources.py`, Settings › Keyword data providers; migrations `ai.0006`/`0007` applied to the live database).
+- **The page:** superusers add, edit, remove and delete keyword platforms and their keys. Keys are encrypted like the provider keys and covered by redaction.
+- **Platforms:** Semrush, DataForSEO and Keywords Everywhere are seeded and read by the studio. Any other platform can be added as "Other": its key is stored, but nothing reads it yet.
+- **In the Search results step:**
+  - it collects candidate keywords: the brief's, autocomplete, People also ask and related searches;
+  - it asks the first ready platform, by order, for monthly searches, difficulty, intent and CPC in the brief's market (Semrush database, DataForSEO location name, Keywords Everywhere country);
+  - it keeps or drops each keyword by the editable rules: fewest searches, highest difficulty, navigational intent, excluded terms, the most to keep, plus relevance and near-duplicates. The brief's own keywords and questions are protected;
+  - it writes a "Keyword data" table with each keyword's reason into the report.
+- **Research** now picks only kept keywords (`prompts/research.md`, Keyword Table).
+- **Without a key** the relevance, duplicate and excluded-term rules still run, and the report says the volumes are unknown.
+- **API shapes** come from each platform's docs; nothing has been called live yet, because no keyword key is stored. Semrush's v3 API is marked deprecated in favour of v4, but v3 API keys still work. Keywords Everywhere's UK country code ("uk") isn't confirmed by its docs.
+- **Tests:** `tests/test_keyword_data.py` (11).
+
 **Search results step and Serper (checked live 2026-10-15):** the stored Serper key is first in line and the brief's region reaches it (`gl`/`hl`: UK results lean to .uk sites, AU to .gov.au). Outside the US, Serper sends no "People also ask" questions and no related searches; the step's report now says so under both headings, so the research knows its questions are Google autocomplete only (`serp._source_note`).
 
 **Next, in order:**

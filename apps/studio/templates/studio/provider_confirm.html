@@ -7,7 +7,7 @@
         <p class="s-muted s-m0">{{ detail }}</p>
         <div class="s-row-actions">
             <button class="button no" type="submit">{{ button }}</button>
-            <a class="button button-secondary" href="{% url 'studio:provider_keys' %}">Cancel</a>
+            <a class="button button-secondary" href="{{ cancel_url }}">Cancel</a>
         </div>
     </form>
 </div>

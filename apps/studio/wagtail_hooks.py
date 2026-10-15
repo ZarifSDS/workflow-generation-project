@@ -174,6 +174,19 @@ def register_search_providers_menu():
     )
 
 
+@hooks.register("register_settings_menu_item")
+def register_keyword_sources_menu():
+    """Settings › Keyword data providers: Semrush, DataForSEO and other keyword platforms, and the rules
+    that filter keywords before research. Superusers only."""
+    return SuperuserMenuItem(
+        "Keyword data providers",
+        reverse("studio:keyword_sources"),
+        icon_name="tag",
+        name="keyword-sources",
+        order=904,
+    )
+
+
 @hooks.register("register_log_actions")
 def register_ai_log_actions(actions):
     """History entries for provider settings. They never contain a key, only its last characters."""
@@ -185,6 +198,11 @@ def register_ai_log_actions(actions):
     actions.register_action("ai.key_set", "Set API key", changed)
     actions.register_action("ai.key_removed", "Remove API key", "Removed the stored API key")
     actions.register_action("ai.billing_set", "Set billing", "Changed how the key is billed")
+    actions.register_action("ai.keyword_source_added", "Add keyword platform", changed)
+    actions.register_action("ai.keyword_source_changed", "Change keyword platform", changed)
+    actions.register_action("ai.keyword_source_key_removed", "Remove keyword platform key", "Removed the key")
+    actions.register_action("ai.keyword_source_deleted", "Delete keyword platform", "Deleted the platform")
+    actions.register_action("ai.keyword_rules_set", "Set keyword rules", "Changed the keyword rules")
     actions.register_action("ai.provider_added", "Add AI provider", "Added the provider")
     actions.register_action("ai.provider_changed", "Change AI provider", "Changed the provider")
     actions.register_action("ai.provider_deleted", "Delete AI provider", "Deleted the provider")

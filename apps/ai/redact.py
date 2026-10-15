@@ -43,11 +43,14 @@ def _stored_values():
     _busy.active = True
     try:
         from . import secrets
+        from .models import KeywordSource
         from .providers import stored_configs
 
         values = []
-        for row in stored_configs():
-            for token in (row.api_key_encrypted, row.account_id_encrypted):
+        tokens = [(row.api_key_encrypted, row.account_id_encrypted) for row in stored_configs()]
+        tokens += list(KeywordSource.objects.values_list("api_key_encrypted", "login_encrypted"))
+        for pair in tokens:
+            for token in pair:
                 if token:
                     try:
                         values.append(secrets.decrypt(token))

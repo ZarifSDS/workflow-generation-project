@@ -10,7 +10,7 @@ from urllib.parse import urlsplit
 from django import forms
 from django.conf import settings
 
-from .models import AddedModel, ProviderConfig
+from .models import AddedModel, KeywordRules, KeywordSource, ProviderConfig
 
 # Plain http is allowed only for services on this machine or the Docker host.
 LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1", "host.docker.internal"}
@@ -57,6 +57,73 @@ class KeyForm(forms.Form):
         if not self.errors and not data.get("api_key") and not data.get("account_id"):
             raise forms.ValidationError("Enter a key to save, or go back.")
         return data
+
+
+class KeywordSourceForm(forms.ModelForm):
+    """A keyword data platform (Settings › Keyword data providers). Empty key fields keep what is stored."""
+
+    api_key = _key_field("API key (DataForSEO: API password)", required=False)
+    login = _key_field("API login (DataForSEO only)", required=False)
+
+    class Meta:
+        model = KeywordSource
+        fields = ["label", "name", "platform", "base_url", "enabled", "order", "notes"]
+        labels = {
+            "name": "Short id",
+            "platform": "Which platform",
+            "base_url": "API address (optional)",
+            "enabled": "Ask this source",
+            "order": "Order",
+        }
+        help_texts = {
+            "name": "Lowercase letters, digits and hyphens, e.g. semrush",
+            "platform": "Pick the platform to read its data; Other stores the key until a reader exists.",
+            "base_url": "Leave empty for the platform's own address",
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance.pk:
+            self.fields["name"].disabled = True  # the id stays put once saved
+
+    def clean_base_url(self):
+        url = (self.cleaned_data.get("base_url") or "").strip().rstrip("/")
+        parts = urlsplit(url)
+        if url and parts.scheme != "https":
+            raise forms.ValidationError("Use https.")
+        if url and (parts.username or parts.query):
+            raise forms.ValidationError("Use the plain API address, without a login or query.")
+        return url
+
+    def clean_api_key(self):
+        return _clean_secret(self.cleaned_data.get("api_key", ""), "key")
+
+    def clean_login(self):
+        value = (self.cleaned_data.get("login") or "").strip()
+        if value and any(char.isspace() for char in value):
+            raise forms.ValidationError("A login has no spaces.")
+        return value
+
+    def clean(self):
+        data = super().clean()
+        if data.get("platform") == KeywordSource.Platform.DATAFORSEO and data.get("api_key"):
+            if not data.get("login") and not self.instance.login_encrypted:
+                self.add_error("login", "DataForSEO needs the API login with the password.")
+        return data
+
+
+class KeywordRulesForm(forms.ModelForm):
+    class Meta:
+        model = KeywordRules
+        fields = ["min_volume", "max_difficulty", "drop_navigational", "exclude_terms", "max_keywords"]
+        labels = {
+            "min_volume": "Fewest monthly searches",
+            "max_difficulty": "Highest keyword difficulty (0-100)",
+            "drop_navigational": "Drop navigational keywords",
+            "exclude_terms": "Drop keywords containing",
+            "max_keywords": "Keywords kept for research, at most",
+        }
+        widgets = {"exclude_terms": forms.Textarea(attrs={"rows": 3, "placeholder": "one per line"})}
 
 
 class AddedProviderForm(forms.ModelForm):

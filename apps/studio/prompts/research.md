@@ -32,7 +32,7 @@ Bullets: what the ranking pages miss, get wrong or explain badly (outdated rules
 
 ## Keyword Table
 | Keyword | Type (primary, secondary, long-tail, question) | Intent | Planned placement |
-Include the primary and secondary keywords, the related searches and autocomplete terms worth targeting, and the regional term a {{region}} reader searches for when it differs.
+Include the primary and secondary keywords, the related searches and autocomplete terms worth targeting, and the regional term a {{region}} reader searches for when it differs. When the search results carry a "Keyword data" table, choose only from its kept keywords (add their monthly searches and difficulty to the Type cell) and never a dropped one; use its intent where it gives one.
 
 ## Regulation Depth
 Which specific parts of which regulations (regulator, document, section) the searcher's supporting queries and the ranking pages' structures call for, and which the article should only name or leave out. Two to five bullets. Default to light: cite a rule where it settles a question the reader asks, never as a tour of the statute.

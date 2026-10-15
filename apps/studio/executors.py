@@ -16,7 +16,7 @@ from apps.ai.types import ProviderError
 from apps.quality import hero, house, review
 from apps.quality import scripts as quality_scripts
 
-from . import prompting, serp, textclean, webfetch
+from . import keyword_data, prompting, serp, textclean, webfetch
 from .models import MetadataOption, StepVersion
 from .pipeline import profile_for
 
@@ -193,6 +193,10 @@ def search_results(step):
     content = serp.report(
         serp_data, suggestions, pages, summary, keyword, brief.region, settings.STUDIO_OWN_DOMAIN
     )
+    # Volumes, difficulty and intent from the keyword source, and which candidates research should target.
+    keywords = keyword_data.gather(brief, serp_data, suggestions)
+    if section := keyword_data.report(keywords, brief.region):
+        content = content.rstrip() + "\n\n" + section
     return StepOutput(
         content=content,
         provider=serp_data.provider if serp_data else "",
@@ -213,7 +217,13 @@ def search_results(step):
                     for p in pages
                     if p.status == "read"
                 ],
-            }
+            },
+            "keywords": {
+                "source": keywords.source,
+                "kept": [c.keyword for c in keywords.kept],
+                "dropped": {c.keyword: c.reason for c in keywords.dropped},
+                "note": keywords.note,
+            },
         },
     )
 

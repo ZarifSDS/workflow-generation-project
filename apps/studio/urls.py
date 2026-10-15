@@ -12,6 +12,12 @@ from .views.images import (
     image_plan_status,
     infographic_preview,
 )
+from .views.keyword_sources import (
+    KeywordSourceDeleteView,
+    KeywordSourceKeyRemoveView,
+    KeywordSourcesView,
+    KeywordSourceView,
+)
 from .views.metadata import MetadataView
 from .views.provider_keys import (
     AddedModelView,
@@ -62,6 +68,19 @@ urlpatterns = [
     path("ai-providers/", ProviderKeysView.as_view(), name="provider_keys"),
     path("ai-defaults/", TaskDefaultsView.as_view(), name="task_defaults"),
     path("search-providers/", SearchProvidersView.as_view(), name="search_providers"),
+    path("keyword-providers/", KeywordSourcesView.as_view(), name="keyword_sources"),
+    path("keyword-providers/add/", KeywordSourceView.as_view(), name="keyword_source_add"),
+    path("keyword-providers/<slug:name>/", KeywordSourceView.as_view(), name="keyword_source_edit"),
+    path(
+        "keyword-providers/<slug:name>/key/remove/",
+        KeywordSourceKeyRemoveView.as_view(),
+        name="keyword_source_key_remove",
+    ),
+    path(
+        "keyword-providers/<slug:name>/delete/",
+        KeywordSourceDeleteView.as_view(),
+        name="keyword_source_delete",
+    ),
     path("ai-providers/add/", AddedProviderView.as_view(), name="provider_add"),
     path("ai-providers/models/", ModelsManageView.as_view(), name="provider_models"),
     path("ai-providers/usage/", UsageView.as_view(), name="usage"),

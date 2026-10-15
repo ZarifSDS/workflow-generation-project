@@ -1,0 +1,28 @@
+{% extends "wagtailadmin/generic/base.html" %}
+
+{% block main_content %}
+<div class="studio">
+    {% if not secrets_ready %}
+        <div class="s-callout s-callout--critical" role="alert"><strong>Keys can't be stored yet.</strong> Add <code>{{ secrets_env }}</code> to <code>.env</code> and restart the studio (docs/security.md › Provider keys).</div>
+    {% endif %}
+    {% if source %}
+        <p class="s-muted s-m0">{% if source.api_key_encrypted %}A key is stored ({{ source.api_key_hint }}). Entering a new one replaces it; leave the key fields empty to keep it.{% else %}No key is stored yet.{% endif %}</p>
+    {% else %}
+        <p class="s-muted s-m0">Semrush, DataForSEO and Keywords Everywhere are read by the studio. Any other platform can be added to keep its key here; it isn't asked until a reader for it exists.</p>
+    {% endif %}
+    <form method="post" class="s-keys__form" novalidate>{% csrf_token %}
+        {% if form.non_field_errors %}<div class="s-callout s-callout--critical" role="alert">{{ form.non_field_errors|join:" " }}</div>{% endif %}
+        {% for field in form %}
+            <div class="s-keys__field">
+                {% if field.field.widget.input_type == "checkbox" %}<label class="s-cluster">{{ field }} {{ field.label }}</label>{% else %}<label for="{{ field.id_for_label }}">{{ field.label }}{% if field.field.required %} <span aria-hidden="true">*</span>{% endif %}</label>{{ field }}{% endif %}
+                {% if field.help_text %}<p class="s-muted">{{ field.help_text }}</p>{% endif %}
+                {% for error in field.errors %}<p class="s-keys__error" role="alert">{{ error }}</p>{% endfor %}
+            </div>
+        {% endfor %}
+        <div class="s-row-actions">
+            <button class="button" type="submit">{% if source %}Save{% else %}Add platform{% endif %}</button>
+            <a class="button button-secondary" href="{% url 'studio:keyword_sources' %}">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

@@ -174,6 +174,97 @@ class UsageRecord(models.Model):
         return f"{self.provider}/{self.model}: {self.input_tokens} in, {self.output_tokens} out"
 
 
+class KeywordSource(models.Model):
+    """A keyword data platform (Settings › Keyword data providers): its key, and for DataForSEO its login.
+    The Search results step asks the first enabled source with a key (by `order`) for each candidate
+    keyword's volume, difficulty, intent and CPC (apps.studio.keyword_data). Keys are encrypted like the
+    provider keys (apps.ai.secrets) and never shown again."""
+
+    class Platform(models.TextChoices):
+        SEMRUSH = "semrush", "Semrush"
+        DATAFORSEO = "dataforseo", "DataForSEO"
+        KEYWORDS_EVERYWHERE = "keywords_everywhere", "Keywords Everywhere"
+        OTHER = "other", "Other (key stored; no reader yet)"
+
+    name = models.SlugField(max_length=40, unique=True, help_text="Short id, e.g. semrush")
+    label = models.CharField(max_length=80)
+    platform = models.CharField(max_length=30, choices=Platform.choices, default=Platform.OTHER)
+    base_url = models.URLField(blank=True, help_text="Only to override the platform's API address")
+    api_key_encrypted = models.TextField(blank=True, editable=False)
+    api_key_hint = models.CharField(max_length=12, blank=True, editable=False)
+    login_encrypted = models.TextField(blank=True, editable=False)  # DataForSEO: API login
+    login_hint = models.CharField(max_length=12, blank=True, editable=False)
+    enabled = models.BooleanField(default=True)
+    order = models.PositiveSmallIntegerField(default=10, help_text="Lower is asked first")
+    notes = models.CharField(max_length=200, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+
+    class Meta:
+        ordering = ["order", "label"]
+
+    def __str__(self):
+        return self.label
+
+    @property
+    def needs_login(self):
+        return self.platform == self.Platform.DATAFORSEO
+
+    @property
+    def readable(self):
+        return self.platform != self.Platform.OTHER
+
+    @property
+    def ready(self):
+        """Enabled, with the platform's credentials stored, and a reader for it."""
+        return bool(
+            self.enabled
+            and self.readable
+            and self.api_key_encrypted
+            and (self.login_encrypted or not self.needs_login)
+        )
+
+
+class KeywordRules(models.Model):
+    """How candidate keywords are filtered before research sees them (one row; apps.studio.keyword_data).
+    Volume and difficulty apply only where a keyword source measured them."""
+
+    min_volume = models.PositiveIntegerField(default=10, help_text="Monthly searches; lower is dropped")
+    max_difficulty = models.PositiveSmallIntegerField(
+        default=70, help_text="Keyword difficulty 0-100; higher is dropped"
+    )
+    drop_navigational = models.BooleanField(
+        default=True, help_text="Drop keywords whose intent is navigational (someone looking for one site)"
+    )
+    exclude_terms = models.TextField(
+        blank=True, help_text="Words or phrases that drop a keyword, one per line (e.g. competitor names)"
+    )
+    max_keywords = models.PositiveSmallIntegerField(
+        default=25, help_text="Keywords kept for research, at most"
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+
+    def __str__(self):
+        return "Keyword rules"
+
+    @classmethod
+    def current(cls):
+        from django.db import DatabaseError
+
+        try:
+            return cls.objects.first() or cls()
+        except DatabaseError:
+            return cls()
+
+    def excluded(self):
+        return [line.strip().lower() for line in self.exclude_terms.splitlines() if line.strip()]
+
+
 class ModelSync(models.Model):
     """When a provider's model list was last read into AddedModel, and what went wrong if it failed."""
 

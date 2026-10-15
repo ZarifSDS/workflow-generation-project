@@ -311,7 +311,9 @@ class ConfirmView(KeysPage):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context.update(question=self.question, detail=self.detail, button=self.button)
+        context.update(
+            question=self.question, detail=self.detail, button=self.button, cancel_url=reverse(self.home[0])
+        )
         return context
 
 

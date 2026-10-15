@@ -1,0 +1,65 @@
+{% extends "wagtailadmin/generic/base.html" %}
+{% load wagtailadmin_tags %}
+
+{% block main_content %}
+<div class="studio">
+    {% if not secrets_ready %}
+        <div class="s-callout s-callout--critical" role="alert"><strong>Keys can't be stored yet.</strong> Add <code>{{ secrets_env }}</code> to <code>.env</code> and restart the studio (docs/security.md › Provider keys).</div>
+    {% endif %}
+    <p class="s-muted s-m0">The Search results step collects candidate keywords (the brief's, autocomplete, People also ask, related searches), asks the first platform below that has a key for their monthly searches, difficulty and intent in the brief's region, then keeps or drops each one by the rules further down. Research then picks only from the kept ones. Without a key, the rules still drop off-topic keywords, near-duplicates and excluded terms. Keys are encrypted, never shown again (only their last four characters), and every change is recorded under Reports › Site history.</p>
+
+    <section aria-labelledby="sources-head" class="s-keys">
+        <div class="s-row-actions">
+            <h2 class="s-section" id="sources-head">Platforms</h2>
+            <span class="s-spacer"></span>
+            <form method="post">{% csrf_token %}<button class="button button-small button-secondary" type="submit" name="action" value="test" data-controller="w-progress" data-action="w-progress#activate" data-w-progress-active-value="Asking…">Test</button></form>
+            <a class="button button-small button-secondary" href="{% url 'studio:keyword_source_add' %}">Add a platform</a>
+        </div>
+        {% if sources %}
+            <div class="s-table-wrap">
+                <table class="s-table">
+                    <thead><tr><th scope="col">Platform</th><th scope="col">What it gives</th><th scope="col">Key</th><th scope="col">Order</th><th scope="col"><span class="w-sr-only">Actions</span></th></tr></thead>
+                    <tbody>
+                    {% for s in sources %}
+                        <tr>
+                            <th scope="row">{{ s.label }}{% if s.name == ready.0 %} <span class="s-tag s-tag--ok">Asked first</span>{% elif not s.enabled %} <span class="s-tag s-tag--muted">Off</span>{% endif %}<div class="s-muted s-mono s-keys__sub">{{ s.name }} · {{ s.get_platform_display }}</div></th>
+                            <td class="s-small">{{ s.notes|default:"–" }}{% if not s.readable %} <span class="s-muted">(the key is stored; the studio can't read this platform yet)</span>{% endif %}</td>
+                            <td>
+                                {% if s.api_key_encrypted %}<span class="s-tag s-tag--ok">Stored</span> <span class="s-mono">{{ s.api_key_hint }}</span>{% if s.login_hint %} <span class="s-muted">· login</span> <span class="s-mono">{{ s.login_hint }}</span>{% elif s.needs_login %} <span class="s-tag s-tag--warn">Login missing</span>{% endif %}
+                                    {% if s.updated_by %}<div class="s-muted s-keys__sub">{{ s.updated_by.get_username }}, {{ s.updated_at|date:"j M Y H:i" }}</div>{% endif %}
+                                {% else %}<span class="s-tag s-tag--warn">Not set</span>{% endif %}
+                            </td>
+                            <td class="s-num">{{ s.order }}</td>
+                            <td class="s-keys__actions">
+                                <a class="button button-small button-secondary" href="{% url 'studio:keyword_source_edit' s.name %}">{% if s.api_key_encrypted %}Edit{% else %}Set key{% endif %}</a>
+                                {% if s.api_key_encrypted or s.login_encrypted %}<a class="button button-small button-secondary no" href="{% url 'studio:keyword_source_key_remove' s.name %}">Remove key</a>{% endif %}
+                                <a class="button button-small button-secondary no" href="{% url 'studio:keyword_source_delete' s.name %}">Delete</a>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="s-empty"><p>No keyword platforms yet. Add Semrush, DataForSEO, Keywords Everywhere or another platform.</p><a class="button" href="{% url 'studio:keyword_source_add' %}">Add a platform</a></div>
+        {% endif %}
+        <p class="s-muted s-small s-m0">Credits: Semrush charges about 10 API units per keyword; DataForSEO charges per request; Keywords Everywhere one credit per keyword. A step sends each candidate once (up to about 60).</p>
+    </section>
+
+    <section aria-labelledby="rules-head" class="s-keys">
+        <h2 class="s-section" id="rules-head">Rules for keeping a keyword</h2>
+        <p class="s-muted s-m0">The brief's own keywords are always kept. A question is kept even without a volume, because it may still be the FAQ's best question. Volume and difficulty apply only where a platform measured them.</p>
+        <form method="post" class="s-keys__form" novalidate>{% csrf_token %}
+            <input type="hidden" name="action" value="rules">
+            {% for field in rules_form %}
+                <div class="s-keys__field">
+                    {% if field.field.widget.input_type == "checkbox" %}<label class="s-cluster">{{ field }} {{ field.label }}</label>{% else %}<label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% endif %}
+                    {% if field.help_text %}<p class="s-muted">{{ field.help_text }}</p>{% endif %}
+                    {% for error in field.errors %}<p class="s-keys__error" role="alert">{{ error }}</p>{% endfor %}
+                </div>
+            {% endfor %}
+            <div class="s-row-actions"><button class="button" type="submit">Save rules</button></div>
+        </form>
+    </section>
+</div>
+{% endblock %}
