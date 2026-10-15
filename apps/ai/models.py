@@ -78,6 +78,12 @@ class AddedModel(models.Model):
     provider = models.CharField(max_length=30)
     model = models.CharField(max_length=200, help_text="The provider's model id, e.g. openai/gpt-5.5")
     label = models.CharField(max_length=80)
+    kind = models.CharField(
+        max_length=10, default="text", choices=[("text", "Writes text"), ("image", "Makes images")]
+    )
+    max_references = models.PositiveSmallIntegerField(
+        default=0, help_text="Image models: how many reference images (logo, product shots) it takes"
+    )
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.PAID)
     typical_seconds = models.PositiveIntegerField(
         null=True, blank=True, help_text="Rough time per step in seconds, shown next to the model"
@@ -120,6 +126,10 @@ class ModelInfo(models.Model):
     price_source = models.CharField(max_length=10, choices=Source.choices, blank=True, default="")
     context_source = models.CharField(max_length=10, choices=Source.choices, blank=True, default="")
     note = models.CharField(max_length=200, blank=True, help_text="Where a reference value was matched")
+    # Image models: a price per image where the provider sets one, else per million output-image tokens
+    # (the image's token count depends on its size and quality, so no per-image figure is guessed).
+    per_image = models.DecimalField(max_digits=12, decimal_places=6, null=True, blank=True)
+    image_out_per_m = models.DecimalField(max_digits=12, decimal_places=6, null=True, blank=True)
     checked_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:

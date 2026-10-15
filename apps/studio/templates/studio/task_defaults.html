@@ -28,13 +28,13 @@
                     </th>
                     <td>
                         <select name="{{ r.task.key }}_model" aria-label="Default model for {{ r.task.label }}" data-model-options="{{ r.task.kind }}" data-selected="{{ r.model }}">
-                            <option value="">Built-in: {{ r.built_in }}</option>
+                            <option value="">{% if r.blank %}{{ r.blank }}{% else %}Built-in: {{ r.built_in }}{% endif %}</option>
                             {% if r.model %}<option value="{{ r.model }}" selected>{{ r.model_label }}</option>{% endif %}
                         </select>
                     </td>
                     <td>
                         <select name="{{ r.task.key }}_fallback" aria-label="Fallback model for {{ r.task.label }}" data-model-options="{{ r.task.kind }}" data-selected="{{ r.fallback }}">
-                            <option value="">Built-in: {{ r.built_in_fallback }}</option>
+                            <option value="">{% if r.blank %}{{ r.blank }}{% else %}Built-in: {{ r.built_in_fallback }}{% endif %}</option>
                             {% if r.fallback %}<option value="{{ r.fallback }}" selected>{{ r.fallback_label }}</option>{% endif %}
                         </select>
                     </td>

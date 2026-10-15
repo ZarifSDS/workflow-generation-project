@@ -7,7 +7,7 @@ paid: adding one is the opt-in. They replace a built-in entry with the same prov
 `typical_seconds` is a rough per-step duration shown in the UI, measured in the M2 evaluation.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 
 @dataclass(frozen=True)
@@ -21,6 +21,7 @@ class CatalogModel:
     typical_seconds: int | None = None
     options: dict | None = None
     added: bool = False  # added by an admin
+    max_references: int = 0  # image models: reference images (brand assets) it takes
 
     @property
     def key(self):
@@ -37,6 +38,7 @@ PROVIDER_LABELS = {
     "gemini": "Gemini",
     "groq": "Groq",
     "cloudflare": "Cloudflare",
+    "openrouter": "OpenRouter",
     "comfyui": "ComfyUI (your PC)",
     "serper": "Serper (Google results)",
     "brave_search": "Brave Search",
@@ -132,6 +134,15 @@ CATALOG = [
     ),
     CatalogModel(
         "cloudflare",
+        "@cf/black-forest-labs/flux-2-klein-9b",
+        "FLUX.2 klein 9B",
+        "image",
+        status="unavailable",
+        reason="Non-commercial licence (docs/providers.md)",  # klein 4B is Apache-2.0
+        options={"width": 1440, "height": 816},
+    ),
+    CatalogModel(
+        "cloudflare",
         "@cf/black-forest-labs/flux-1-schnell",
         "FLUX.1 schnell",
         "image",
@@ -166,22 +177,37 @@ def _added():
     try:
         labels = {row.name: row.label for row in ProviderConfig.objects.all() if row.label}
         models = [
-            CatalogModel(
-                row.provider,
-                row.model,
-                row.label,
-                "text",
-                status=row.status,
-                reason="Paid: billed to your key" if row.status == "paid" else "",
-                typical_seconds=row.typical_seconds,
-                added=True,
-            )
-            for row in AddedModel.objects.filter(hidden=False).order_by("provider", "label")
+            _added_model(row) for row in AddedModel.objects.filter(hidden=False).order_by("provider", "label")
         ]
     except DatabaseError:
         return [], {}
     cache.set(ADDED_CACHE_KEY, (models, labels), ADDED_CACHE_SECONDS)
     return models, labels
+
+
+# Gemini's free tier gives image models no quota (HTTP 429 "limit: 0", checked 2026-10-15).
+NO_FREE_IMAGES = {"gemini"}
+
+
+def _added_model(row):
+    status, reason = row.status, "Paid: billed to your key" if row.status == "paid" else ""
+    if row.kind == "image" and row.provider in NO_FREE_IMAGES:
+        from . import pricing
+
+        if pricing.billing(row.provider) == "free_tier":
+            status = "unavailable"
+            reason = "Free-tier key: no images. Use the OpenRouter entry, or set the key to Pay per token"
+    return CatalogModel(
+        row.provider,
+        row.model,
+        row.label,
+        row.kind or "text",
+        status=status,
+        reason=reason,
+        typical_seconds=row.typical_seconds,
+        added=True,
+        max_references=row.max_references,
+    )
 
 
 def clear_cache():
@@ -223,12 +249,51 @@ def by_key(key):
     return find(provider, model)
 
 
+# The owner's order for image models (2026-10-15), whichever stored key serves them: these head every image
+# dropdown in a "Recommended" group, with what each is best at. Ids checked against the providers' own
+# lists on 2026-10-15 (OpenRouter's Image API, Gemini's model list, Cloudflare's catalog).
+RECOMMENDED_IMAGE = [
+    (("gemini-nano-banana-2.1", "google/gemini-nano-banana-2.1"), "best for text in images"),
+    (("gemini-3.1-flash-image", "google/gemini-3.1-flash-image"), "text in images"),
+    (("gemini-3.1-flash-lite-image", "google/gemini-3.1-flash-lite-image"), "text in images, cheaper"),
+    (("bytedance-seed/seedream-5-0-flash",), ""),
+    (("openai/gpt-image-2.5-flare",), "best for combining 3+ brand assets"),
+    (
+        (
+            "@cf/black-forest-labs/flux-2-klein-4b",
+            "black-forest-labs/flux.2-klein-4b",
+        ),
+        "",
+    ),
+    (("black-forest-labs/flux-3-image",), ""),
+]
+
+
+def recommended_images(items, labels):
+    """The recommended image models among `items`, in the owner's order, labelled with what they are best
+    at and the key that serves them."""
+    chosen = []
+    for ids, hint in RECOMMENDED_IMAGE:
+        for model_id in ids:
+            for item in items:
+                if item.model == model_id and item.selectable:
+                    parts = [item.label, labels.get(item.provider, item.provider)] + ([hint] if hint else [])
+                    chosen.append(replace(item, label=" · ".join(parts)))
+    return chosen
+
+
 def grouped(kind):
-    """[(group label, [CatalogModel, ...]), ...] for a dropdown; unavailable models last."""
+    """[(group label, [CatalogModel, ...]), ...] for a dropdown; unavailable models last. Image lists start
+    with the recommended models."""
     groups = {}
     labels = provider_labels()
-    for item in all_models():
-        if item.kind != kind:
+    models = [item for item in all_models() if item.kind == kind]
+    top = recommended_images(models, labels) if kind == "image" else []
+    if top:
+        groups["Recommended"] = top
+    shown = {item.key for item in top}
+    for item in models:
+        if item.key in shown:
             continue
         group = "Not available" if not item.selectable else labels.get(item.provider, item.provider)
         groups.setdefault(group, []).append(item)

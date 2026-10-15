@@ -95,6 +95,7 @@ class ModelTask:
     profile: str  # built-in profile in settings.AI_PROFILES
     kind: str = "text"
     help: str = ""
+    inherits: str = ""  # until a default is chosen, this task uses that task's model (and fallback)
 
 
 # Every step with a model, plus the two model calls inside the hero image step.
@@ -123,6 +124,22 @@ MODEL_TASKS = [
         ),
     ),
     ModelTask(
+        "lead_image",
+        "Lead image",
+        "image",
+        "image",
+        help="Makes the unbranded lead photo for guest posts and other sites (Image generator).",
+        inherits="hero_image",
+    ),
+    ModelTask(
+        "inline_image",
+        "In-article image",
+        "image",
+        "image",
+        help="Makes the in-article photos that carry the logo (Image generator and article image plans).",
+        inherits="hero_image",
+    ),
+    ModelTask(
         "vision",
         "Hero image check",
         "vision",
@@ -137,4 +154,8 @@ def profile_for(task_key):
     from apps.ai import defaults
 
     task = MODEL_TASK_KEYS.get(task_key)
-    return defaults.resolve(task_key, task.profile if task else None) if task else {}
+    if not task:
+        return {}
+    if task.inherits and task_key not in defaults.overrides():
+        return profile_for(task.inherits)
+    return defaults.resolve(task_key, task.profile)

@@ -57,6 +57,12 @@ SDXL base/lightning and DreamShaper aren't on the pricing page; test before rely
 |---|---|---|
 | ComfyUI (local host) | HTTP API at `http://host.docker.internal:8188`: `POST /prompt` with your exported API-format workflow, poll `/history/{id}`, fetch `/view` (`apps/ai/images/comfyui.py`) | FLUX.2 [klein] 4B (Apache-2.0, commercial use OK). Needs quantised weights on 8 GB VRAM. The catalog's "model" is the workflow file name; setup in [setup.md](setup.md#6-host-comfyui-local-images-optional). |
 | Cloudflare Workers AI | REST, `CLOUDFLARE_ACCOUNT_ID` + `CLOUDFLARE_API_TOKEN` | FLUX.2 klein 4B or FLUX.1 schnell; free daily allowance shared with text |
+| OpenRouter (the stored OpenRouter key) | Image API: `POST /api/v1/images` with `model`, `prompt`, `aspect_ratio`, `resolution`, `input_references` (data URLs); answers `data[].b64_json` and `usage.cost` (`apps/ai/images/openrouter.py`). Each model's accepted ratios, tiers and reference count come from `GET /images/models` (cached a day); prices from `GET /images/models/{id}/endpoints` (per image, per megapixel or per image token) | 57 image models on 2026-10-15: Nano Banana 2.1 / 2 / 2 Lite / Pro, GPT Image 2.5 Flare and others, Seedream 5.0, FLUX 3 and FLUX.2, Recraft, Qwen Image, MAI, Krea, Riverflow. The billed cost goes to the usage ledger exactly. |
+| Gemini (the Gemini key) | `POST /v1beta/models/{model}:generateContent`, `responseModalities: ["IMAGE"]`, `imageConfig` (aspectRatio, imageSize), reference images as `inline_data` parts (`apps/ai/images/gemini.py`) | A **free-tier key has no image quota** (HTTP 429 "limit: 0", checked 2026-10-15): these models are listed as unavailable until the key is set to Pay per token; use the same models through OpenRouter meanwhile. |
+
+**Which image model (owner's guidance, 2026-10-15).** Every image list starts with a "Recommended" group in this order: Nano Banana 2.1, Nano Banana 2 (Gemini 3.1 Flash Image), Nano Banana 2 Lite, Seedream 5.0 Flash, GPT Image 2.5 Flare, FLUX.2 klein 4B, FLUX 3 (`apps/ai/catalog.RECOMMENDED_IMAGE`). Gemini (Nano Banana) is best when the image needs text in it; GPT Image 2.5 Flare is best for combining three or more brand assets (logo, product shots, reference photos), which the Image generator sends as reference images ("Brand assets to combine"). Sizes: a call without one asks for the hero's 1440×816, mapped to the nearest ratio the model takes and the smallest resolution tier at least that wide.
+
+Live on 2026-10-15 (lead images through the Image generator): FLUX.2 klein 4B on OpenRouter 9 s, $0.015; Nano Banana 2.1 38 s, $0.053 (2752×1536 at 2K); GPT Image 2.5 Flare with three brand assets 34 s, $0.034, the logo reproduced faithfully.
 
 Heroes are generated at 1440×816 (the hero layout is 1440×810). FLUX.1 schnell on Cloudflare ignores width and height and returns a square image, which usually can't be reframed for the hero, so a failed ComfyUI run falls back to FLUX.2 klein first.
 
@@ -64,7 +70,7 @@ Heroes are generated at 1440×816 (the hero layout is 1440×810). FLUX.1 schnell
 
 The `vision` profile looks at each generated hero photo (subject box, facing, readable text, safety problems): Gemini 3.7 Flash, falling back to local `qwen3-vl:8b-instruct`. Messages use OpenAI-style content parts (`text` + `image_url` with a base64 data URL); the Ollama adapter converts them to Ollama's `images` field. On 2026-10-13 Gemini's Flash models returned HTTP 500 for several image requests in a row; the fallback covered them. Qwen3-VL 8B boxes subjects less tightly than Gemini.
 
-Avoid models with non-commercial licences (FLUX.1-dev, FLUX.2-dev, FLUX.2 klein 9B) for company content. Cloudflare also lists `flux-2-klein-9b` and `flux-2-dev`; use them only if Cloudflare's terms for those hosted models clearly allow commercial use. Otherwise stick to `flux-2-klein-4b` and `flux-1-schnell` (both Apache-2.0).
+Avoid models with non-commercial licences (FLUX.1-dev, FLUX.2-dev, FLUX.2 klein 9B) for company content. Cloudflare also lists `flux-2-klein-9b` and `flux-2-dev`; use them only if Cloudflare's terms for those hosted models clearly allow commercial use. Otherwise stick to `flux-2-klein-4b` and `flux-1-schnell` (both Apache-2.0). The catalog lists `flux-2-klein-9b` as not available for this reason.
 
 ## Local model strategy (RTX 5060 Laptop 8 GB + 64 GB DDR5-5200)
 

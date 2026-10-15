@@ -329,6 +329,8 @@ def info_map():
                 "price_source": row.price_source,
                 "context_source": row.context_source,
                 "note": row.note,
+                "per_image": row.per_image,
+                "image_out_per_m": row.image_out_per_m,
             }
             for row in ModelInfo.objects.all()
         }
@@ -370,8 +372,16 @@ def facts(provider, model, billing_mode=None):
     found = info(provider, model) or {}
     mode = billing_mode or billing(provider)
     parts = []
+    image_price = ""
+    if found.get("per_image") is not None:
+        image_price = f"{money(found['per_image'])} per image"
+    elif found.get("image_out_per_m") is not None:
+        image_price = f"{money(found['image_out_per_m'])} per M image tokens"
     if mode == LOCAL:
         parts.append("free: your machine")
+    elif image_price:
+        on_plan = {"free_tier": "free tier", "subscription": "on your plan"}.get(mode)
+        parts.append(f"{on_plan} (list {image_price})" if on_plan else image_price)
     elif found.get("in") is not None and found.get("out") is not None:
         price = f"{money(found['in'])} / {money(found['out'])} per M"
         if found["in"] == 0 and found["out"] == 0:
@@ -387,20 +397,24 @@ def facts(provider, model, billing_mode=None):
         parts.append("on your plan")
     else:
         parts.append("price unknown")
-    if found.get("context"):
+    if found.get("context") and not image_price:  # an image model's context is left from a text listing
         parts.append(context_label(found["context"]))
     return " · ".join(parts)
 
 
-def cost(provider, model, input_tokens, output_tokens, billed=None, billing_mode=None):
+def cost(provider, model, input_tokens, output_tokens, billed=None, billing_mode=None, images=0):
     """(Decimal or None, kind) for one call. `billed` is what the provider reported (OpenRouter's
-    usage.cost); otherwise tokens x price for a pay-per-token key."""
+    usage.cost); otherwise tokens x price for a pay-per-token key, or `images` x the price per image."""
     mode = billing_mode or billing(provider)
     if mode in (LOCAL, "free_tier", "subscription"):
         return Decimal("0"), "free"
     if billed is not None:
         return _dec(billed), "billed"
     found = info(provider, model) or {}
+    if images:
+        if found.get("per_image") is None:
+            return None, "unknown"
+        return (found["per_image"] * images).quantize(Decimal("0.000001")), "estimated"
     if found.get("in") is None or found.get("out") is None or input_tokens is None:
         return None, "unknown"
     total = (Decimal(input_tokens) * found["in"] + Decimal(output_tokens or 0) * found["out"]) / 1_000_000

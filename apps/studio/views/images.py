@@ -92,6 +92,7 @@ class ImageGeneratorView(StudioPage):
             "width",
             "height",
             "corner",
+            "model_key",
         )
         initial = {name: getattr(job, name) for name in fields}
         if job.spec:
@@ -114,8 +115,16 @@ class ImageGeneratorView(StudioPage):
             except ValueError as error:
                 form.add_error("upload", str(error))
                 return self.render_to_response(self.get_context_data(form=form, tab="single"))
+        try:
+            references = [
+                _save_upload(item, request.user) for item in form.cleaned_data.get("references_upload") or []
+            ]
+        except ValueError as error:
+            form.add_error("references_upload", str(error))
+            return self.render_to_response(self.get_context_data(form=form, tab="single"))
         job.created_by = request.user
         job.save()
+        job.references.set(references)
         imagegen.enqueue(job)
         messages.success(request, "Making the image. This page updates when it's ready (about a minute).")
         return redirect("studio:image_job", pk=job.pk)

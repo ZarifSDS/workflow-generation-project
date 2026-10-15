@@ -19,6 +19,7 @@ class ProviderSpec:
     name: str
     adapter: str  # "openai_compat" | "ollama_native" | "cloudflare_images" | "comfyui"
     base_url: str
+    image_adapter: str = ""  # a text provider's image API (apps.ai.service.image_adapter), e.g. Gemini's
     api_key_env: str | None = None
     account_env: str | None = None  # Cloudflare account id, Google Programmable Search engine id
     account_label: str = "Account ID"

@@ -7,14 +7,31 @@ from django.conf import settings
 
 from . import usage
 from .adapters import ollama_native, openai_compat
-from .images import cloudflare, comfyui
+from .images import cloudflare, comfyui, gemini, openrouter
 from .providers import get_provider
 from .types import ProviderError
 
 logger = logging.getLogger(__name__)
 
 TEXT_ADAPTERS = {"openai_compat": openai_compat.chat, "ollama_native": ollama_native.chat}
-IMAGE_ADAPTERS = {"cloudflare_images": cloudflare.generate, "comfyui": comfyui.generate}
+IMAGE_ADAPTERS = {
+    "cloudflare_images": cloudflare.generate,
+    "comfyui": comfyui.generate,
+    "gemini_images": gemini.generate,
+    "openrouter_images": openrouter.generate,
+}
+
+
+def image_adapter(spec):
+    """The image API behind a provider: its own adapter (Cloudflare, ComfyUI), or the image side of a text
+    provider (OpenRouter's Image API, Gemini's generateContent); "" when it makes no images."""
+    if spec.adapter in IMAGE_ADAPTERS:
+        return spec.adapter
+    if spec.image_adapter:
+        return spec.image_adapter
+    if spec.adapter == "openai_compat" and "openrouter.ai" in spec.base_url:
+        return "openrouter_images"
+    return ""
 
 
 def _with_retries(call, describe, retries, backoff):
@@ -55,15 +72,17 @@ def generate_image(provider, model, prompt, options=None, retries=None, backoff=
     options = options or {}
     spec = get_provider(provider)
     try:
-        adapter = IMAGE_ADAPTERS[spec.adapter]
+        adapter = IMAGE_ADAPTERS[image_adapter(spec)]
     except KeyError:
         raise ProviderError("bad_request", f"Provider '{provider}' does not generate images") from None
-    return _with_retries(
+    result = _with_retries(
         lambda: adapter(spec, model, prompt, options),
         f"{provider}/{model}",
         settings.AI_RETRIES if retries is None else retries,
         settings.AI_RETRY_BACKOFF if backoff is None else backoff,
     )
+    usage.record(result)  # one image and its cost (OpenRouter bills it exactly) in the ledger
+    return result
 
 
 def generate_for_profile(profile, messages, options=None):

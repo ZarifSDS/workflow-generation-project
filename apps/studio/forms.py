@@ -167,9 +167,47 @@ def step_rows(content_type, preset=None, existing=None):
     return rows
 
 
+class MultipleFileInput(forms.ClearableFileInput):
+    allow_multiple_selected = True
+
+
+class MultipleImageField(forms.ImageField):
+    """Several images in one field (Django's documented pattern); cleans to a list."""
+
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault("widget", MultipleFileInput(attrs={"accept": "image/*"}))
+        super().__init__(*args, **kwargs)
+
+    def clean(self, data, initial=None):
+        if isinstance(data, (list, tuple)):
+            return [super(MultipleImageField, self).clean(item, initial) for item in data if item]
+        return [super().clean(data, initial)] if data else []
+
+
+MOST_REFERENCES = 8
+# Which Default models task makes each kind of photo (apps.studio.pipeline.MODEL_TASKS).
+IMAGE_TASKS = {"hero": "hero_image", "lead": "lead_image", "inline": "inline_image"}
+
+
+def image_model_choices():
+    """The image models to choose from, grouped as in every other image list (recommended first)."""
+    choices = [("", "Default for this kind of image (Settings › Default models)")]
+    for group, items in catalog.grouped("image"):
+        if group != "Not available":
+            choices.append((group, [(item.key, item.label) for item in items]))
+    return choices
+
+
 class ImageJobForm(forms.ModelForm):
     """The standalone Image generator (apps/studio/imagegen.py)."""
 
+    references_upload = MultipleImageField(
+        label="Brand assets to combine (optional)",
+        required=False,
+        help_text=f"Up to {MOST_REFERENCES} images the model works into the photo: the logo, product shots, "
+        "reference photos. Needs a model that takes reference images, such as GPT Image 2.5 Flare (best for "
+        "three or more assets) or Nano Banana.",
+    )
     upload = forms.ImageField(
         label="Or start from your own photo",
         required=False,
@@ -196,6 +234,7 @@ class ImageJobForm(forms.ModelForm):
             "width",
             "height",
             "corner",
+            "model_key",
         ]
         widgets = {
             "kind": forms.RadioSelect,
@@ -209,10 +248,21 @@ class ImageJobForm(forms.ModelForm):
             "source; every number must be here.",
         }
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["model_key"] = forms.ChoiceField(
+            label="Image model",
+            required=False,
+            choices=image_model_choices(),
+            help_text="Photos only. Gemini (Nano Banana) is best when the image needs text in it; GPT Image "
+            "2.5 Flare is best for combining three or more brand assets.",
+        )
+
     def clean(self):
         data = super().clean()
         from .imagegen import ImageJobError, validate_size
 
+        self._clean_references(data)
         try:
             validate_size(data.get("width"), data.get("height"))
         except ImageJobError as error:
@@ -230,6 +280,35 @@ class ImageJobForm(forms.ModelForm):
                 "Describe what the image shows, write a photo prompt, or upload a photo."
             )
         return data
+
+    def _clean_references(self, data):
+        references = data.get("references_upload") or []
+        if not references:
+            return
+        if len(references) > MOST_REFERENCES:
+            self.add_error("references_upload", f"Up to {MOST_REFERENCES} brand assets, please.")
+            return
+        if data.get("kind") == ImageJob.Kind.INFOGRAPHIC or data.get("upload"):
+            self.add_error(
+                "references_upload",
+                "Brand assets go into a generated photo, not an infographic or an uploaded photo.",
+            )
+            return
+        key = data.get("model_key") or ""
+        if not key:
+            profile = profile_for(IMAGE_TASKS.get(data.get("kind"), "hero_image"))
+            key = f"{profile.get('provider')}::{profile.get('model')}"
+        item = catalog.by_key(key)
+        most = item.max_references if item else 0
+        if not most:
+            name = item.label if item else key
+            self.add_error(
+                "model_key",
+                f"{name} can't take brand assets. Choose a model that takes reference "
+                "images, such as GPT Image 2.5 Flare or Nano Banana.",
+            )
+        elif len(references) > most:
+            self.add_error("references_upload", f"{item.label} takes up to {most} reference images.")
 
     def _clean_infographic(self, data):
         import json

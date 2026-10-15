@@ -14,7 +14,7 @@ from apps.ai import catalog, defaults
 from apps.ai.models import TaskDefault
 from apps.ai.providers import get_providers
 
-from ..pipeline import MODEL_TASKS
+from ..pipeline import MODEL_TASK_KEYS, MODEL_TASKS
 from .provider_keys import TEXT_ADAPTERS, KeysPage
 
 
@@ -42,9 +42,11 @@ class TaskDefaultsView(KeysPage):
             base = defaults.built_in(task.profile)
             row = stored.get(task.key)
             chosen = posted.get(task.key) if posted else None
+            parent = MODEL_TASK_KEYS.get(task.inherits)
             rows.append(
                 {
                     "task": task,
+                    "blank": f"Same as {parent.label}" if parent else "",
                     "built_in": _label(defaults.model_key(base)),
                     "built_in_fallback": _label(defaults.model_key(base.get("fallback") or {})),
                     "model": chosen[0] if chosen else (row.model_key if row else ""),

@@ -23,6 +23,7 @@ from django.db import transaction
 from django.utils import timezone
 from django.utils.text import slugify
 
+from apps.ai import catalog
 from apps.ai.redact import redact
 from apps.ai.service import generate_image
 from apps.ai.types import ProviderError
@@ -85,9 +86,25 @@ def _context(job):
     }
 
 
+# With brand assets the model is asked to keep them as they are; the usual no-text clause would forbid the
+# logo it was given.
+WITH_REFERENCES = (
+    "Work the attached reference images (brand assets: logo, product shots, reference photos) into one "
+    "natural scene and keep each exactly as it is: its shape, colours and any words on it. No other words, "
+    "letters, labels or logos anywhere in the image."
+)
+
+
+def _finish_prompt(job, prompt):
+    if job.pk and job.references.exists():
+        prompt = " ".join(prompt.split())
+        return prompt if WITH_REFERENCES in prompt else f"{prompt} {WITH_REFERENCES}"
+    return executors.with_no_text(prompt)
+
+
 def _photo_prompt(job, context):
     if job.photo_prompt.strip():
-        return executors.with_no_text(job.photo_prompt[:1500])
+        return _finish_prompt(job, job.photo_prompt[:1500])
     if not (job.description or job.headline).strip():
         raise ImageJobError("Describe what the image shows, write a photo prompt, or upload a photo.")
     caller = SimpleNamespace(key="hero_image")  # _call_text only reads .key when a task is given
@@ -95,21 +112,53 @@ def _photo_prompt(job, context):
     prompt = " ".join(result.text.split())[:1500]
     if not prompt:
         raise ImageJobError("The model returned an empty photo prompt. Try again or write one yourself.")
-    return executors.with_no_text(prompt)
+    return _finish_prompt(job, prompt)
 
 
-def _generate(prompt):
-    """(ImageResult, note): the image profile's model (Settings › Default models › Hero image), then its
-    fallback."""
-    profile = profile_for("hero_image")
+TASKS = {
+    ImageJob.Kind.HERO: "hero_image",
+    ImageJob.Kind.LEAD: "lead_image",
+    ImageJob.Kind.INLINE: "inline_image",
+}
+
+
+def _profile(job):
+    """The job's chosen model, else the default for its kind of image (Settings › Default models), with
+    that default's fallback."""
+    profile = profile_for(TASKS.get(job.kind, "hero_image"))
+    if job.model_key:
+        provider, _, model = job.model_key.partition("::")
+        item = catalog.find(provider, model)
+        chosen = {"provider": provider, "model": model, "options": dict(item.options or {}) if item else {}}
+        if profile.get("model") and (provider, model) != (profile["provider"], profile["model"]):
+            chosen["fallback"] = {k: profile[k] for k in ("provider", "model", "options") if k in profile}
+        else:
+            chosen["fallback"] = profile.get("fallback")
+        profile = chosen
+    return profile
+
+
+def _generate(job, prompt):
+    """(ImageResult, note): the job's model with its brand assets, then the fallback. A fallback that takes
+    no reference images still makes the photo, without them, and the note says so."""
+    profile = _profile(job)
+    references = [_read(image) for image in job.references.all()] if job.pk else []
+    options = {**profile.get("options", {}), **({"reference_images": references} if references else {})}
     try:
-        return generate_image(profile["provider"], profile["model"], prompt, profile.get("options", {})), ""
+        return generate_image(profile["provider"], profile["model"], prompt, options), ""
     except ProviderError as error:
         fallback = profile.get("fallback")
         if not fallback:
             raise
-        image = generate_image(fallback["provider"], fallback["model"], prompt, fallback.get("options", {}))
-        return image, f"Used the fallback image model because {profile['model']} failed ({error.kind})."
+        options = dict(fallback.get("options", {}))
+        item = catalog.find(fallback["provider"], fallback["model"])
+        note = f"Used the fallback image model because {profile['model']} failed ({error.kind})."
+        if references and item and item.max_references:
+            options["reference_images"] = references
+        elif references:
+            note += " It takes no brand assets, so they are not in this photo."
+        image = generate_image(fallback["provider"], fallback["model"], prompt, options)
+        return image, note
 
 
 def _save_image(title, data, name, description=""):
@@ -159,7 +208,7 @@ def run(job):
         image_prompt = _photo_prompt(job, context)
     for attempt in (1, 2):
         if generated:
-            image, note = _generate(image_prompt)
+            image, note = _generate(job, image_prompt)
             notes += [note] if note else []
             job.provider, job.model = image.provider, image.model
             ext = image.mime_type.split("/")[-1].replace("jpeg", "jpg")
@@ -337,6 +386,7 @@ def again(job, user, **changes):
         "height",
         "corner",
         "template",
+        "model_key",
     )
     values = {name: getattr(job, name) for name in fields}
     values["spec"] = {} if changes.pop("rewrite", False) else changes.pop("spec", None) or job.spec
@@ -344,6 +394,7 @@ def again(job, user, **changes):
     values.update({key: value for key, value in changes.items() if value not in (None, "")})
     source = (job.photo or job.source) if same_photo else None  # a new photo is generated otherwise
     new = ImageJob.objects.create(**values, source=source, created_by=user)
+    new.references.set(job.references.all())
     enqueue(new)
     return new
 

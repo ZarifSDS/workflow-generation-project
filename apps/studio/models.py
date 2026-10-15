@@ -585,6 +585,19 @@ class ImageJob(models.Model):
         related_name="+",
         help_text="An uploaded photo (or the previous job's photo) used instead of generating one.",
     )
+    model_key = models.CharField(
+        "Image model",
+        max_length=240,
+        blank=True,
+        help_text="Empty: the default for this kind of image (Settings › Default models).",
+    )
+    references = models.ManyToManyField(
+        "wagtailimages.Image",
+        blank=True,
+        related_name="+",
+        help_text="Brand assets the image model combines into the photo (logo, product shots, reference "
+        "photos); needs a model that takes reference images.",
+    )
     plan = models.ForeignKey(ImagePlan, null=True, blank=True, on_delete=models.SET_NULL, related_name="jobs")
     section = models.CharField(
         max_length=255, blank=True, help_text="Where the image goes in the article (an H2), or the hero."

@@ -223,6 +223,7 @@ AI_PROVIDERS = {
         "adapter": "openai_compat",
         "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
         "api_key_env": "GEMINI_API_KEY",
+        "image_adapter": "gemini_images",  # Nano Banana through generateContent (apps/ai/images/gemini.py)
     },
     "groq": {
         "adapter": "openai_compat",
