@@ -162,6 +162,31 @@ def test_analysis_finds_recurring_themes_and_report_lists_outlines():
     assert "median 1500 words" in text and "(yours)" in text and "H2: Digital storage" in text
 
 
+def test_the_report_says_where_the_questions_came_from():
+    result = [serp.Result(1, "Page 1", "https://site1.com")]
+    # Outside the US, Serper sends no "People also ask" or related searches: autocomplete only, said plainly.
+    bare = serp.SerpData("serper", "risk assessment template", "gb", "en", results=result)
+    text = serp.report(
+        bare, ["how to write a risk assessment", "risk assessment template uk"], [], {}, "k", "UK"
+    )
+    assert (
+        'Google autocomplete for UK only. Serper sent no "People also ask" questions for this search '
+        "(outside the US it usually sends none), so these are what people type, not the questions Google "
+        "answers on the results page." in text
+    )
+    assert "Serper sent no related searches for this search (outside the US it usually sends none)" in text
+    assert "- how to write a risk assessment" in text and "- risk assessment template uk" in text
+    # With People also ask, the source says both; with nothing at all, "None found" instead of silence.
+    full = serp.SerpData(
+        "serper", "k", "us", "en", results=result, questions=["What is a JSA?"], related=["jsa template"]
+    )
+    text = serp.report(full, [], [], {}, "k", "US")
+    assert '*Source: "People also ask" questions from Serper for United States' in text
+    assert "(outside the US" not in text
+    text = serp.report(bare, [], [], {}, "k", "AU")
+    assert "## Questions searchers ask" in text and "- None found." in text
+
+
 @pytest.mark.search_step
 def test_search_step_feeds_research(monkeypatch, brief):
     run = services.create_run(brief, {})

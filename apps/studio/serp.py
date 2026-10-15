@@ -584,11 +584,53 @@ def report(serp, suggestions, pages, summary, keyword, region, own_domain=""):
             + [s for s in suggestions if s.split()[0].lower() in QUESTION_WORDS]
         )
     )
-    if questions:
-        lines += ["## Questions searchers ask", ""] + [f"- {q}" for q in questions[:20]] + [""]
+    paa_note = _source_note(serp, country, "questions")
+    if questions or paa_note:
+        lines += ["## Questions searchers ask", ""]
+        lines += [paa_note, ""] if paa_note else []
+        lines += [f"- {q}" for q in questions[:20]] + [""] if questions else ["- None found.", ""]
     related = list(
         dict.fromkeys((serp.related if serp else []) + [s for s in suggestions if s not in questions])
     )
-    if related:
-        lines += ["## Related searches", ""] + [f"- {r}" for r in related[:25]] + [""]
+    related_note = _source_note(serp, country, "related")
+    if related or related_note:
+        lines += ["## Related searches", ""]
+        lines += [related_note, ""] if related_note else []
+        lines += [f"- {r}" for r in related[:25]] + [""] if related else ["- None found.", ""]
     return "\n".join(lines).strip() + "\n"
+
+
+PROVIDER_NAMES = {
+    "serper": "Serper",
+    "brave_search": "Brave Search",
+    "google_cse": "Google Programmable Search",
+    "duckduckgo": "DuckDuckGo",
+    "ollama_web": "Ollama web search",
+}
+
+
+def _source_note(serp, country, kind):
+    """Where the questions (Google's "People also ask") or related searches came from, said plainly when
+    the search provider sent none, so the research knows they are only autocomplete suggestions: what
+    people type, not the questions Google answers on the results page. Serper sends both for US searches
+    and usually neither elsewhere (checked live 2026-10-15)."""
+    if not serp:
+        return ""
+    sent = serp.questions if kind == "questions" else serp.related
+    what = '"People also ask" questions' if kind == "questions" else "related searches"
+    name = PROVIDER_NAMES.get(serp.provider, serp.provider)
+    market = COUNTRY_NAMES.get(country, country)
+    if sent:
+        return f"*Source: {what} from {name} for {market}, plus Google autocomplete for {market}.*"
+    usually = (
+        " (outside the US it usually sends none)" if serp.provider == "serper" and country != "us" else ""
+    )
+    meaning = (
+        "what people type, not the questions Google answers on the results page"
+        if kind == "questions"
+        else "what people type after the keyword, not Google's own related searches"
+    )
+    return (
+        f"*Source: Google autocomplete for {market} only. {name} sent no {what} for this search{usually}, "
+        f"so these are {meaning}.*"
+    )
