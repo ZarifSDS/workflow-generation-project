@@ -3,8 +3,8 @@
 from django.db.models.signals import post_delete, post_save
 from django.dispatch import receiver
 
-from . import catalog, defaults, redact
-from .models import AddedModel, ProviderConfig, TaskDefault
+from . import catalog, defaults, pricing, redact
+from .models import AddedModel, ModelInfo, ProviderConfig, TaskDefault
 
 
 @receiver([post_save, post_delete], sender=ProviderConfig)
@@ -12,6 +12,12 @@ from .models import AddedModel, ProviderConfig, TaskDefault
 def clear_caches(**kwargs):
     catalog.clear_cache()
     redact.clear_stored_cache()
+    pricing.clear_cache()
+
+
+@receiver([post_save, post_delete], sender=ModelInfo)
+def clear_price_cache(**kwargs):
+    pricing.clear_cache()
 
 
 @receiver([post_save, post_delete], sender=TaskDefault)

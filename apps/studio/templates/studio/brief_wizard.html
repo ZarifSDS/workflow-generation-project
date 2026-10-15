@@ -67,7 +67,7 @@
                 <thead><tr><th scope="col">Step</th><th scope="col">Model</th><th scope="col">SOP self-review</th><th scope="col">Wait for my approval</th></tr></thead>
                 <tbody>
                 {% for row in rows %}
-                    <tr data-types="{{ row.types }}">
+                    <tr data-types="{{ row.types }}"{% if row.tokens %} data-step-in="{{ row.tokens.input }}" data-step-out="{{ row.tokens.output }}" data-sop-in="{{ row.sop_tokens.0 }}" data-sop-out="{{ row.sop_tokens.1 }}" data-need="{{ row.need }}"{% endif %}>
                         <th scope="row">
                             {% if row.def.optional %}
                                 <label><input type="checkbox" name="step_{{ row.def.key }}_enabled" {% if row.def.default_on %}checked{% endif %}> {{ row.def.label }}</label>
@@ -80,7 +80,7 @@
                                     {% for group, items in row.groups %}
                                         <optgroup label="{{ group }}">
                                             {% for item in items %}
-                                                <option value="{{ item.key }}" {% if not item.selectable %}disabled{% endif %} {% if item.key == row.default %}selected{% endif %}>{{ item.label }}{% if item.typical_seconds %} · {{ item.typical_seconds|duration }}{% endif %}{% if item.reason %} · {{ item.reason }}{% endif %}</option>
+                                                <option value="{{ item.key }}" {% if not item.selectable %}disabled{% endif %} {% if item.key == row.default %}selected{% endif %} {% model_data item %}>{{ item.label }}{% if item.typical_seconds %} · {{ item.typical_seconds|duration }}{% endif %}{% with facts=item|model_facts %}{% if facts %} · {{ facts }}{% endif %}{% endwith %}{% context_warning item row.need %}{% if item.reason %} · {{ item.reason }}{% endif %}</option>
                                             {% endfor %}
                                         </optgroup>
                                     {% endfor %}
@@ -106,6 +106,7 @@
     </details>
 
     <div class="s-sticky-actions">
+        <p class="s-m0 s-small s-run-estimate" data-run-estimate aria-live="polite">{% if run_estimate %}{{ run_estimate }}{% endif %}</p>
         {% if brief %}
             <button class="button" type="submit" name="action" value="save">Save brief</button>
             <button class="button button-secondary" type="submit" name="action" value="start">Save and start a new run</button>

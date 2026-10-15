@@ -6,6 +6,7 @@ from django.db import transaction
 from django.tasks import task
 from django.utils import timezone
 
+from apps.ai import usage
 from apps.ai.redact import redact
 from apps.ai.types import ProviderError
 
@@ -23,8 +24,14 @@ def run_step(step_id):
 def run_chat(message_id):
     """Answer one suggestions-chat message or Tune request (apps/studio/assistant.py)."""
     from . import assistant
+    from .models import ChatMessage
 
-    assistant.answer(message_id)
+    message = ChatMessage.objects.filter(pk=message_id).select_related("step").first()
+    step = message.step if message else None
+    with usage.scope(
+        "chat", run_id=step.run_id if step else None, step_key=step.key if step else "", object_id=message_id
+    ):
+        assistant.answer(message_id)
 
 
 @task()
@@ -32,7 +39,8 @@ def run_image_job(job_id):
     """Make one image for the standalone Image generator (apps/studio/imagegen.py)."""
     from . import imagegen
 
-    imagegen.execute(job_id)
+    with usage.scope("image_job", object_id=job_id):
+        imagegen.execute(job_id)
 
 
 @task()
@@ -40,7 +48,8 @@ def run_image_plan(plan_id):
     """Read an existing article and propose images tailored to it (apps/studio/imagegen.py)."""
     from . import imagegen
 
-    imagegen.execute_plan(plan_id)
+    with usage.scope("image_plan", object_id=plan_id):
+        imagegen.execute_plan(plan_id)
 
 
 @task()
@@ -69,10 +78,12 @@ def execute_step(step_id):
     services.refresh_run_status(step.run)
 
     try:
-        output = executors.EXECUTORS[step.key](step)
-        if step.self_review and step.key in sop.STEPS:
-            # The SOP loop never fails a step: a reviewer problem holds the step with the output kept.
-            output = sop.apply(step, output)
+        # Every model call inside (the step, its SOP rounds, the edit sequence) is logged to this step.
+        with usage.scope("step", run_id=step.run_id, step_key=step.key, object_id=step.pk):
+            output = executors.EXECUTORS[step.key](step)
+            if step.self_review and step.key in sop.STEPS:
+                # The SOP loop never fails a step: a reviewer problem holds the step with the output kept.
+                output = sop.apply(step, output)
     except (ProviderError, executors.StepError) as error:
         _fail(step, executors.friendly_error(error))
         return

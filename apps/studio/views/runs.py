@@ -8,10 +8,10 @@ from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 from django.utils.text import slugify
 
-from apps.ai import catalog
+from apps.ai import catalog, usage
 from apps.quality import house, review
 
-from .. import assistant, diffing, permissions, requester, services
+from .. import assistant, diffing, estimates, permissions, requester, services
 from ..models import ChatMessage, GenerationRun, StepRun, StepVersion
 from . import editor_api
 from .common import StudioPage
@@ -168,7 +168,11 @@ class RunWorkspaceView(StudioPage):
             and self.run.status != GenerationRun.Status.REJECTED
             and permissions.can_review(user, step)
         )
+        usage_steps, usage_total = usage.for_run(self.run.pk)
         context.update(
+            usage_total=usage_total if usage_total["calls"] else None,
+            step_usage=usage_steps.get(step.key) if step else None,
+            context_need=estimates.context_needed(step.key) if step and kind == "text" else 0,
             run=self.run,
             brief=self.run.brief,
             steps=self.run.steps.all(),

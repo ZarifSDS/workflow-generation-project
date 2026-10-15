@@ -75,7 +75,52 @@
   }
   modeInputs.forEach((input) => input.addEventListener("change", applyMode));
 
+  // Run estimate next to Start run: time, money and context, from the chosen models (apps/studio/estimates.py
+  // works it out the same way). Prices are what this key is billed per million tokens: free-tier,
+  // subscription and local models carry 0, models without a known price carry nothing.
+  const estimateLine = form.querySelector("[data-run-estimate]");
+  function money(value) {
+    if (value === 0) return "$0";
+    if (value < 0.01) return "under $0.01";
+    return "$" + value.toFixed(2);
+  }
+  function minutes(seconds) {
+    return seconds < 90 ? `${Math.max(1, Math.round(seconds))} s` : `${Math.round(seconds / 60)} min`;
+  }
+  function estimate() {
+    if (!estimateLine) return;
+    let seconds = 0, cost = 0, paid = 0, unknown = 0, small = [];
+    form.querySelectorAll("tr[data-types]").forEach((row) => {
+      if (row.hidden) return;
+      const enabled = row.querySelector('input[name$="_enabled"]');
+      if (enabled && !enabled.checked) return;
+      const select = row.querySelector("select[data-step-model]");
+      const option = select && select.options[select.selectedIndex];
+      if (!option) return;
+      seconds += Number(option.dataset.secs || 60);
+      if (!row.dataset.stepIn) return;
+      const sop = row.querySelector("[data-self-review]");
+      const tokensIn = Number(row.dataset.stepIn) + (sop && sop.checked ? Number(row.dataset.sopIn || 0) : 0);
+      const tokensOut = Number(row.dataset.stepOut) + (sop && sop.checked ? Number(row.dataset.sopOut || 0) : 0);
+      if (option.dataset.ctx && Number(row.dataset.need) > Number(option.dataset.ctx)) {
+        small.push(row.querySelector("th").textContent.trim());
+      }
+      if (option.dataset.in === undefined) { unknown += 1; return; }
+      const stepCost = (tokensIn * Number(option.dataset.in) + tokensOut * Number(option.dataset.out)) / 1e6;
+      if (stepCost > 0) paid += 1;
+      cost += stepCost;
+    });
+    const parts = [`About ${minutes(seconds)}`];
+    parts.push(paid ? `about ${money(cost)} (${paid} paid step${paid > 1 ? "s" : ""})` : unknown ? "free models where the price is known" : "free");
+    if (unknown) parts.push(`price unknown for ${unknown} step${unknown > 1 ? "s" : ""}`);
+    if (small.length) parts.push(`context too small: ${small.join(", ")}`);
+    estimateLine.textContent = parts.join(" · ");
+    estimateLine.classList.toggle("s-run-estimate--warn", small.length > 0);
+  }
+  form.addEventListener("change", estimate);
+
   typeInputs.forEach((input) => input.addEventListener("change", applyType));
   if (presetSelect) presetSelect.addEventListener("change", applyPreset);
   applyType();
+  estimate();
 })();

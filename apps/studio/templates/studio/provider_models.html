@@ -1,4 +1,5 @@
 {% extends "wagtailadmin/generic/base.html" %}
+{% load studio_tags %}
 
 {% block main_content %}
 <div class="studio">
@@ -30,6 +31,9 @@
                         <th scope="col">Model id</th>
                         <th scope="col">Provider</th>
                         <th scope="col">Free or paid</th>
+                        <th scope="col">$ in, per M tokens</th>
+                        <th scope="col">$ out, per M tokens</th>
+                        <th scope="col">Context (tokens)</th>
                         <th scope="col">From</th>
                     </tr></thead>
                     <tbody>
@@ -40,6 +44,10 @@
                             <td class="s-mono s-small">{{ m.model }}{% if m.details %}<div class="s-muted">{{ m.details }}</div>{% endif %}</td>
                             <td>{% for key, label in labels.items %}{% if key == m.provider %}{{ label }}{% endif %}{% endfor %}</td>
                             <td><label class="w-sr-only" for="status-{{ m.pk }}">Free or paid for {{ m.model }}</label><select id="status-{{ m.pk }}" name="status-{{ m.pk }}">{% for value, label in statuses %}<option value="{{ value }}" {% if value == m.status %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></td>
+                            <td><label class="w-sr-only" for="in-{{ m.pk }}">Input price per million tokens for {{ m.model }}</label><input class="s-num s-price" id="in-{{ m.pk }}" name="in-{{ m.pk }}" inputmode="decimal" value="{{ m.info.input_per_m|price_field }}" placeholder="unknown"></td>
+                            <td><label class="w-sr-only" for="out-{{ m.pk }}">Output price per million tokens for {{ m.model }}</label><input class="s-num s-price" id="out-{{ m.pk }}" name="out-{{ m.pk }}" inputmode="decimal" value="{{ m.info.output_per_m|price_field }}" placeholder="unknown"></td>
+                            <td><label class="w-sr-only" for="ctx-{{ m.pk }}">Context window for {{ m.model }}</label><input class="s-num s-price" id="ctx-{{ m.pk }}" name="ctx-{{ m.pk }}" inputmode="numeric" value="{{ m.info.context_window|default_if_none:'' }}" placeholder="unknown">
+                                {% if m.info.price_source or m.info.context_source %}<div class="s-muted s-small" title="{{ m.info.note }}">{% if m.info.price_source %}price: {{ m.info.get_price_source_display|lower }}{% endif %}{% if m.info.price_source and m.info.context_source %} · {% endif %}{% if m.info.context_source %}context: {{ m.info.get_context_source_display|lower }}{% endif %}</div>{% endif %}</td>
                             <td><span class="s-tag s-tag--{% if m.source == 'listed' %}info{% else %}neutral{% endif %}">{% if m.source == 'listed' %}Provider's list{% else %}By hand{% endif %}</span></td>
                         </tr>
                     {% endfor %}

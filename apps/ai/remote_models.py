@@ -35,6 +35,11 @@ class RemoteModel:
     price: str = ""  # "$0.15 in / $0.60 out per million tokens"
     vision: bool = False
     chat: bool = True  # False: embeddings, speech, image or moderation models (never a step's writer)
+    # The same prices as numbers (USD per million tokens) and the output limit, for apps.ai.pricing.
+    input_per_m: float | None = None
+    output_per_m: float | None = None
+    cached_input_per_m: float | None = None
+    max_output: int | None = None
 
     @property
     def status(self):
@@ -63,10 +68,26 @@ class RemoteModel:
 
 
 def _per_million(value):
+    """A price as USD per million tokens. OpenRouter sends USD per token (strings such as "0.0000001");
+    some OpenAI-compatible hosts send per-million numbers. No real price is $1,000 per million or more,
+    so a value under 0.001 is per token and anything larger is already per million."""
     try:
-        return float(value) * 1_000_000
+        number = float(value)
     except (TypeError, ValueError):
         return None
+    if number < 0:
+        return None  # OpenRouter's "-1" means variable pricing (a router model): unknown
+    return number * 1_000_000 if number < 0.001 else number
+
+
+def _prices(item):
+    """(input, output, cached input) per million from the shapes OpenAI-compatible lists use:
+    OpenRouter's pricing.prompt/completion/input_cache_read, or pricing.input/output."""
+    pricing = item.get("pricing") if isinstance(item.get("pricing"), dict) else {}
+    prompt = _per_million(pricing.get("prompt", pricing.get("input")))
+    completion = _per_million(pricing.get("completion", pricing.get("output")))
+    cached = _per_million(pricing.get("input_cache_read", pricing.get("cached_input")))
+    return prompt, completion, cached
 
 
 def _money(value):
@@ -77,8 +98,7 @@ def _openai_entry(item):
     model_id = str(item.get("id") or "").strip()
     if model_id.startswith("models/"):  # Gemini's OpenAI-compatible list
         model_id = model_id.removeprefix("models/")
-    pricing = item.get("pricing") if isinstance(item.get("pricing"), dict) else {}
-    prompt, completion = _per_million(pricing.get("prompt")), _per_million(pricing.get("completion"))
+    prompt, completion, cached = _prices(item)
     free, price = None, ""
     if prompt is not None and completion is not None:
         free = prompt == 0 and completion == 0
@@ -89,6 +109,8 @@ def _openai_entry(item):
     modalities = architecture.get("input_modalities") or []
     outputs = architecture.get("output_modalities")
     context = item.get("context_length") or item.get("context_window")
+    top = item.get("top_provider") if isinstance(item.get("top_provider"), dict) else {}
+    max_output = top.get("max_completion_tokens") or item.get("max_completion_tokens")
     name = str(item.get("name") or "").strip()
     return RemoteModel(
         id=model_id,
@@ -98,6 +120,10 @@ def _openai_entry(item):
         price=price,
         vision="image" in modalities,
         chat=is_chat(model_id, name) and (not outputs or "text" in outputs),
+        input_per_m=prompt if completion is not None else None,
+        output_per_m=completion if prompt is not None else None,
+        cached_input_per_m=cached,
+        max_output=max_output if isinstance(max_output, int) else None,
     )
 
 
@@ -224,7 +250,48 @@ def sync(spec):
         record.synced_at, record.listed, record.error = now, len(wanted), ""
         record.save()
     catalog.clear_cache()
+    _update_prices(spec, models)
     return len(wanted)
+
+
+def _update_prices(spec, models):
+    """Prices and context windows for every model of the provider (apps.ai.pricing); never raises."""
+    from . import catalog, pricing
+    from .models import AddedModel
+
+    try:
+        pricing.refresh_reference()
+        if spec.adapter == "ollama_native":
+            models = [_with_ollama_context(spec, model) for model in models]
+        others = [m.model for m in catalog.CATALOG if m.provider == spec.name and m.kind == "text"]
+        others += list(
+            AddedModel.objects.filter(provider=spec.name, source=AddedModel.Source.MANUAL).values_list(
+                "model", flat=True
+            )
+        )
+        pricing.update(spec.name, listed=models, model_ids=others)
+    except Exception:  # noqa: BLE001 - prices are an extra: the model list itself is already saved
+        import logging
+
+        logging.getLogger(__name__).exception("Prices for %s couldn't be updated", spec.name)
+
+
+def _with_ollama_context(spec, model):
+    """Local Ollama reports a model's context length through /api/show (model_info "*.context_length")."""
+    from dataclasses import replace
+
+    try:
+        response = httpx.post(
+            spec.base_url.rstrip("/") + "/api/show",
+            json={"model": model.id},
+            headers=dict(spec.headers),
+            timeout=TIMEOUT,
+        )
+        info = response.json().get("model_info") or {} if response.status_code == 200 else {}
+    except (httpx.HTTPError, ValueError):
+        return model
+    lengths = [v for k, v in info.items() if k.endswith(".context_length") and isinstance(v, int)]
+    return replace(model, context=lengths[0]) if lengths else model
 
 
 def stale(names=None):
@@ -259,4 +326,8 @@ def sync_all(names=None):
             results[name] = sync(spec)
         except RemoteModelsError as error:
             results[name] = str(error)
+    if names is None:
+        from . import pricing
+
+        pricing.update_all()  # models of providers that list nothing get reference prices too
     return results

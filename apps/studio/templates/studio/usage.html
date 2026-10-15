@@ -1,0 +1,54 @@
+{% extends "wagtailadmin/generic/base.html" %}
+{% load studio_tags %}
+
+{% block main_content %}
+<div class="studio">
+    <p class="s-muted s-m0 s-measure">Every model call the studio makes is counted here: steps with their SOP rounds and edit passes, the suggestions chat, and the image planner. <strong>Billed</strong> is what the provider reported charging (OpenRouter); <strong>estimated</strong> is tokens × the model's price; <strong>free</strong> is a free-tier, subscription or local model; <strong>unknown</strong> means the model has no price yet (add one under <a href="{% url 'studio:provider_models' %}">Manage models</a>). Set how each key is billed on <a href="{% url 'studio:provider_keys' %}">AI providers</a>.</p>
+
+    {% for month in months %}
+        <section class="s-box" aria-labelledby="month-{{ forloop.counter }}">
+            <h3 class="s-section" id="month-{{ forloop.counter }}">{{ month.month|date:"F Y" }} <span class="s-muted s-num">· {{ month.cost|usd }}</span></h3>
+            <div class="s-table-wrap">
+                <table class="s-table">
+                    <thead><tr><th scope="col">Model</th><th scope="col">Provider</th><th scope="col">Calls</th><th scope="col">Tokens in</th><th scope="col">Tokens out</th><th scope="col">Cost</th></tr></thead>
+                    <tbody>
+                    {% for row in month.rows %}
+                        <tr>
+                            <th scope="row" class="s-small">{{ row.model }}</th>
+                            <td>{{ row.label }}</td>
+                            <td class="s-num">{{ row.calls }}</td>
+                            <td class="s-num">{{ row.tokens_in|default_if_none:"–" }}</td>
+                            <td class="s-num">{{ row.tokens_out|default_if_none:"–" }}</td>
+                            <td class="s-num">{{ row.cost|usd|default:"–" }} <span class="s-tag s-tag--{% if row.how == 'unknown' %}warn{% elif row.how == 'billed' %}ok{% else %}neutral{% endif %}">{{ row.how }}</span></td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    {% empty %}
+        <div class="s-empty"><p>No model calls recorded yet. They're counted from the next step, chat message or image plan on.</p></div>
+    {% endfor %}
+
+    {% if runs %}
+        <section class="s-box" aria-labelledby="runs-head">
+            <h3 class="s-section" id="runs-head">Latest runs</h3>
+            <div class="s-table-wrap">
+                <table class="s-table">
+                    <thead><tr><th scope="col">Run</th><th scope="col">Calls</th><th scope="col">Tokens in</th><th scope="col">Cost</th></tr></thead>
+                    <tbody>
+                    {% for run in runs %}
+                        <tr>
+                            <th scope="row"><a href="{% url 'studio:run' run.run_id %}">{{ run.topic }}</a></th>
+                            <td class="s-num">{{ run.calls }}</td>
+                            <td class="s-num">{{ run.tokens_in|default_if_none:"–" }}</td>
+                            <td class="s-num">{{ run.cost|usd|default:"–" }}</td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    {% endif %}
+</div>
+{% endblock %}

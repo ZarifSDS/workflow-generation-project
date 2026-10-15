@@ -4,6 +4,7 @@ from django import forms
 
 from apps.ai import catalog
 
+from . import estimates
 from .models import BriefPreset, ContentBrief, ContentType, ImageJob
 from .pipeline import STEPS, profile_for, steps_for
 
@@ -150,12 +151,17 @@ def step_rows(content_type, preset=None, existing=None):
         default = f"{profile['provider']}::{profile['model']}" if profile.get("provider") else ""
         if preset and preset.step_models.get(key):
             default = preset.step_models[key]
+        tokens = estimates.step_tokens(key) if step_def.kind == "text" else {}
         rows.append(
             {
                 "def": step_def,
                 "types": " ".join(types),
                 "default": default,
                 "groups": catalog.grouped(step_def.kind) if step_def.kind in ("text", "image") else [],
+                # For the run estimate (studio.js) and the context guard.
+                "tokens": tokens,
+                "sop_tokens": estimates.SOP_TOKENS if tokens and not tokens.get("measured") else (0, 0),
+                "need": estimates.context_needed(key) if step_def.kind == "text" else 0,
             }
         )
     return rows

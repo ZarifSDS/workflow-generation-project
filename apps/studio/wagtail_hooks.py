@@ -184,6 +184,7 @@ def register_ai_log_actions(actions):
 
     actions.register_action("ai.key_set", "Set API key", changed)
     actions.register_action("ai.key_removed", "Remove API key", "Removed the stored API key")
+    actions.register_action("ai.billing_set", "Set billing", "Changed how the key is billed")
     actions.register_action("ai.provider_added", "Add AI provider", "Added the provider")
     actions.register_action("ai.provider_changed", "Change AI provider", "Changed the provider")
     actions.register_action("ai.provider_deleted", "Delete AI provider", "Deleted the provider")

@@ -51,7 +51,7 @@
         <template id="model-options-{{ kind }}">
             {% for group, items in groups %}
                 <optgroup label="{{ group }}">
-                    {% for item in items %}<option value="{{ item.key }}" {% if not item.selectable %}disabled{% endif %}>{{ item.label }}{% if item.typical_seconds %} · {{ item.typical_seconds|duration }}{% endif %}{% if item.reason %} · {{ item.reason }}{% endif %}</option>{% endfor %}
+                    {% for item in items %}<option value="{{ item.key }}" {% if not item.selectable %}disabled{% endif %}>{{ item.label }}{% if item.typical_seconds %} · {{ item.typical_seconds|duration }}{% endif %}{% with facts=item|model_facts %}{% if facts %} · {{ facts }}{% endif %}{% endwith %}{% if item.reason %} · {{ item.reason }}{% endif %}</option>{% endfor %}
                 </optgroup>
             {% endfor %}
         </template>

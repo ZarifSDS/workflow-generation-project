@@ -5,6 +5,7 @@ import time
 
 from django.conf import settings
 
+from . import usage
 from .adapters import ollama_native, openai_compat
 from .images import cloudflare, comfyui
 from .providers import get_provider
@@ -40,12 +41,14 @@ def generate(provider, model, messages, options=None, retries=None, backoff=None
         adapter = TEXT_ADAPTERS[spec.adapter]
     except KeyError:
         raise ProviderError("bad_request", f"Provider '{provider}' does not generate text") from None
-    return _with_retries(
+    result = _with_retries(
         lambda: adapter(spec, model, messages, options),
         f"{provider}/{model}",
         settings.AI_RETRIES if retries is None else retries,
         settings.AI_RETRY_BACKOFF if backoff is None else backoff,
     )
+    usage.record(result)  # tokens and cost in the ledger; never raises
+    return result
 
 
 def generate_image(provider, model, prompt, options=None, retries=None, backoff=None):

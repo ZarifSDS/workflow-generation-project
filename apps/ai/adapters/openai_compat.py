@@ -67,6 +67,14 @@ def chat(spec, model, messages, options):
     total = time.monotonic() - started
     output_tokens = usage.completion_tokens if usage else None
     generation_time = total - (first_token_at - started) if first_token_at else None
+    stats = {}
+    # OpenRouter reports what the call was billed in usage.cost (USD credits); the SDK keeps it as an
+    # extra field. Other providers don't send it.
+    billed = getattr(usage, "cost", None) if usage else None
+    if billed is None and usage is not None:
+        billed = (getattr(usage, "model_extra", None) or {}).get("cost")
+    if isinstance(billed, (int, float)) and not isinstance(billed, bool):
+        stats["billed_cost"] = float(billed)
     return GenerationResult(
         provider=spec.name,
         model=model,
@@ -81,4 +89,5 @@ def chat(spec, model, messages, options):
             if output_tokens and output_tokens >= 50 and generation_time
             else None
         ),
+        stats=stats,
     )

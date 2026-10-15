@@ -317,6 +317,13 @@ STUDIO_WEBHOOK_SECRET = os.environ.get("STUDIO_WEBHOOK_SECRET", "")
 # reviewer's findings before the step holds for a person.
 STUDIO_SOP_MAX_ROUNDS = int(os.environ.get("STUDIO_SOP_MAX_ROUNDS", "3"))
 
+# Reference prices and context windows for models whose provider lists none (apps/ai/pricing.py): LiteLLM's
+# community-maintained list (MIT), read at most once a week during a model sync. Empty switches it off.
+AI_PRICE_REFERENCE_URL = os.environ.get(
+    "AI_PRICE_REFERENCE_URL",
+    "https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json",
+)
+
 AI_RETRIES = 3
 AI_RETRY_BACKOFF = 5  # seconds; grows 5, 15, 45
 

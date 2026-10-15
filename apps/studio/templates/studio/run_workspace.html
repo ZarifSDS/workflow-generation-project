@@ -12,6 +12,7 @@
         <span class="s-tag s-tag--{{ run.status|status_style }}">{{ run.get_status_display }}</span>
         {% if run.autopilot %}<span class="s-tag s-tag--info" title="Steps self-review against the SOP and hold only where they can't pass">Autopilot</span>{% endif %}
         <span class="s-muted">{{ brief.get_content_type_display }} · {{ brief.region }} · FKGL {{ brief.fkgl }}{% if brief.wordcount %} · {{ brief.wordcount }} words{% endif %}</span>
+        {% if usage_total %}<span class="s-muted s-num" title="{{ usage_total.calls }} model call{{ usage_total.calls|pluralize }}: {{ usage_total.input }} tokens in, {{ usage_total.output }} out">· {% if usage_total.exact %}cost {{ usage_total.cost|usd }}{% else %}cost about {{ usage_total.cost|usd }}{% endif %}{% if usage_total.unknown %} + unpriced calls{% endif %}</span>{% endif %}
         <span class="s-spacer"></span>
         {% if has_metadata %}<a class="button button-secondary button-small" href="{% url 'studio:metadata' run.pk %}">Title and meta</a>{% endif %}
         <a class="button button-secondary button-small" href="{% url 'studio:brief_edit' brief.pk %}">Brief</a>
@@ -51,7 +52,7 @@
                 {% if step %}
                     <h2 class="s-m0" id="step-head">{{ step.label }}</h2>
                     {% if version and step.status != "running" %}
-                        <p class="s-muted s-m0">Version {{ version.number }} · {{ version.get_source_display }}{% if version.model %} · {% model_label version.provider version.model %}{% endif %} · {{ version.created_at|date:"j M H:i" }}{% if version.metrics.duration_seconds is not None %} · took {{ version.metrics.duration_seconds|took }}{% endif %}</p>
+                        <p class="s-muted s-m0">Version {{ version.number }} · {{ version.get_source_display }}{% if version.model %} · {% model_label version.provider version.model %}{% endif %} · {{ version.created_at|date:"j M H:i" }}{% if version.metrics.duration_seconds is not None %} · took {{ version.metrics.duration_seconds|took }}{% endif %}{% if step_usage %} · <span class="s-num" title="All model calls for this step, every version and SOP round: {{ step_usage.calls }}">{{ step_usage.input|add:step_usage.output }} tokens, {% if step_usage.exact %}{{ step_usage.cost|usd }}{% else %}about {{ step_usage.cost|usd }}{% endif %}{% if step_usage.unknown %} + unpriced{% endif %}</span>{% endif %}</p>
                         {% if version.image %}<img class="s-image" src="{{ version.image.file.url }}" alt="Generated hero image for {{ brief.topic }}">{% endif %}
                         {% if article_page %}
                             <section class="s-box" aria-labelledby="page-head">
@@ -226,7 +227,7 @@
                                 <select id="send-back-model" name="model">
                                     {% for group, items in model_groups %}
                                         <optgroup label="{{ group }}">
-                                            {% for item in items %}<option value="{{ item.key }}" {% if not item.selectable %}disabled{% endif %} {% if item.key == current_model_key %}selected{% endif %}>{{ item.label }}{% with seen=observed|get_item:item.key %}{% if seen %} · took {{ seen.seconds|took }} for this step (median of {{ seen.runs }}){% elif item.typical_seconds %} · {{ item.typical_seconds|duration }}{% endif %}{% endwith %}</option>{% endfor %}
+                                            {% for item in items %}<option value="{{ item.key }}" {% if not item.selectable %}disabled{% endif %} {% if item.key == current_model_key %}selected{% endif %}>{{ item.label }}{% with seen=observed|get_item:item.key %}{% if seen %} · took {{ seen.seconds|took }} for this step (median of {{ seen.runs }}){% elif item.typical_seconds %} · {{ item.typical_seconds|duration }}{% endif %}{% endwith %}{% with facts=item|model_facts %}{% if facts %} · {{ facts }}{% endif %}{% endwith %}{% context_warning item context_need %}</option>{% endfor %}
                                         </optgroup>
                                     {% endfor %}
                                 </select>
@@ -436,7 +437,7 @@
                         <select id="regen-model" name="model">
                             {% for group, items in model_groups %}
                                 <optgroup label="{{ group }}">
-                                    {% for item in items %}<option value="{{ item.key }}" {% if not item.selectable %}disabled{% endif %} {% if item.key == current_model_key %}selected{% endif %}>{{ item.label }}{% with seen=observed|get_item:item.key %}{% if seen %} · took {{ seen.seconds|took }} for this step (median of {{ seen.runs }}){% elif item.typical_seconds %} · {{ item.typical_seconds|duration }}{% endif %}{% endwith %}{% if item.reason %} · {{ item.reason }}{% endif %}</option>{% endfor %}
+                                    {% for item in items %}<option value="{{ item.key }}" {% if not item.selectable %}disabled{% endif %} {% if item.key == current_model_key %}selected{% endif %}>{{ item.label }}{% with seen=observed|get_item:item.key %}{% if seen %} · took {{ seen.seconds|took }} for this step (median of {{ seen.runs }}){% elif item.typical_seconds %} · {{ item.typical_seconds|duration }}{% endif %}{% endwith %}{% with facts=item|model_facts %}{% if facts %} · {{ facts }}{% endif %}{% endwith %}{% context_warning item context_need %}{% if item.reason %} · {{ item.reason }}{% endif %}</option>{% endfor %}
                                 </optgroup>
                             {% endfor %}
                         </select>

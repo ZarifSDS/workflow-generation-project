@@ -16,7 +16,7 @@ from django.utils.decorators import method_decorator
 from django.views.decorators.cache import never_cache
 from wagtail.log_actions import log
 
-from apps.ai import catalog, remote_models, secrets
+from apps.ai import catalog, pricing, remote_models, secrets
 from apps.ai.forms import AddedModelForm, AddedProviderForm, KeyForm
 from apps.ai.models import AddedModel, ProviderConfig
 from apps.ai.providers import get_providers
@@ -129,7 +129,13 @@ class ProviderKeysView(KeysPage):
                 }
             )
         if not self.search:
-            context.update(model_lists=self.model_lists(providers))
+            from apps.ai.models import PriceReference
+
+            context.update(
+                model_lists=self.model_lists(providers),
+                billing_choices=[(v, label) for v, label in ProviderConfig.Billing.choices if v],
+                reference=PriceReference.objects.first(),
+            )
             self.sync_stale_in_background()
         context.update(
             providers=providers,
@@ -141,7 +147,7 @@ class ProviderKeysView(KeysPage):
         """Per text provider: models in the lists (listed, by hand, hidden) and the last sync."""
         from django.db.models import Count, Q
 
-        from apps.ai.models import ModelSync
+        from apps.ai.models import ModelInfo, ModelSync
 
         counts = {
             row["provider"]: row
@@ -152,6 +158,11 @@ class ProviderKeysView(KeysPage):
             )
         }
         syncs = {row.provider: row for row in ModelSync.objects.all()}
+        priced, known = {}, {}
+        for row in ModelInfo.objects.values("provider", "input_per_m", "context_window"):
+            known[row["provider"]] = known.get(row["provider"], 0) + 1
+            if row["input_per_m"] is not None:
+                priced[row["provider"]] = priced.get(row["provider"], 0) + 1
         built_in = {}
         for item in catalog.CATALOG:
             if item.kind == "text":
@@ -165,6 +176,12 @@ class ProviderKeysView(KeysPage):
             rows.append(
                 {
                     **p,
+                    "billing": pricing.billing(p["name"]),
+                    "billing_choice": p["row"].billing if p["row"] else "",
+                    "usual_label": pricing.BILLING_LABELS[pricing.USUAL_BILLING.get(p["name"], "per_token")],
+                    "local": pricing.USUAL_BILLING.get(p["name"]) == pricing.LOCAL,
+                    "priced": priced.get(p["name"], 0),
+                    "known": known.get(p["name"], 0),
                     "listable": remote_models.listable(spec),
                     "built_in": built_in.get(p["name"], 0),
                     "listed": count.get("listed", 0),
@@ -189,7 +206,10 @@ class ProviderKeysView(KeysPage):
             transaction.on_commit(lambda: sync_model_lists.enqueue(stale))
 
     def post(self, request, *args, **kwargs):
-        """Refresh the model lists of every provider that can list its models (or one: ?provider=)."""
+        """Refresh the model lists of every provider that can list its models (or one: ?provider=), or
+        save how each key is billed."""
+        if not self.search and request.POST.get("action") == "billing":
+            return self.save_billing(request)
         if self.search or request.POST.get("action") != "refresh":
             return redirect("studio:provider_keys")
         only = request.POST.get("provider") or None
@@ -203,6 +223,30 @@ class ProviderKeysView(KeysPage):
             messages.error(request, "Couldn't list the models of " + "; ".join(failed) + ".")
         if not results:
             messages.info(request, "No provider with a key lists its models yet.")
+        return redirect("studio:provider_keys")
+
+    def save_billing(self, request):
+        valid = set(ProviderConfig.Billing.values)
+        changed = []
+        with transaction.atomic():
+            for name, spec in get_providers().items():
+                if spec.adapter not in TEXT_ADAPTERS or pricing.USUAL_BILLING.get(name) == pricing.LOCAL:
+                    continue
+                value = request.POST.get(f"billing-{name}")
+                if value is None or value not in valid:
+                    continue
+                row = ProviderConfig.objects.filter(name=name).first()
+                if (row.billing if row else "") == value:
+                    continue
+                row = row or _row_for(name, self.label_for(name, spec))
+                row.billing, row.updated_by = value, request.user
+                row.save()
+                log(instance=row, action="ai.billing_set", user=request.user, data={"billing": value})
+                changed.append(row.label)
+        pricing.clear_cache()
+        messages.success(
+            request, f"Saved how {', '.join(changed)} is billed." if changed else "Nothing changed."
+        )
         return redirect("studio:provider_keys")
 
 
@@ -291,7 +335,7 @@ class RemoveKeyView(ConfirmView):
         row = self.row
         with transaction.atomic():
             log(instance=row, action="ai.key_removed", user=request.user)
-            if row.built_in:
+            if row.built_in and not row.billing:
                 row.delete()  # nothing else is stored for a built-in provider
             else:
                 _clear_secret(row, "api_key")
@@ -495,12 +539,20 @@ class ModelsManageView(KeysPage):
         return rows.order_by("provider", "label")
 
     def get_context_data(self, **kwargs):
+        from apps.ai.models import ModelInfo
+
         context = super().get_context_data(**kwargs)
         rows = self.queryset()
         labels = catalog.provider_labels()
         providers = sorted(set(AddedModel.objects.values_list("provider", flat=True)))
+        shown = list(rows[: self.LIMIT])
+        infos = {
+            (i.provider, i.model): i for i in ModelInfo.objects.filter(model__in=[m.model for m in shown])
+        }
+        for row in shown:
+            row.info = infos.get((row.provider, row.model))
         context.update(
-            rows=rows[: self.LIMIT],
+            rows=shown,
             total=rows.count(),
             limit=self.LIMIT,
             provider=self.provider,
@@ -560,8 +612,83 @@ class ModelsManageView(KeysPage):
                     row.label, row.status = label, status
                     row.save(update_fields=["label", "status"])
                     changed += 1
+                changed += _save_prices(request, row)
         catalog.clear_cache()
+        pricing.clear_cache()
         return changed
+
+
+def _number(text, kind):
+    """A typed price (USD per million) or context window; "" clears it; None when it doesn't parse."""
+    from decimal import Decimal, InvalidOperation
+
+    text = (text or "").strip().replace("$", "").replace(",", "")
+    if not text:
+        return ""
+    if kind == "context":
+        text = text.lower().removesuffix("tokens").strip()
+        scale = 1000 if text.endswith("k") else 1_000_000 if text.endswith("m") else 1
+        try:
+            value = int(Decimal(text.rstrip("km")) * scale)
+        except InvalidOperation:
+            return None
+        return value if value > 0 else None
+    try:
+        value = Decimal(text)
+    except InvalidOperation:
+        return None
+    return value if value >= 0 else None
+
+
+def _save_prices(request, row):
+    """Prices and context typed on Manage models: a change is stored as entered by hand (a sync never
+    overwrites it); clearing every field hands the model back to the automatic sources. Returns 1 when
+    something changed."""
+    from apps.ai.models import ModelInfo
+
+    fields = {
+        "in": request.POST.get(f"in-{row.pk}"),
+        "out": request.POST.get(f"out-{row.pk}"),
+        "ctx": request.POST.get(f"ctx-{row.pk}"),
+    }
+    if all(value is None for value in fields.values()):
+        return 0
+    info = ModelInfo.objects.filter(provider=row.provider, model=row.model).first()
+    shown = {
+        "in": _shown(info.input_per_m if info else None),
+        "out": _shown(info.output_per_m if info else None),
+        "ctx": str(info.context_window) if info and info.context_window else "",
+    }
+    typed = {key: (value or "").strip() for key, value in fields.items()}
+    if typed == shown:
+        return 0
+    info = info or ModelInfo(provider=row.provider, model=row.model)
+    price_in, price_out = _number(typed["in"], "price"), _number(typed["out"], "price")
+    if (typed["in"], typed["out"]) != (shown["in"], shown["out"]):
+        if price_in == "" and price_out == "":
+            info.input_per_m = info.output_per_m = info.cached_input_per_m = None
+            info.price_source = ""
+        elif price_in not in (None, "") and price_out not in (None, ""):
+            info.input_per_m, info.output_per_m, info.price_source = price_in, price_out, "manual"
+        else:
+            messages.error(request, f"{row.label}: enter both prices per million tokens, or neither.")
+    if typed["ctx"] != shown["ctx"]:
+        context = _number(typed["ctx"], "context")
+        if context == "":
+            info.context_window, info.context_source = None, ""
+        elif context is None:
+            messages.error(request, f"{row.label}: the context window should be a number of tokens.")
+        else:
+            info.context_window, info.context_source = context, "manual"
+    info.save()
+    return 1
+
+
+def _shown(value):
+    """A stored price as the Manage models field shows it (no trailing zeros)."""
+    if value is None:
+        return ""
+    return format(value.normalize(), "f")
 
 
 class DeleteModelView(ConfirmView):
@@ -578,6 +705,62 @@ class DeleteModelView(ConfirmView):
         self.item.delete()
         messages.success(request, f"Removed {label}.")
         return redirect("studio:provider_keys")
+
+
+class UsageView(KeysPage):
+    """Settings › AI providers › Usage and cost: tokens and cost from the usage ledger (apps.ai.usage), by
+    month, provider and model, and the latest runs."""
+
+    template_name = "studio/usage.html"
+    page_title = "Usage and cost"
+    header_icon = "table"
+
+    def get_context_data(self, **kwargs):
+        from django.db.models import Count, Max, Q, Sum
+        from django.db.models.functions import TruncMonth
+
+        from apps.ai.models import UsageRecord
+
+        from ..models import GenerationRun
+
+        context = super().get_context_data(**kwargs)
+        labels = catalog.provider_labels()
+        months = {}
+        rows = (
+            UsageRecord.objects.annotate(month=TruncMonth("created_at"))
+            .values("month", "provider", "model")
+            .annotate(
+                calls=Count("pk"),
+                tokens_in=Sum("input_tokens"),
+                tokens_out=Sum("output_tokens"),
+                cost=Sum("cost"),
+                unknown=Count("pk", filter=Q(cost_kind="unknown")),
+                estimated=Count("pk", filter=Q(cost_kind="estimated")),
+                billed=Count("pk", filter=Q(cost_kind="billed")),
+            )
+            .order_by("-month", "-cost")
+        )
+        for row in rows:
+            row["label"] = labels.get(row["provider"], row["provider"])
+            row["how"] = next((kind for kind in ("unknown", "estimated", "billed") if row[kind]), "free")
+            month = months.setdefault(row["month"], {"month": row["month"], "rows": [], "cost": 0})
+            month["rows"].append(row)
+            month["cost"] += row["cost"] or 0
+        runs = (
+            UsageRecord.objects.filter(run_id__isnull=False)
+            .values("run_id")
+            .annotate(
+                calls=Count("pk"), cost=Sum("cost"), tokens_in=Sum("input_tokens"), last=Max("created_at")
+            )
+            .order_by("-last")[:15]
+        )
+        topics = dict(
+            GenerationRun.objects.filter(pk__in=[r["run_id"] for r in runs]).values_list("pk", "brief__topic")
+        )
+        for run in runs:
+            run["topic"] = topics.get(run["run_id"], f"Run {run['run_id']}")
+        context.update(months=list(months.values()), runs=list(runs))
+        return context
 
 
 class SearchProvidersView(ProviderKeysView):

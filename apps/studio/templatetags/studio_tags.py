@@ -1,7 +1,7 @@
 from django import template
 from django.utils.safestring import mark_safe
 
-from apps.ai import catalog
+from apps.ai import catalog, pricing
 from apps.content.markup import WagtailResolver, markdown_to_html
 
 register = template.Library()
@@ -64,6 +64,60 @@ def sop_badge(step):
 @register.filter
 def duration(seconds):
     return catalog.describe_duration(seconds)
+
+
+@register.filter
+def model_facts(item):
+    """Price and context for a model option: "$0.10 / $0.50 per M · 1,050k context" (apps.ai.pricing)."""
+    if getattr(item, "kind", "text") != "text":
+        return ""
+    return pricing.facts(item.provider, item.model)
+
+
+@register.simple_tag
+def model_data(item):
+    """data- attributes the run estimate reads: billed price per million in and out (absent when
+    unknown), context window and typical time."""
+    from .. import estimates
+
+    if getattr(item, "kind", "text") != "text":
+        return ""
+    attrs = []
+    price = estimates.price_per_m(item.provider, item.model)
+    if price is not None:
+        attrs += [f'data-in="{price[0]}"', f'data-out="{price[1]}"']
+    window = estimates.usable_context(item.provider, item.model, item=item)
+    if window:
+        attrs.append(f'data-ctx="{int(window)}"')
+    if item.typical_seconds:
+        attrs.append(f'data-secs="{int(item.typical_seconds)}"')
+    return mark_safe(" ".join(attrs))  # noqa: S308 - numbers only
+
+
+@register.simple_tag
+def context_warning(item, need):
+    """ " · context too small for this step" when the model's known context window is under `need`
+    tokens (the step's largest prompt plus its output; estimates.context_needed)."""
+    from .. import estimates
+
+    if getattr(item, "kind", "text") != "text" or not need:
+        return ""
+    if estimates.fits(item.provider, item.model, "", need=need, item=item):
+        return ""
+    return " · context too small for this step"
+
+
+@register.filter
+def usd(value):
+    return pricing.money(value)
+
+
+@register.filter
+def price_field(value):
+    """A stored price for an input field: 0.1 rather than 0.100000; empty when unknown."""
+    if value is None or value == "":
+        return ""
+    return format(value.normalize(), "f")
 
 
 @register.filter

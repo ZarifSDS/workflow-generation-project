@@ -11,5 +11,7 @@ CACHES = {"default": {"BACKEND": "django.core.cache.backends.dummy.DummyCache"}}
 STUDIO_EXECUTE_STEPS = False
 STUDIO_CRAWL_PACE_SECONDS = 0
 STUDIO_QUALITY_SCANS = False  # subprocess scans are covered by their own tests
+AI_PRICE_REFERENCE_URL = ""  # no network: tests that need the reference list set their own URL
+AI_PRICE_MEMO_SECONDS = 0  # prices are read afresh in every test
 
 PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]

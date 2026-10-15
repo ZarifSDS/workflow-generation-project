@@ -23,6 +23,7 @@ from .views.provider_keys import (
     ProviderKeyView,
     RemoveKeyView,
     SearchProvidersView,
+    UsageView,
 )
 from .views.providers import ProvidersView
 from .views.runs import RunListView, RunWorkspaceView, VersionCompareView, run_export, run_status
@@ -63,6 +64,7 @@ urlpatterns = [
     path("search-providers/", SearchProvidersView.as_view(), name="search_providers"),
     path("ai-providers/add/", AddedProviderView.as_view(), name="provider_add"),
     path("ai-providers/models/", ModelsManageView.as_view(), name="provider_models"),
+    path("ai-providers/usage/", UsageView.as_view(), name="usage"),
     path("ai-providers/models/add/", AddedModelView.as_view(), name="provider_model_add"),
     path("ai-providers/models/<int:pk>/remove/", DeleteModelView.as_view(), name="provider_model_remove"),
     path("ai-providers/<slug:name>/key/", ProviderKeyView.as_view(), name="provider_key"),

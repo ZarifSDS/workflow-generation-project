@@ -22,11 +22,25 @@ class ProviderConfig(models.Model):
     Keys are stored encrypted (apps.ai.secrets) and never shown again; `*_hint` keeps the last characters.
     """
 
+    class Billing(models.TextChoices):
+        AUTO = "", "Usual for this provider"
+        PER_TOKEN = "per_token", "Pay per token"
+        FREE_TIER = "free_tier", "Free tier"
+        SUBSCRIPTION = "subscription", "Subscription (flat fee)"
+
     name = models.SlugField(
         max_length=30, unique=True, help_text="Short id used in the code, e.g. openrouter"
     )
     label = models.CharField(max_length=80)
     base_url = models.URLField(blank=True, help_text="Only for added providers")
+    billing = models.CharField(
+        max_length=20,
+        choices=Billing.choices,
+        blank=True,
+        default="",
+        db_default="",  # rows saved by code from before this field still get a value
+        help_text="How this key is billed: prices become costs only for pay-per-token keys",
+    )
     api_key_encrypted = models.TextField(blank=True, editable=False)
     api_key_hint = models.CharField(max_length=12, blank=True, editable=False)
     account_id_encrypted = models.TextField(blank=True, editable=False)  # Cloudflare
@@ -82,6 +96,82 @@ class AddedModel(models.Model):
 
     def __str__(self):
         return f"{self.label} ({self.provider})"
+
+
+class ModelInfo(models.Model):
+    """Price per million tokens and context window of one model (apps.ai.pricing), for built-in, listed
+    and hand-added models alike. Filled by the model sync from the first source that has each value: a
+    value entered by hand (never overwritten), the provider's own list, the reference price list. A blank
+    value is unknown: nothing is guessed."""
+
+    class Source(models.TextChoices):
+        NONE = "", "Unknown"
+        PROVIDER = "provider", "Provider's list"
+        REFERENCE = "reference", "Reference price list"
+        MANUAL = "manual", "Entered by hand"
+
+    provider = models.CharField(max_length=30)
+    model = models.CharField(max_length=200)
+    input_per_m = models.DecimalField(max_digits=12, decimal_places=6, null=True, blank=True)
+    output_per_m = models.DecimalField(max_digits=12, decimal_places=6, null=True, blank=True)
+    cached_input_per_m = models.DecimalField(max_digits=12, decimal_places=6, null=True, blank=True)
+    context_window = models.PositiveIntegerField(null=True, blank=True)
+    max_output = models.PositiveIntegerField(null=True, blank=True)
+    price_source = models.CharField(max_length=10, choices=Source.choices, blank=True, default="")
+    context_source = models.CharField(max_length=10, choices=Source.choices, blank=True, default="")
+    note = models.CharField(max_length=200, blank=True, help_text="Where a reference value was matched")
+    checked_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["provider", "model"]
+        constraints = [models.UniqueConstraint(fields=["provider", "model"], name="ai_modelinfo_unique")]
+
+    def __str__(self):
+        return f"{self.provider}::{self.model}"
+
+
+class PriceReference(models.Model):
+    """The reference price list (LiteLLM's model_prices_and_context_window.json, MIT), reduced to chat
+    models: {key: {provider, in, out, cached, context, max_output}} with prices per token."""
+
+    url = models.URLField()
+    entries = models.JSONField(default=dict)
+    fetched_at = models.DateTimeField(null=True, blank=True)
+    error = models.CharField(max_length=300, blank=True)
+
+    def __str__(self):
+        return f"{len(self.entries)} reference prices"
+
+
+class UsageRecord(models.Model):
+    """One model call: tokens used and what it cost (apps.ai.usage). `cost_kind` says how sure the cost
+    is: billed (the provider reported it), estimated (tokens x price), free (free tier, local or a flat
+    subscription), or unknown (no price)."""
+
+    class CostKind(models.TextChoices):
+        BILLED = "billed", "Billed"
+        ESTIMATED = "estimated", "Estimated"
+        FREE = "free", "Free"
+        UNKNOWN = "unknown", "Unknown"
+
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    provider = models.CharField(max_length=30)
+    model = models.CharField(max_length=200)
+    kind = models.CharField(max_length=20, blank=True, help_text="step, chat, image_plan, image_job, other")
+    run_id = models.PositiveIntegerField(null=True, blank=True, db_index=True)
+    step_key = models.CharField(max_length=30, blank=True)
+    object_id = models.PositiveIntegerField(null=True, blank=True, help_text="The step, chat or job id")
+    input_tokens = models.PositiveIntegerField(null=True, blank=True)
+    output_tokens = models.PositiveIntegerField(null=True, blank=True)
+    cost = models.DecimalField(max_digits=12, decimal_places=6, null=True, blank=True)
+    cost_kind = models.CharField(max_length=10, choices=CostKind.choices, default=CostKind.UNKNOWN)
+    seconds = models.FloatField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.provider}/{self.model}: {self.input_tokens} in, {self.output_tokens} out"
 
 
 class ModelSync(models.Model):
